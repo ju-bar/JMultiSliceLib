@@ -1,6 +1,8 @@
 List of changes to JMultiSliceLib.h
 
-2018-07-11: 0.14 JB
+2018-10-06: 0.14 JB
+- Fixed several bugs occurring while using the library with Dr. Probe
+- Added functions to create propagators and detector functions
 - Added functions using smaller phase gratings than wave-functions
 - Added periodically repeated sub-frame multiplications to CPU and GPU cores
 - Added slice thickness data handling

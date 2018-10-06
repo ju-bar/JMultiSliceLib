@@ -3,10 +3,11 @@
 ========================================================================
 
     Copyright (C) 2018 - Juri Barthel
-	Copyright (C) 2018 - RWTH Aachen University, 52074 Aachen, Germany
+	Copyright (C) 2018 - Forschungszentrum Jülich GmbH
+						 52425 Jülich, Germany
 	Email: juribarthel@gmail.com
 
-	Last Version: 0.1.3 - 2018-05-04
+	Last Version: 0.1.4 - 2018-10-06
 
 ========================================================================
 
