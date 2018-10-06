@@ -1,0 +1,24 @@
+List of changes to JMultiSliceLib.h
+
+2018-07-11: 0.14 JB
+- Added functions using smaller phase gratings than wave-functions
+- Added periodically repeated sub-frame multiplications to CPU and GPU cores
+- Added slice thickness data handling
+- Added pure GPU memory info function
+- Added function to calculate propagtors (Fresnel and planar)
+- Added GNU GPL 3 License information to all source files.
+
+2018-05-04: 0.13 JB
+- Changed the implementation to a Class CJMultiSlice since the previous
+  static scope implementation turned out to be unusable in a multi-thread
+  scheme.
+
+2018-05-02: 0.12 JB
+- Optimized incident wave function offset calculations for GPU code.
+
+2018-04-30: 0.11 JB
+- Multiple bug removals.
+- Added masked integrating detector readout functions.
+
+2018-04-26: 0.1 JB
+- First core and interface implementations. Working!
