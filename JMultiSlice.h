@@ -345,7 +345,7 @@ public:
 	void SetSliceThickness(int islc, float fthickness);
 
 	// Load a detector sensitivity profile from a text file
-	int LoadSTEMDetectorProfile(std::string sfile, int &len, float &refpix, float* profile);
+	int LoadSTEMDetectorProfile(std::string sfile, int &len, float &refpix, float** profile);
 
 	// Calculates the radial detector sensitivity for a given diffraction angle theta
 	// depending on present profile data.

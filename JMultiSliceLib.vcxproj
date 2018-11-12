@@ -22,7 +22,7 @@
     <ProjectGuid>{976AB6F8-558B-438F-9EA2-3F79BDD4D086}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>JMultiSliceLib</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.15063.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.17134.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -99,6 +99,7 @@
       <PreprocessorDefinitions>_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
       <AdditionalIncludeDirectories>$(ProjectDir)\..\fftw\include;%(AdditionalIncludeDirectories);$(CudaToolkitIncludeDir)</AdditionalIncludeDirectories>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -106,7 +107,6 @@
     <Lib>
       <AdditionalDependencies>libfftwf-3.3.lib</AdditionalDependencies>
       <AdditionalLibraryDirectories>..\fftw\lib\x64\Static-Debug</AdditionalLibraryDirectories>
-      <IgnoreSpecificDefaultLibraries>LIBCMT</IgnoreSpecificDefaultLibraries>
     </Lib>
     <CudaCompile>
       <CodeGeneration>compute_30,sm_30;compute_50,sm_50;compute_52,sm_52;compute_61,sm_61</CodeGeneration>
@@ -139,6 +139,7 @@
       <PreprocessorDefinitions>NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
       <AdditionalIncludeDirectories>$(ProjectDir)\..\fftw\include;%(AdditionalIncludeDirectories);$(CudaToolkitIncludeDir)</AdditionalIncludeDirectories>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -148,7 +149,6 @@
     <Lib>
       <AdditionalDependencies>libfftwf-3.3.lib</AdditionalDependencies>
       <AdditionalLibraryDirectories>..\fftw\lib\x64\Static-Release</AdditionalLibraryDirectories>
-      <IgnoreSpecificDefaultLibraries>LIBCMT</IgnoreSpecificDefaultLibraries>
     </Lib>
     <CudaCompile>
       <CodeGeneration>compute_30,sm_30;compute_50,sm_50;compute_52,sm_52;compute_61,sm_61</CodeGeneration>
@@ -159,6 +159,7 @@
     <Text Include="Changes.txt" />
     <Text Include="gpl-3.0.txt" />
     <Text Include="ReadMe.txt" />
+    <Text Include="ToDo.txt" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ArrayOps.cuh" />

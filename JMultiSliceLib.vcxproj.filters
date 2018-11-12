@@ -18,6 +18,7 @@
     <Text Include="ReadMe.txt" />
     <Text Include="gpl-3.0.txt" />
     <Text Include="Changes.txt" />
+    <Text Include="ToDo.txt" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">

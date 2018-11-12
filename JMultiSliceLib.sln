@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
-VisualStudioVersion = 15.0.28010.2041
+VisualStudioVersion = 15.0.27703.2042
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "JMultiSliceLib", "JMultiSliceLib.vcxproj", "{976AB6F8-558B-438F-9EA2-3F79BDD4D086}"
 EndProject
@@ -26,6 +26,6 @@ Global
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {35F841B3-BEEA-4657-8FBA-0EDBA3212ACC}
+		SolutionGuid = {FACD42D2-284D-4FA1-A222-5D7A24F3530C}
 	EndGlobalSection
 EndGlobal

@@ -563,7 +563,7 @@ int CJMultiSlice::CalculatePropagator(float fthick, float otx, float oty, fcmplx
 	return 0;
 }
 
-int CJMultiSlice::LoadSTEMDetectorProfile(std::string sfile, int &len, float &refpix, float* profile)
+int CJMultiSlice::LoadSTEMDetectorProfile(std::string sfile, int &len, float &refpix, float** profile)
 {
 	// init
 	int nResult = 0;
@@ -573,7 +573,7 @@ int CJMultiSlice::LoadSTEMDetectorProfile(std::string sfile, int &len, float &re
 	string ssep = "' ";
 	len = 0;
 	refpix = 0.f;
-	profile = NULL;
+	*profile = NULL;
 	int idx = 0, nline = 0;
 	int i0 = 0, i1 = 0;
 	// try opening the file for reading list directed data
@@ -612,18 +612,18 @@ int CJMultiSlice::LoadSTEMDetectorProfile(std::string sfile, int &len, float &re
 				}
 				// length>0 and reference pixel index have been read in
 				// allocate the profile buffer (slightly larger)
-				profile = (float*)malloc(sizeof(float)*(len+10));
-				if (NULL == profile) {
+				*profile = (float*)malloc(sizeof(float)*(len+10));
+				if (NULL == *profile) {
 					nResult = 4;
 					goto _exit;
 				}
-				memset(profile, 0, sizeof(float)*(len+10)); // preset buffer with zeroes
+				memset(*profile, 0, sizeof(float)*(len+10)); // preset buffer with zeroes
 				//
 				// ... ready for reading more data
 			}
 			else {
 				// to float (expecting no other stuff in the line)
-				profile[idx] = stof(sline);
+				(*profile)[idx] = stof(sline);
 				idx++;
 			}
 		}
@@ -635,8 +635,8 @@ int CJMultiSlice::LoadSTEMDetectorProfile(std::string sfile, int &len, float &re
 	}
 _exit:
 	if (0 < nResult) { // handle allocations on error
-		if (NULL != profile) {
-			free(profile); profile = NULL;
+		if (NULL != *profile) {
+			free(*profile); *profile = NULL;
 		}
 		len = 0; refpix = 0.f;
 		if (instr.is_open()) { // handle open input stream
@@ -704,7 +704,7 @@ int CJMultiSlice::CalculateRingDetector(float beta0, float beta1, float phi0, fl
 	// Detector sensitivity modification (optional)
 	if (0 < sdsprofile.length()) { // there is a string in the profile name parameter
 		// try loading the detector profile data
-		nerr = LoadSTEMDetectorProfile(sdsprofile, nDetProfileLen, fRefPixelBeta1, pfDetProfile);
+		nerr = LoadSTEMDetectorProfile(sdsprofile, nDetProfileLen, fRefPixelBeta1, &pfDetProfile);
 		if ( 0 < nerr) { // error while reading the detector profile
 			cout << "(CJMultiSlice::CalculateRingDetector) Warning: Failed to read detector sensitivity profile." << endl;
 			cout << "  file name: " << sdsprofile << endl;
@@ -820,6 +820,10 @@ int CJMultiSlice::CalculateRingDetector(float beta0, float beta1, float phi0, fl
 			}
 		} // loop columns
 	} // loop rows
+	if (NULL != pfDetProfile) {
+		free(pfDetProfile);
+		pfDetProfile = NULL;
+	}
 	return 0; // exit with success code
 }
 

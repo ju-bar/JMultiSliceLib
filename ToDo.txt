@@ -1,0 +1,8 @@
+List of next steps and wishes for JMultiSliceLib
+
+- Extend the LIB interface to a similar level as the C++ class interface
+	* target for linking to Fortran
+- Detector readout becomes the bottle neck when applied at many slices.
+	* check the readout core for optimizations / cache and loop vectorization
+	* check for optimization including the loop over multiple detectors
+- Implement compiler flags to exclude the CUDA code
