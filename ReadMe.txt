@@ -1,12 +1,12 @@
 ========================================================================
-    STATIC LIBRARY : JMultiSliceLib Project Overview
+	STATIC LIBRARY : JMultiSliceLib Project Overview
 ========================================================================
 
-    Copyright (C) 2018 - Juri Barthel
-	Copyright (C) 2018 - RWTH Aachen University, 52074 Aachen, Germany
+	Copyright (C) 2018 - Juri Barthel
+	Copyright (C) 2018 - Forschungszentrum Juelich GmbH, Germany
 	Email: juribarthel@gmail.com
 
-	Last Version: 0.1.5 - 2018-11-12
+	Last Version: 0.1.5 - 2018-11-13
 
 ========================================================================
 
@@ -72,10 +72,10 @@ comply with the FFTW and CUDA software licenses.
 	1)	JMultiSliceLib is provided as freeware, but only for private, 
 		educational, academic, non-commercial use (that means at home
 		or in educational or academic institutions).
-	1a) JMultiSliceLib is free for educational use (schools,
+	1a)	JMultiSliceLib is free for educational use (schools,
 		universities, museums and libraries) and for use in charity
 		or humanitarian organisations.
-	1b) If you intend to use JMultiSliceLib at your place of business
+	1b)	If you intend to use JMultiSliceLib at your place of business
 		or for commercial purposes, please register and purchase it.
 		Commercial users: please contact the author by E-Mail for 
 		prices, discounts and payment methods.
