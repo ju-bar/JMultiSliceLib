@@ -140,6 +140,7 @@ int __stdcall OffsetIncomingWave(int whichcode, float dx, float dy, float dz, in
 	return JMS.OffsetIncomingWave(whichcode, dx, dy, dz, iThread);
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////
 //
 // CPU CODE

@@ -6,3 +6,9 @@ List of next steps and wishes for JMultiSliceLib
 	* check the readout core for optimizations / cache and loop vectorization
 	* check for optimization including the loop over multiple detectors
 - Implement compiler flags to exclude the CUDA code
+- Test new functions for probe generation
+- Interface for wave function readout
+- Householding of elastic wave functions for separating thermal diffuse scattering
+- Calculating plane, probe, and vortex wave functions
+- Calculating object transmission functions from structure files, including structure data I/O
+- Calculation of transition potentials for inelastic scattering

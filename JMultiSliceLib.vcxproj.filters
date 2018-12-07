@@ -16,9 +16,9 @@
   </ItemGroup>
   <ItemGroup>
     <Text Include="ReadMe.txt" />
-    <Text Include="gpl-3.0.txt" />
     <Text Include="Changes.txt" />
     <Text Include="ToDo.txt" />
+    <Text Include="LICENSE" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -73,5 +73,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="CUDA EULA.pdf" />
+    <None Include="REDAME.md" />
   </ItemGroup>
 </Project>

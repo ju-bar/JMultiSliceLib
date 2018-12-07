@@ -16,6 +16,8 @@ echo Zipping up all files:
 "C:\Program Files\7-Zip\7z.exe" a "JMSLib_SRC_Backup.zip" "*.txt"
 "C:\Program Files\7-Zip\7z.exe" a "JMSLib_SRC_Backup.zip" "*.manifest"
 "C:\Program Files\7-Zip\7z.exe" a "JMSLib_SRC_Backup.zip" "*.bat"
+"C:\Program Files\7-Zip\7z.exe" a "JMSLib_SRC_Backup.zip" "*.md"
+"C:\Program Files\7-Zip\7z.exe" a "JMSLib_SRC_Backup.zip" "LICENSE"
 "C:\Program Files\7-Zip\7z.exe" a "JMSLib_SRC_Backup.zip" "res\*.*"
 echo ---------------------------------------------------
 echo Done.

@@ -4,10 +4,9 @@
 //
 //
 // Copyright (C) 2018 - Juri Barthel (juribarthel@gmail.com)
-// Copyright (C) 2018 - RWTH Aachen University, 52074 Aachen, Germany
 // Copyright (C) 2018 - Forschungszentrum Juelich GmbH, 52425 Juelich, Germany
 //
-// Verions of JMultiSlice: 0.14 (2018 - July - 04)
+// Verions of JMultiSlice: 0.16 (2018 - December - 06)
 //
 /*
 This program is free software : you can redistribute it and/or modify
@@ -136,6 +135,11 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 
 #define _JMS_RELAPERTURE		(2./3.) // relative size of band-width limit
 
+#define _JMS_PROBE_APERTURE_THRESH	(1.E-6) // aperture strength threshold
+
+#define _JMS_ABERRATION_ORDER_MAX	8 // maximum order of axial coherent aberrations
+#define _JMS_ABERRATION_STRTHRESH	(1.E-15) // aberration strength threshold [nm]
+
 
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
@@ -212,6 +216,12 @@ protected:
 	int m_status_setup_GPU;
 	// default message string for output (not initialized)
 	char m_msg[_JMS_MESSAGE_LEN];
+	// max. length of accepted aberration table
+	int m_abrr_maxidx;
+	// list of aberration indices l, n
+	int* m_abrr_widx;
+	// list of aberration function binomial factors
+	int* m_abrr_binom;
 
 // ----------------------------------------------------------------------------
 // multislice data objects
@@ -355,6 +365,16 @@ public:
 	// - refpix: 
 	// - beta1: reference pixel collection angle [rad]
 	float GetRadialDetectorSensitivity(float theta, float* profile, int len, float refpix, float beta1);
+
+	// Calculates a STEM probe wavefunction in Fourier space using current parameters
+	// - fAlpha: probe semi-convergence angle [mrad]
+	// - fACX, fACY: aperture center [mrad]
+	// - fBTX, fBTY: probe beam tilt [mrad]
+	// - nAbrr: number of aberrations defined by the coefficent list AberrCoeff
+	// - AberrC: aberration coefficient list of length 2*nAbrr
+	//               { a11x,a11y,a20y,a20y,a22x,a22y,... }
+	// - wav: address receiving the probe wave function
+	int CalculateProbeWaveFourier(float fAlpha, float fACX, float fACY, float fBTX, float fBTY, int nAbrr, float* AberrC, fcmplx *wav);
 
 	// Calculates a propagator function for a given thickness, object tilt
 	// and current size and wavelength parameters. The propagator amplitudes
@@ -599,13 +619,32 @@ public:
 	int ReadoutImgDet_h(int iSlice, int iThread, float weight = 1.0f);
 	// performs image detector readouts for GPU in given slice
 	int ReadoutImgDet_d(int iSlice, float weight = 1.0f);
+	// calculates the value of a round aperture function in the diffraction plane
+	// - qx, qy: diffraction plane coordinate [1/nm]
+	// - qcx, qcy: aperture center [1/nm]
+	// - qlim: radius of the aperture [1/nm]
+	float ApertureFunction(float qx, float qy, float qcx, float qcy, float qlim);
+	// calculates the value of a round aperture function in the diffraction plane
+	// The edge of the aperture is smoothed by about one pixel
+	// - qx, qy: diffraction plane coordinate [1/nm]
+	// - qcx, qcy: aperture center [1/nm]
+	// - qlim: radius of the aperture [1/nm]
+	float ApertureFunctionS(float qx, float qy, float qcx, float qcy, float qlim, float smooth=1.f);
+	// calculates the value of an aberration function for a given diffraction plane coordinate {qx,qy}
+	// - qx, qy: diffraction plane coordinate [1/nm]
+	// - nabrr: length of the aberration list
+	// - aberrcoeff: ordered list of nabrr aberrations with 2 coefficients each
+	//   The order is {a11x,a11y,a20x,a20y,a22x,a22y,a31x,a31y,a33x,a33y,a40x,a40y, ...)
+	//   amnx,y are the coefficients [nm]
+	float AberrationFunction(float qx, float qy, int nabrr, float* aberrcoeff);
 
 
 // ----------------------------------------------------------------------------
 // multislice functions
 
-	// Takes a copy of the backup wave function, offsets in (x, y, z), and stores
-	// in the the active wave function channel used for the multislice calculation.
+	// Takes a copy of the backup wave function m_h_wav0 / m_d_wav0,
+	// applies offsets in (x, y, z), and stores the result in the the active
+	// wave function channels m_h_wav / m_d_wav used for the multislice calculation.
 	// - whichcode: flag signaling which code to prepare (_JMS_CODE_CPU | _JMS_CODE_GPU)
 	// - dx, dy, dz: offset distances in 3 dimensions and nm units.
 	// - iThread: thread ID for CPU code, ignored for GPU code

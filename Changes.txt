@@ -1,5 +1,9 @@
 List of changes to JMultiSliceLib
 
+
+2018-12-06: 0.16 JB
+- funtions for probe aberrations, apertures, and wavefunctions
+
 2018-11-12: 0.15 JB
 - Implementation of propagators and detector functions
 - Fixed bugs in the multislice chain discovered when using with the Dr. Probe GUI

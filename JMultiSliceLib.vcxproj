@@ -157,7 +157,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <Text Include="Changes.txt" />
-    <Text Include="gpl-3.0.txt" />
+    <Text Include="LICENSE" />
     <Text Include="ReadMe.txt" />
     <Text Include="ToDo.txt" />
   </ItemGroup>
@@ -189,6 +189,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="CUDA EULA.pdf" />
+    <None Include="REDAME.md" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
