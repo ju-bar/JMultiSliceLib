@@ -158,7 +158,7 @@
   <ItemGroup>
     <Text Include="Changes.txt" />
     <Text Include="LICENSE" />
-    <Text Include="ReadMe.txt" />
+    <Text Include="Info.txt" />
     <Text Include="ToDo.txt" />
   </ItemGroup>
   <ItemGroup>

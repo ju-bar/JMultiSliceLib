@@ -15,10 +15,10 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <Text Include="ReadMe.txt" />
     <Text Include="Changes.txt" />
     <Text Include="ToDo.txt" />
     <Text Include="LICENSE" />
+    <Text Include="Info.txt" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
