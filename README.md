@@ -145,9 +145,8 @@ graphical user interface program,
 ## Further development
 
 The following points could be developed
-* test new functions for probe generation
 * interface for wave function readout
 * householding of elastic wave functions for separating thermal diffuse scattering
-* calculating plane, probe, and vortex wave functions
+* calculating plane and vortex wave functions
 * calculating object transmission functions from structure files, including structure data I/O
 * calculation of transition potentials for inelastic scattering

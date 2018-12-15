@@ -1,8 +1,9 @@
 List of changes to JMultiSliceLib
 
 
-2018-12-06: 0.16 JB
-- funtions for probe aberrations, apertures, and wavefunctions
+2018-12-15: 0.20 JB
+- Added a module for probe aberrations, apertures, and wavefunctions
+- Added functions to set incoming wave functions directly
 
 2018-11-12: 0.15 JB
 - Implementation of propagators and detector functions

@@ -32,6 +32,7 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 // - operational interface:
 //   You can call forward and backward transformations with the function
 //   FT() and IFT(), respectively. The Transformation will be "in place".
+//   Each call increases the power by the square of the number of items.
 // - data transfer interface:
 //   Set the data using SetData...() routines.
 //   Get the data using GetData...() routines.
@@ -73,7 +74,9 @@ public:
 	int FT(void); // does a forward FFT with the current plan and data in the core
 	int IFT(void); // does a backward FFT with the current plan and data in the core
 	int Zero(void); // sets the core data values to zero
+	int Conjugate(void); // applies complex conjugate to the data
 	int Scale(float sca); // scales the data
+	int MultiplyReal(float * src); // multiply with a list of real values of the same size
 	int MultiplyC(float * src); // multiply complex values given as re,im aligned list
 	int MultiplyC(fcmplx * src); // multiply complex values
 	int MultiplyC(fftwf_complex * src); // multiply complex values
@@ -101,6 +104,8 @@ public:
 	int GetDataAbs(float * dst); // gets data, assuming float (abs) destination items
 	int GetDataArg(float * dst); // gets data, assuming float (arg) destination items
 	int GetDataPow(float * dst); // gets data, assuming float (abs**2) destination items
-	float GetDataTotalPow(void); // returns teh total power of the data
+	float GetDataTotalPow(void); // returns the total power of the data
+	float GetDataTotalRe(void); // returns the total of the data real part
+	float GetDataTotalIm(void); // returns the total of the data imaginary part
 };
 

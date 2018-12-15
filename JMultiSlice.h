@@ -104,43 +104,32 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 //
 #include "JFFTWcore.h"
 #include "JFFTCUDAcore.h"
+#include "JProbeGen.h"
 //
 #ifndef __JMS__
 #define __JMS__
 #define __JMS_VERSION__			0
 #define __JMS_VERSION_SUB__		1
 #define __JMS_VERSION_SUB_SUB__	3
-
 #define _JMS_CODE_CPU			1
 #define _JMS_CODE_GPU			2
-
 #define _JMS_STATUS_NONE		0
 #define _JMS_STATUS_PGR			1
 #define _JMS_STATUS_OBJ			2
 #define _JMS_STATUS_PRO			4
 #define _JMS_STATUS_DET			8
 #define _JMS_STATUS_CORE		16
-
 #define _JMS_THRESHOLD_CORE		15 // status threshold for core initialization
 #define _JMS_THRESHOLD_CALC		31 // status threshold for calculation
-
 #define _JMS_ACCMODE_NONE		0
 #define _JMS_ACCMODE_INTEGRATE	1
-
 #define _JMS_DETECT_INTEGRATED	0
 #define _JMS_DETECT_IMAGE		1
 #define _JMS_DETECT_DIFFRACTION	2
-
 #define _JMS_MESSAGE_LEN		2048 // max. length of message strings
-
 #define _JMS_RELAPERTURE		(2./3.) // relative size of band-width limit
-
-#define _JMS_PROBE_APERTURE_THRESH	(1.E-6) // aperture strength threshold
-
-#define _JMS_ABERRATION_ORDER_MAX	8 // maximum order of axial coherent aberrations
-#define _JMS_ABERRATION_STRTHRESH	(1.E-15) // aberration strength threshold [nm]
-
-
+//
+//
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 // Class CJMultiSlice makes the global scope for the calculations.
@@ -215,13 +204,7 @@ protected:
 	// status flag for GPU multislice setup
 	int m_status_setup_GPU;
 	// default message string for output (not initialized)
-	char m_msg[_JMS_MESSAGE_LEN];
-	// max. length of accepted aberration table
-	int m_abrr_maxidx;
-	// list of aberration indices l, n
-	int* m_abrr_widx;
-	// list of aberration function binomial factors
-	int* m_abrr_binom;
+	char m_msg[_JPG_MESSAGE_LEN];
 
 // ----------------------------------------------------------------------------
 // multislice data objects
@@ -300,6 +283,8 @@ protected:
 // ----------------------------------------------------------------------------
 // multislice objects doing calculations
 
+	// Probe function calculations
+	CJProbeGen m_jpg;
 	// CPU core objects for FFTs and array ops on host
 	CJFFTWcore* m_jcpuco;
 	// GPU core object for FFTs and array ops on device
@@ -367,14 +352,9 @@ public:
 	float GetRadialDetectorSensitivity(float theta, float* profile, int len, float refpix, float beta1);
 
 	// Calculates a STEM probe wavefunction in Fourier space using current parameters
-	// - fAlpha: probe semi-convergence angle [mrad]
-	// - fACX, fACY: aperture center [mrad]
-	// - fBTX, fBTY: probe beam tilt [mrad]
-	// - nAbrr: number of aberrations defined by the coefficent list AberrCoeff
-	// - AberrC: aberration coefficient list of length 2*nAbrr
-	//               { a11x,a11y,a20y,a20y,a22x,a22y,... }
+	// - prm: address of a CJProbeParams object defining physical probe parameters
 	// - wav: address receiving the probe wave function
-	int CalculateProbeWaveFourier(float fAlpha, float fACX, float fACY, float fBTX, float fBTY, int nAbrr, float* AberrC, fcmplx *wav);
+	int CalculateProbeWaveFourier(CJProbeParams prm, fcmplx *wav);
 
 	// Calculates a propagator function for a given thickness, object tilt
 	// and current size and wavelength parameters. The propagator amplitudes
@@ -619,25 +599,6 @@ public:
 	int ReadoutImgDet_h(int iSlice, int iThread, float weight = 1.0f);
 	// performs image detector readouts for GPU in given slice
 	int ReadoutImgDet_d(int iSlice, float weight = 1.0f);
-	// calculates the value of a round aperture function in the diffraction plane
-	// - qx, qy: diffraction plane coordinate [1/nm]
-	// - qcx, qcy: aperture center [1/nm]
-	// - qlim: radius of the aperture [1/nm]
-	float ApertureFunction(float qx, float qy, float qcx, float qcy, float qlim);
-	// calculates the value of a round aperture function in the diffraction plane
-	// The edge of the aperture is smoothed by about one pixel
-	// - qx, qy: diffraction plane coordinate [1/nm]
-	// - qcx, qcy: aperture center [1/nm]
-	// - qlim: radius of the aperture [1/nm]
-	float ApertureFunctionS(float qx, float qy, float qcx, float qcy, float qlim, float smooth=1.f);
-	// calculates the value of an aberration function for a given diffraction plane coordinate {qx,qy}
-	// - qx, qy: diffraction plane coordinate [1/nm]
-	// - nabrr: length of the aberration list
-	// - aberrcoeff: ordered list of nabrr aberrations with 2 coefficients each
-	//   The order is {a11x,a11y,a20x,a20y,a22x,a22y,a31x,a31y,a33x,a33y,a40x,a40y, ...)
-	//   amnx,y are the coefficients [nm]
-	float AberrationFunction(float qx, float qy, int nabrr, float* aberrcoeff);
-
 
 // ----------------------------------------------------------------------------
 // multislice functions
@@ -649,6 +610,19 @@ public:
 	// - dx, dy, dz: offset distances in 3 dimensions and nm units.
 	// - iThread: thread ID for CPU code, ignored for GPU code
 	int OffsetIncomingWave(int whichcode, float dx, float dy, float dz, int iThread = 0);
+
+	// Ignores the backup wave function m_d_wav0 and stores wav directly in
+	// the wave function channel m_d_wav for the GPU multislice calculation.
+	// - wav: wave function in Fourier space
+	// - bTranspose: flag signalizing that the input wave function is transposed
+	int SetIncomingWaveGPU(fcmplx* wav, bool bTranspose=false);
+
+	// Ignores the backup wave function m_h_wav0 and stores wav directly in
+	// the wave function channel m_h_wav of thread iThread for the CPU multislice calculation.
+	// - wav: wave function in Fourier space
+	// - bTranspose: flag signalizing that the input wave function is transposed
+	// - iThread: CPU thread ID
+	int SetIncomingWaveCPU(fcmplx* wav, bool bTranspose=false, int iThread=0);
 
 	// Runs a multislice calculation on a CPU thread
 	// Assumes incident wave function present in _h_JMS_wav

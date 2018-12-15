@@ -168,6 +168,7 @@
     <ClInclude Include="JFFTWcore.h" />
     <ClInclude Include="JMultiSlice.h" />
     <ClInclude Include="JMultiSliceLib.h" />
+    <ClInclude Include="JProbeGen.h" />
     <ClInclude Include="NatureConstants.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
@@ -177,6 +178,7 @@
     <ClCompile Include="JFFTWcore.cpp" />
     <ClCompile Include="JMultiSlice.cpp" />
     <ClCompile Include="JMultiSliceLib.cpp" />
+    <ClCompile Include="JProbeGen.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>

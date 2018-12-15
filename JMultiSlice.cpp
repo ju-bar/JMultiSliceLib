@@ -26,6 +26,8 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 #include "stdafx.h"
 #include "JMultiSlice.h"
 #include "NatureConstants.h"
+#include <stdlib.h>
+#include <malloc.h>
 #include <math.h>
 #include <time.h>
 #include <fstream>
@@ -102,73 +104,13 @@ CJMultiSlice::CJMultiSlice()
 	m_d_det_dif = NULL;
 	m_d_det_tmp = NULL;
 	m_jcpuco = NULL;
-	m_abrr_maxidx = 0;
-	m_abrr_widx = NULL;
-	m_abrr_binom = NULL;
-	// aberration table config
-	// - max expected index for the order _JMS_ABERRATION_ORDER_MAX
-	m_abrr_maxidx = (int)ceilf(-2.01f + sqrtf(4.f + 4.f*(float)(_JMS_ABERRATION_ORDER_MAX)));
-	// - allocate and set the aberration index table
-	//   This allocation exists until the object is destroyed.
-	m_abrr_widx = (int*)malloc(2 * (m_abrr_maxidx + 1) * sizeof(int));
-	memset(m_abrr_widx, 0, 2 * (m_abrr_maxidx + 1) * sizeof(int));
-	if (m_abrr_widx) {
-		// the following setup defines the sequence of aberrations in the interface list
-		// index of aberration (x,y) -> (order, rotational symmetry)
-		int l = 0;
-		for (int m = 1; m <= _JMS_ABERRATION_ORDER_MAX; m++) { // loop over aberration order 1 ... _JMS_ABERRATION_ORDER_MAX
-			for (int n = 0; n <= m; n++) { // loop over aberration rotational symmetry 0 .. m
-				if (0 == (m + n) % 2) { // valid combination of order and rotational symmetry (1,1), (2,0), (2,2), (3,1) ... sum is even
-					m_abrr_widx[2 * l] = m; // store order
-					m_abrr_widx[1 + 2 * l] = n; // store rotational symmetry
-					l++; // next aberration index
-				}
-			}
-		}
-	}
-	//
-	int nol = 1 + 2 * (int)_JMS_ABERRATION_ORDER_MAX; // number of order indices
-	int nsz = nol*nol; // total order items
-	// - allocate and set the aberration binomial table
-	//   This allocation exists until the object is destroyed.
-	m_abrr_binom = (int*)malloc(nsz * sizeof(int));
-	memset(m_abrr_binom, 0, nsz * sizeof(int));
-	if (m_abrr_binom) {
-		// the following calculates binomial factors (n over k) for n, k = aberration order
-		int res = 1;
-		int lk = 0;
-		int i = 0;
-		for (int k = 0; k < nol; k++) {
-			for (int n = 0; n < nol; n++) {
-				if (n < k) {
-					res = 0;
-				}
-				else {
-					res = 1;
-					lk = k;
-					// Since C(n, k) = C(n, n-k) 
-					if (k > n - k) {
-						lk = n - k;
-					}
-					// Calculate value of [n * (n-1) *---* (n-k+1)] / [k * (k-1) *----* 1] 
-					for (i = 0; i < lk; ++i) {
-						res *= (n - i);
-						res /= (i + 1);
-					}
-				}
-				m_abrr_binom[n + k*nol] = res;
-			}
-		}
-	}
+	
 }
 
 CJMultiSlice::~CJMultiSlice()
 {
 	// clean up to be safe
 	Cleanup();
-	//
-	if (NULL!= m_abrr_widx) free(m_abrr_widx);
-	if (NULL != m_abrr_binom) free(m_abrr_binom);
 }
 
 int CJMultiSlice::SetDebugLevel(int dbg)
@@ -514,73 +456,18 @@ float CJMultiSlice::GetSliceThickness(int islc)
 	return 0.0f;
 }
 
-int CJMultiSlice::CalculateProbeWaveFourier(float fAlpha, float fACX, float fACY, float fBTX, float fBTY, int nAbrr, float* AberrC, fcmplx *wav)
+int CJMultiSlice::CalculateProbeWaveFourier(CJProbeParams prm, fcmplx *wav)
 {
 	// Assumes that general parameters are set up.
-	// uses m_a0, m_nscx,m_nscy, m_wl
-	int nitems = m_nscx * m_nscy;
-	int i = 0, j = 0, ij = 0;
-	size_t nbytesx = sizeof(float) * m_nscx;
-	size_t nbytesy = sizeof(float) * m_nscy;
-	int nx2 = (m_nscx - (m_nscx % 2)) >> 1;
-	int ny2 = (m_nscy - (m_nscy % 2)) >> 1;
-	int nab = min(nAbrr, m_abrr_maxidx);
-	if (nAbrr > 0 && NULL == AberrC) {
-		nab = 0;
+	if (m_wl <= 0.f || m_a0[0] * m_a0[1] <= 0.f || m_nscx*m_nscy <= 0 || NULL == wav || prm.m_alpha <= 0.f) {
+		return 1; // error, invalid setup
 	}
-	float *qnx = NULL;
-	float *qny = NULL;
-	float btx = 0.f, bty = 0.f, btm = 0.f;
-	float qlcx = 0.f, qlcy = 0.f, qlim = 0.f;
-	float chi = 1.f;
-	float wap = 0.f;
-	float wpow = 0.f, fsca = 1.f;
-	//
-	if (nitems <= 0 || m_a0[0]* m_a0[1] <= 0.f || m_wl <= 0.f || fAlpha <= 0.f || NULL == wav) { // error, invalid setup
-		return 1;
-	}
-	//
-	qlim = fAlpha * 0.001f / m_wl; // mrad -> 1/nm
-	qlcx = fACX * 0.001f / m_wl; // mrad -> 1/nm
-	qlcy = fACY * 0.001f / m_wl; // mrad -> 1/nm
-	btx = fBTX * 0.001f / m_wl; // mrad -> 1/nm
-	bty = fBTY * 0.001f / m_wl; // mrad -> 1/nm
-	btm = sqrtf(btx * btx + bty * bty);
-	//
-	qnx = (float*)malloc(nbytesx);
-	qny = (float*)malloc(nbytesy);
-	for (i = 0; i < m_nscx; i++) { // setup horizontal index -> qx + btx
-		qnx[i] = (float)(((i + nx2) % m_nscx) - nx2)/m_a0[0] + btx;
-	}
-	for (j = 0; j < m_nscy; j++) { // setup vertical index -> qy + bty
-		qny[j] = (float)(((j + ny2) % m_nscy) - ny2)/m_a0[1] + bty;
-	}
-	//
-	for (j = 0; j < m_nscy; j++) { // loop over grid rows
-		ij = j * m_nscx;
-		for (i = 0; i < m_nscx; i++) { // loop over grid columns
-			wap = ApertureFunctionS(qnx[i], qny[j], qlcx, qlcy, qlim); // aperture with smoothing of 1 pixel
-			if (wap > (float)_JMS_PROBE_APERTURE_THRESH) {
-				if (nab > 0) {
-					chi = AberrationFunction(qnx[i], qny[j], nAbrr, AberrC);
-				}
-				wav[i + ij] = fcmplx(wap*cosf(chi),-wap*sinf(chi));
-				wpow += (wap*wap);
-			}
-		}
-	}
-	// normalize
-	fsca = 1.f / sqrtf(wpow);
-	for (j = 0; j < m_nscy; j++) { // loop over grid rows
-		ij = j * m_nscx;
-		for (i = 0; i < m_nscx; i++) { // loop over grid columns
-			wav[i + ij] = wav[i + ij] * fsca; // apply normalization factor
-		}
-	}
-	//
-	if (NULL != qnx) free(qnx);
-	if (NULL != qny) free(qny);
-	return 0;
+	// uses m_a0, m_nscx, m_nscy, m_wl from CJMultiSlice
+	CJProbeParams lprm;
+	lprm = prm;
+	lprm.m_wl = m_wl;
+	int nerr = m_jpg.CalculateProbeWaveFourier(&lprm, m_nscx, m_nscy, m_a0[0], m_a0[1], wav);
+	return nerr;
 }
 
 int CJMultiSlice::CalculatePropagator(float fthick, float otx, float oty, fcmplx *pro, int ntype)
@@ -1944,6 +1831,54 @@ _Exit:
 }
 
 
+int CJMultiSlice::SetIncomingWaveCPU(fcmplx* wav, bool bTranspose, int iThread)
+{
+	int nerr = 0;
+	int nitems = m_nscx * m_nscy;
+	int i = 0, j = 0, i1 = 0, j1 = 0, idx = 0, idx1 = 0, idy = 0, idy1 = 0; // iterator
+	size_t nbytes = sizeof(fcmplx)*(size_t)nitems;
+	fcmplx* wavuse = wav;
+	fcmplx* _h_wav = NULL;
+	fcmplx* wavtmp = NULL; // temp buffer only used when bTranspose == true
+	if ( (m_status_setup_CPU & _JMS_THRESHOLD_CALC) == 0 || nitems <= 0 || 
+		m_h_wav == NULL || iThread < 0 || iThread >= m_nfftwthreads) {
+		nerr = 1; goto _Exit;
+	}
+	// float ftmp1 = 0.f, ftmp2 = 0.f;
+	// ftmp1 = GetAbsTotal(wav, nitems);
+	if (bTranspose) { // transpose the input to wavtmp and relink wavuse
+		wavtmp = (fcmplx*)malloc(nbytes);
+		if (NULL == wavtmp) { // allocation failed
+			nerr = 1; goto _Exit;
+		}
+		// copy a transposed version of the input to the temporary buffer
+		// - assumes that the input wav has m_nscx rows of length m_nscy
+		// - writes data transposed to wavtmp in m_nscy rows of length m_nscx
+		// This can be slow due to massive memory jumps
+		for (j = 0; j < m_nscx; j++) { // loop over input m_nscx rows -> tmp columns (j)
+			idy = j * m_nscy;
+			for (i = 0; i < m_nscy; i++) { // loop over input m_nscy columns -> tmp rows (i)
+				idx = i + idy;
+				idx1 = j + i * m_nscx;
+				wavtmp[idx1] = wav[idx];
+			}
+		}
+		wavuse = wavtmp; // link the temporary buffer to used
+	}
+	_h_wav = m_h_wav + iThread * nitems; // get thread wave slot
+	if (NULL == memcpy(_h_wav, wavuse, nbytes)) { // mem copy wavuse to incoming wave slot
+		nerr = 2; goto _Exit;
+	}
+	// debug
+	// ftmp2 = GetAbsTotal(_h_wav, nitems);
+	// end debug
+_Exit:
+	if (NULL != wavtmp) { free(wavtmp); wavtmp = NULL; } // free wavtmp if used
+	return nerr;
+}
+
+
+
 int CJMultiSlice::CPUMultislice(int islc0, int accmode, float weight, int iThread)
 {
 	int nerr = 0;
@@ -2468,114 +2403,49 @@ _Exit:
 }
 
 
-float CJMultiSlice::ApertureFunction(float qx, float qy, float qcx, float qcy, float qlim)
+int CJMultiSlice::SetIncomingWaveGPU(fcmplx* wav, bool bTranspose)
 {
-	float rtmp = 0.f;
-	if (qlim>0.f) {
-		float dqx = qx - qcx;
-		float dqy = qy - qcy;
-		if (dqx * dqx + dqy * dqy <= qlim) {
-			rtmp = 1.f;
+	int nerr = 0;
+	cudaError cuerr;
+	int nitems = m_nscx * m_nscy;
+	int i = 0, j = 0, i1 = 0, j1 = 0, idx = 0, idx1 = 0, idy = 0, idy1 = 0; // iterator
+	size_t nbytes = sizeof(fcmplx)*(size_t)nitems;
+	fcmplx* wavuse = wav;
+	fcmplx* wavtmp = NULL; // temp buffer only used when bTranspose == true
+	if ( (m_status_setup_GPU & _JMS_THRESHOLD_CALC) == 0 || nitems <= 0 || m_d_wav == NULL) {
+		nerr = 101; goto _Exit; // module not ready
+	}
+	// float ftmp1 = 0.f, ftmp2 = 0.f;
+	// ftmp1 = GetAbsTotal(wav, nitems);
+	if (bTranspose) { // transpose the input to wavtmp and relink wavuse
+		wavtmp = (fcmplx*)malloc(nbytes);
+		if (NULL == wavtmp) { // allocation failed
+			nerr = 1; goto _Exit;
 		}
-	}
-	return rtmp;
-}
-
-
-float CJMultiSlice::ApertureFunctionS(float qx, float qy, float qcx, float qcy, float qlim, float smooth)
-{
-	// uses the current physical grid size: m_a0[0] and m_a0[1]
-	// A <smooth>-pixel wide smoothing is applied to the aperture edge
-	float rtmp = 0.f;
-	if (qlim>0.f) {
-		float dqx = qx - qcx; // qx distance from aperture center
-		float dqy = qy - qcy; // qy distance from aperture center
-		float dqm = sqrtf(dqx * dqx + dqy * dqy); // magnitude of distance
-		if (dqm > 0.f) { // q is not at center
-			float dpx = dqx * m_a0[0]; // x pixel distance
-			float dpy = dqy * m_a0[1]; // y pixel distance
-			float dpm = sqrtf(dpx * dpx + dpy * dpy); // total pixel distance
-			float dlr = qlim / dqm; // ratio between q and qlim
-			float dlpx = dqx * dlr * m_a0[0]; // rescale to aperture edge pixel distance along x
-			float dlpy = dqy * dlr * m_a0[2]; // rescale to aperture edge pixel distance along y
-			float dpl = sqrtf(dlpx * dlpx + dlpy * dlpy); // aperture total pixel distance
-			rtmp = (1.f - tanhf((dpm - dpl)*((float)_PI) / smooth)) *0.5f; // sigmoid edge
-		}
-		else { // at center of aperture set amplitude to 1.
-			rtmp = 1.f;
-		}
-	}
-	return rtmp;
-}
-
-
-float CJMultiSlice::AberrationFunction(float qx, float qy, int nabrr, float* aberrcoeff)
-{
-	// This code assumes that one of the cores fulfills _JMS_THRESHOLD_CALC
-	if (0 == nabrr || NULL == aberrcoeff) {
-		return 0.f; // no coefficients
-	}
-	int i = 0, j = 0, k = 0, k2 = 0, l = 0, n = 0, m = 0;
-	int nol = (int)(_JMS_ABERRATION_ORDER_MAX) + 1;
-	int nol2 = (int)(_JMS_ABERRATION_ORDER_MAX)*2 + 1;
-	int nab = min(nabrr, m_abrr_maxidx); // limit applied list length to what is supported
-	float* wfield = NULL;
-	float* wabs = NULL;
-	float sgnprm[4] = { 1.f,0.f,-1.f,0.f };
-	float wx = qx * m_wl; // 1/nm -> rad
-	float wy = qy * m_wl; // 1/nm -> rad
-	float w = sqrtf(wx * wx + wy * wy);
-	float prefac = (float)_TPI / m_wl;
-	float chi = 0.f;
-	float pwx = 1.f, pwy = 1.f, pw = 1.f;
-	float wax = 0.f, way = 0.f;
-	float rtmp = 0.f, ttmp = 0.f, ttmp1 = 0.f, tsgn = 0.f;
-	wfield = (float*)malloc(sizeof(float) * 2 * nol);
-	wabs = (float*)malloc(sizeof(float) * nol);
-	wfield[0] = pwx; wfield[1] = pwy; wabs[0] = pw;
-	for (i = 1; i < nol; i++) { // prepare list of powres of wx, wy, and w
-		pwx *= wx;
-		pwy *= wy;
-		pw *= w;
-		wfield[2 * i] = pwx;
-		wfield[1 + 2 * i] = pwy;
-		wabs[i] = pw;
-	}
-	for (k = 0; k < nab; k++) { // loop k over all aberrations in the ordered list
-		// possible to implement skips here for non-active aberrations, need info
-		k2 = 2 * k;
-		wax = aberrcoeff[k2];
-		way = aberrcoeff[1+k2];
-		if ((wax*wax + way * way) > (float)(_JMS_ABERRATION_STRTHRESH)) { // skip insignificant aberration 
-			m = m_abrr_widx[k2]; // aberration order
-			n = m_abrr_widx[1+k2]; // aberration rotational symmetry
-			ttmp = 0.f;
-			for (l = 0; l <= n; l++) { // loop l over all terms -> possible exponents of w*
-				ttmp1 = 0.f;
-				// get first term sign
-				tsgn = sgnprm[l % 4];
-				ttmp1 = ttmp1 + tsgn * wax; // add scaling with wax
-				// get second term sign
-				tsgn = sgnprm[(l + 3) % 4];
-				ttmp1 = ttmp1 + tsgn * way; // add scaling with way
-				// get exponent j of w
-				j = n - l;
-				//   ++ (s1*wax + s2*way) * (n over l)           * wx^j          * wy^l
-				ttmp = ttmp + ttmp1 * m_abrr_binom[n + l * nol2] * wfield[2 * j] * wfield[1 + 2 * l];
+		// copy a transposed version of the input to the temporary buffer
+		// - assumes that the input wav has m_nscx rows of length m_nscy
+		// - writes data transposed to wavtmp in m_nscy rows of length m_nscx
+		// This can be slow due to massive memory jumps
+		for (j = 0; j < m_nscx; j++) { // loop over input m_nscx rows -> tmp columns (j)
+			idy = j * m_nscy;
+			for (i = 0; i < m_nscy; i++) { // loop over input m_nscy columns -> tmp rows (i)
+				idx = i + idy;
+				idx1 = j + i * m_nscx;
+				wavtmp[idx1] = wav[idx];
 			}
-
-			j = m - n; // get prefactor scale
-			ttmp = ttmp * wabs[j] / ((float)m); // ! final scaling for current term
-			rtmp = rtmp + ttmp;
 		}
+		wavuse = wavtmp; // link the temporary buffer to used
 	}
-	chi = rtmp * prefac; // scale result with prefactor to a phase [rad]
-	//
-	if (NULL!= wabs) free(wabs);
-	if (NULL != wfield) free(wfield);
-	//
-	return chi;
+	cuerr = cudaMemcpy(m_d_wav0, wavuse, nbytes, cudaMemcpyHostToDevice);
+	if (cuerr != cudaSuccess) {
+		PostCUDAError("(SetIncomingWaveGPU): Failed to copy wave function to GPU devices", cuerr);
+		nerr = 102; goto _Exit;
+	}
+_Exit:
+	if (NULL != wavtmp) { free(wavtmp); wavtmp = NULL; } // free wavtmp if used
+	return nerr;
 }
+
 
 
 int CJMultiSlice::GPUMultislice(int islc0, int accmode, float weight)

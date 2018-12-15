@@ -5,6 +5,11 @@
 
 #pragma once
 
+// Remembering to define _CRT_RAND_S prior to inclusion statements
+// when trying to use errno_t __cdelc rand_s(unsigned int * number).
+#define _CRT_RAND_S
+
+
 #include "targetver.h"
 
 #define WIN32_LEAN_AND_MEAN             // Exclude rarely-used stuff from Windows headers

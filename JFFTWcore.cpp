@@ -199,6 +199,19 @@ int CJFFTWcore::Zero(void)
 	return 0;
 }
 
+int CJFFTWcore::Conjugate(void)
+{
+	if (m_nstatus < 1) {
+		cerr << "Error(JFFTWcore): Cannot conjugate data, not initialized." << endl;
+		return 1;
+	}
+	size_t nd = GetDataSize();
+	for (size_t i = 0; i < nd; i++) {
+		m_pcw[i][1] = -m_pcw[i][1]; // invert the imaginary part
+	}
+	return 0;
+}
+
 int CJFFTWcore::Scale(float sca)
 {
 	if (m_nstatus < 1) {
@@ -209,6 +222,25 @@ int CJFFTWcore::Scale(float sca)
 	for (size_t i = 0; i < nd; i++) {
 		m_pcw[i][0] *= sca;
 		m_pcw[i][1] *= sca;
+	}
+	return 0;
+}
+
+int CJFFTWcore::MultiplyReal(float * src)
+{
+	if (m_nstatus < 1) {
+		cerr << "Error(JFFTWcore): Cannot multiply data, not initialized." << endl;
+		return 1;
+	}
+	if (src == NULL) // error: invalid source pointer
+		return 2;
+	size_t nd = GetDataSize();
+	fcmplx * pcdst = reinterpret_cast<fcmplx*>(m_pcw);
+	for (size_t i = 0; i<nd; i++) {
+		pcdst[i] *= src[i];
+		//re1 = m_pcw[i][0]; im1 = m_pcw[i][1];
+		//m_pcw[i][0] = re1*src[2 * i] - im1*src[2 * i + 1];
+		//m_pcw[i][1] = im1*src[2 * i] + re1*src[2 * i + 1];
 	}
 	return 0;
 }
@@ -631,9 +663,11 @@ int CJFFTWcore::GetDataPow(float * dst)
 	return 0;
 }
 
+
+
 float CJFFTWcore::GetDataTotalPow(void)
 {
-	/*       Performs a Kahan sum on in_1[i]*in_2[i]                              */
+	/*       Performs a Kahan sum on the absolute square of the data              */
 	/*       https://en.wikipedia.org/wiki/Kahan_summation_algorithm              */
 	double dsum = 0.0;
 	double dabs = 0.0;
@@ -649,6 +683,51 @@ float CJFFTWcore::GetDataTotalPow(void)
 			im = (double)m_pcw[i][1];
 			dabs = re * re + im * im;
 			dy = dabs - dc; // next value including previous correction
+			dt = dsum + dy; // intermediate new sum value
+			dc = (dt - dsum) - dy; // new correction
+			dsum = dt; // update result
+		}
+	}
+	return (float)dsum;
+}
+
+
+float CJFFTWcore::GetDataTotalRe(void)
+{
+	/*       Performs a Kahan sum on the data real part                           */
+	/*       https://en.wikipedia.org/wiki/Kahan_summation_algorithm              */
+	double dsum = 0.0;
+	double dc = 0.0;
+	double dy = 0.0;
+	double dt = 0.0;
+	double re = 0.0;
+	size_t len = GetDataSize();
+	if (len > 0 && m_pcw != NULL && m_nstatus > 0) {
+		for (size_t i = 0; i < len; i++) {
+			re = (double)m_pcw[i][0];
+			dy = re - dc; // next value including previous correction
+			dt = dsum + dy; // intermediate new sum value
+			dc = (dt - dsum) - dy; // new correction
+			dsum = dt; // update result
+		}
+	}
+	return (float)dsum;
+}
+
+float CJFFTWcore::GetDataTotalIm(void)
+{
+	/*       Performs a Kahan sum on the data imaginary part                      */
+	/*       https://en.wikipedia.org/wiki/Kahan_summation_algorithm              */
+	double dsum = 0.0;
+	double dc = 0.0;
+	double dy = 0.0;
+	double dt = 0.0;
+	double im = 0.0;
+	size_t len = GetDataSize();
+	if (len > 0 && m_pcw != NULL && m_nstatus > 0) {
+		for (size_t i = 0; i < len; i++) {
+			im = (double)m_pcw[i][1];
+			dy = im - dc; // next value including previous correction
 			dt = dsum + dy; // intermediate new sum value
 			dc = (dt - dsum) - dy; // new correction
 			dsum = dt; // update result
