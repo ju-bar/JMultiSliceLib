@@ -124,7 +124,7 @@ void CJProbeParams::operator=(const CJProbeParams &other)
 	m_fspread_width = other.m_fspread_width;
 	m_fspread_kernel_width = other.m_fspread_kernel_width;
 	m_fspread_kernel_samples = other.m_fspread_kernel_samples;
-	memcpy(m_abrr_coeff, 0, sizeof(float)*naccpy);
+	memcpy(m_abrr_coeff, other.m_abrr_coeff, sizeof(float)*naccpy);
 
 }
 

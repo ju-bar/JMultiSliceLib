@@ -1,5 +1,26 @@
 List of changes to JMultiSliceLib
 
+2018-12-18: 0.21 JB
+- Added diffraction de-scan (global m_dif_descan == 0: off, 1: on)
+  per thread de-scan parameters: m_d/h_dif_ndescanx/y in [pixel]
+  De-scan shifts the diffraction pattern before accumulation.
+  Use DiffractionDescan(true/false) to turn the de-scan on/off.
+  Use SetDiffractionDescan(whichcode, ndescanx, ndescany, iThread)
+  to set de-scan values of the thread  before calling the multislice
+  routines. The de-scan values should be identical to the scan values.
+- Added more device and host SetData and GetData functions (CJFFTCUDAcore).
+- Added external array transform interfaces FT_h and IFT_h (CJFFTWcore).
+- Added wave function accumulation and readout. The detection channels
+  for wave functions are triggered in the DetectorSetup() and GetResult()
+  interfaces with flags _JMS_DETECT_WAVEREAL and _JMS_DETECT_WAVEFOURIER.
+  Accumulating many multislice runs with these flags will sum up over
+  wave functions. Renormalization of these results yields wave functions
+  of the elastic channel which can be used to separate elastic images and
+  TDS images from the total intensities recorded with the detection flags
+  _JMS_DETECT_IMAGE and _JMS_DETECT_DIFFRACTION, respectively. Due to
+  the potential hybrid multi-threading, the final separation is not
+  provided by JMultiSlice and should be done by the calling code.
+- Extended the LIB interface .
 
 2018-12-15: 0.20 JB
 - Added a module for probe aberrations, apertures, and wavefunctions

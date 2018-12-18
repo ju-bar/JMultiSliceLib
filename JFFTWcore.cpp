@@ -177,6 +177,36 @@ int CJFFTWcore::FT(void)
 	return 0;
 }
 
+int CJFFTWcore::FT_h(fcmplx* src)
+{
+	if (m_nstatus < 1) {
+		cerr << "Error(JFFTWcore): Cannot transform, not initialized." << endl;
+		return 1;
+	}
+	if (NULL == src) {
+		cerr << "Error(JFFTWcore): Cannot transform, invalid data pointer." << endl;
+		return 2;
+	}
+	// We allocate an array here to ensure the same memory alignment as with m_pcw,
+	// because we want to re-use m_planf
+	size_t nd = GetDataSize();
+	fftwf_complex* pcw = fftwf_alloc_complex(nd);
+	if (NULL == pcw) {
+		cerr << "Error(JFFTWcore): Failed to allocate transformation array." << endl;
+		return 3;
+	}
+	// copy the data in
+	size_t nbytes = sizeof(fftwf_complex)*nd;
+	memcpy(pcw, src, nbytes);
+	// do the transformation
+	fftwf_execute_dft(m_planf, pcw, pcw);
+	// copy the data out
+	memcpy(src, pcw, nbytes);
+	// clean up
+	if (NULL != pcw) fftwf_free(pcw);
+	return 0;
+}
+
 
 int CJFFTWcore::IFT(void)
 {
@@ -185,6 +215,36 @@ int CJFFTWcore::IFT(void)
 		return 1;
 	}
 	fftwf_execute(m_planb);
+	return 0;
+}
+
+int CJFFTWcore::IFT_h(fcmplx* src)
+{
+	if (m_nstatus < 1) {
+		cerr << "Error(JFFTWcore): Cannot transform, not initialized." << endl;
+		return 1;
+	}
+	if (NULL == src) {
+		cerr << "Error(JFFTWcore): Cannot transform, invalid data pointer." << endl;
+		return 2;
+	}
+	// We allocate an array here to ensure the same memory alignment as with m_pcw,
+	// because we want to re-use m_planf
+	size_t nd = GetDataSize();
+	fftwf_complex* pcw = fftwf_alloc_complex(nd);
+	if (NULL == pcw) {
+		cerr << "Error(JFFTWcore): Failed to allocate transformation array." << endl;
+		return 3;
+	}
+	// copy the data in
+	size_t nbytes = sizeof(fftwf_complex)*nd;
+	memcpy(pcw, src, nbytes);
+	// do the transformation
+	fftwf_execute_dft(m_planb, pcw, pcw);
+	// copy the data out
+	memcpy(src, pcw, nbytes);
+	// clean up
+	if (NULL != pcw) fftwf_free(pcw);
 	return 0;
 }
 

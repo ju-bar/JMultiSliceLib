@@ -130,29 +130,39 @@ public:
 	int SetCUDADevice(int ndev = 0);
 	// sets data by copying from device memory
 	int SetDataC_d(cuComplex * src);
-	// sets data, assuming float re,im aligned source items
+	// sets data, assuming float re,im aligned source items from host memory
 	int SetDataC(fcmplx * src);
-	// sets data (re,0)
+	// sets data (re,0) from host
 	int SetDataRe(float * src);
-	// sets data (0,im)
+	// sets data (0,im) from host
 	int SetDataIm(float * src);
-	// gets data, assuming float re,im aligned destination items
+	// gets data to host, assuming float re,im aligned destination items
 	int GetDataC(fcmplx * dst);
-	// gets data, assuming float (real) destination items
+	// gets data to host, assuming float (real) destination items
 	int GetDataRe(float * dst);
-	// gets data, assuming float (imag) destination items
+	// gets data to host, assuming float (imag) destination items
 	int GetDataIm(float * dst);
-	// gets data, assuming float (abs) destination items
+	// gets data to host, assuming float (abs) destination items
 	int GetDataAbs(float * dst);
-	// gets data, assuming float (arg) destination items
+	// gets data to host, assuming float (arg) destination items
 	int GetDataArg(float * dst);
 	// gets a pointer to the core data on device memory
 	// ! Warning ! Use carefully! Do not change allocation status!
 	cuComplex* GetData_d();
 	// gets a copy of the data on device memory
 	int GetDataC_d(cuComplex * dst);
-	// gets a copy of the data power on device memory
+	// sets data (0,im) from device source
+	int SetDataIm_d(float * src);
+	// sets data (re,0) from device source
+	int SetDataRe_d(float * src);
+	// gets data (0,im) to device buffer
+	int GetDataIm_d(float * dst);
+	// gets data (re,0) to device buffer
+	int GetDataRe_d(float * dst);
+	// gets a copy of the data power to device buffer
 	int GetDataPow_d(float * dst);
+	// gets a copy of the data power to host buffer
+	int GetDataPow(float * dst);
 	// gets total data power
 	int GetDataTotalPow(float &pow);
 };

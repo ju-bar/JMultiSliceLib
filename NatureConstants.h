@@ -2,7 +2,7 @@
 // C++ header file: NatureConstants.h
 // Declaration of math constants often used
 // Declaration of physical constants based on published CODATA 2014
-// Source: <https://doi.org/10.5281/zenodo.22826>
+// Source:	<http://dx.doi.org/10.1103/RevModPhys.88.035009>
 //
 // Copyright (C) 2018 Juri Barthel
 // Email: juribarthel@gmail.com

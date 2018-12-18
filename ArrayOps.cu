@@ -67,6 +67,48 @@ namespace cg = cooperative_groups;
 //	return cudaStatus;
 //}
 
+
+// sets in_1 as the real part of out_1: out_1[i].x = in_1[i]
+__global__ void SetReKernel(cuComplex* out_1, float* in_1, unsigned int size)
+{
+	unsigned int idx = threadIdx.x + blockIdx.x * blockDim.x;
+	if (idx < size) {
+		out_1[idx].x = in_1[idx];
+	}
+	return;
+}
+
+// sets in_1 as the imaginary part of out_1: out_1[i].y = in_1[i]
+__global__ void SetImKernel(cuComplex* out_1, float* in_1, unsigned int size)
+{
+	unsigned int idx = threadIdx.x + blockIdx.x * blockDim.x;
+	if (idx < size) {
+		out_1[idx].y = in_1[idx];
+	}
+	return;
+}
+
+// gets out_1 as the real part of in_1: out_1[i] = in_1[i].x
+__global__ void GetReKernel(float* out_1, cuComplex* in_1, unsigned int size)
+{
+	unsigned int idx = threadIdx.x + blockIdx.x * blockDim.x;
+	if (idx < size) {
+		out_1[idx] = in_1[idx].x;
+	}
+	return;
+}
+
+// gets out_1 as the imaginary part of in_1: out_1[i] = in_1[i].y
+__global__ void GetImKernel(float *out_1, cuComplex* in_1, unsigned int size)
+{
+	unsigned int idx = threadIdx.x + blockIdx.x * blockDim.x;
+	if (idx < size) {
+		out_1[idx] = in_1[idx].y;
+	}
+	return;
+}
+
+
 // calculates a linear combination of two complex arrays with offset: out_1[i] = in_1[i] * a + in_2[i] * b + c
 __global__ void AddKernel(cuComplex *out_1, cuComplex *in_1, cuComplex* in_2, cuComplex a, cuComplex b, cuComplex c, unsigned int size)
 {
@@ -76,6 +118,16 @@ __global__ void AddKernel(cuComplex *out_1, cuComplex *in_1, cuComplex* in_2, cu
 		cuComplex c2b = cuCmulf(in_2[idx], b);
 		out_1[idx].x = c1a.x + c2b.x + c.x;
 		out_1[idx].y = c1a.y + c2b.y + c.y;
+	}
+	return;
+}
+
+// calculates the sum of two complex arrays: out_1[i] = in_1[i] + in_2[i]
+__global__ void AddKernel0(cuComplex *out_1, cuComplex *in_1, cuComplex* in_2, unsigned int size)
+{
+	unsigned int idx = threadIdx.x + blockIdx.x * blockDim.x;
+	if (idx < size) {
+		out_1[idx] = cuCaddf(in_1[idx],in_2[idx]);
 	}
 	return;
 }
@@ -160,7 +212,7 @@ __global__ void MulKernel(cuComplex *out_1, cuComplex *in_1, cuComplex *in_2, un
 // calculates complex*complex element-wise: out_1[j1][i1] = in_1[j1][i1] * in_2[j2][i2]
 // - use this to apply complex transmission functions smaller than the wavefunction
 // - uses periodic boundary conditions on in_2 on periods (m0,m1)
-__global__ void MulSub2dKernel(cuComplex *out_1, cuComplex *in_1, cuComplex *in_2, unsigned int n0, unsigned int n1, unsigned int m0, unsigned int m1, unsigned size)
+__global__ void MulSub2dKernel(cuComplex *out_1, cuComplex *in_1, cuComplex *in_2, unsigned int n0, unsigned int n1, unsigned int m0, unsigned int m1, unsigned int size)
 {
 	unsigned int idx1 = threadIdx.x + blockIdx.x * blockDim.x; // pixel index in data stream 1
 	if (idx1 < size) {
@@ -268,6 +320,23 @@ __global__ void CPowScaKernel(float *out_1, cuComplex *in_1, float sca, unsigned
 	unsigned int idx = threadIdx.x + blockIdx.x * blockDim.x;
 	if (idx < size) {
 		out_1[idx] = sca * (in_1[idx].x * in_1[idx].x + in_1[idx].y * in_1[idx].y);
+	}
+}
+
+// applies a shift offset to a wave-function: out_1[i] = in_[1]*Exp{ -I *2*Pi * [ dx*in_2[i] + dy*in_3[i]) ] }
+// - in_1 -> input wave function (Fourier space)
+// - in_2 -> kx field [1/nm]
+// - in_3 -> ky field [1/nm]
+// - dx, dy = shifts x and y [nm]
+__global__ void MulPhasePlate00Kernel(cuComplex *out_1, cuComplex *in_1, float *in_2, float *in_3, float dx, float dy, unsigned int size)
+{
+	unsigned int idx = threadIdx.x + blockIdx.x * blockDim.x;
+	cuComplex tf;
+	if (idx < size) {
+		float chi = -6.28318531f*(dx * in_2[idx] + dy * in_3[idx]);
+		tf.x = cosf(chi);
+		tf.y = sinf(chi);
+		out_1[idx] = cuCmulf(in_1[idx], tf);
 	}
 }
 
@@ -813,6 +882,126 @@ Error:
 }
 
 
+// sets the real part of out_1 from in_1: out_1[i].x = in_1[i] on device 
+cudaError_t ArrayOpSetRe(cuComplex *out_1, float *in_1, ArrayOpStats1 stats)
+{
+	cudaError_t cudaStatus;
+	unsigned int size = stats.uSize;	// input size
+	int blockSize = stats.nBlockSize;	// block size 
+	int gridSize = stats.nGridSize;		// grid size needed, based on input size
+
+	// Launch the parallel kernel operation
+	SetReKernel<<<gridSize, blockSize>>>(out_1, in_1, size);
+
+	// Check for any errors launching the kernel
+	cudaStatus = cudaGetLastError();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "- SetReKernel launch failed: %s\n", cudaGetErrorString(cudaStatus));
+		fprintf(stderr, "  - gridSize: %i, blockSize: %i\n", gridSize, blockSize);
+		goto Error;
+	}
+
+	// synchronize threads and wait for all to be finished
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaDeviceSynchronize failed after launching SetReKernel: %s\n", cudaGetErrorString(cudaStatus));
+		goto Error;
+	}
+
+Error:
+	return cudaStatus;
+}
+
+// sets the imaginary part of out_1 from in_1: out_1[i].y = in_1[i] on device 
+cudaError_t ArrayOpSetIm(cuComplex *out_1, float *in_1, ArrayOpStats1 stats)
+{
+	cudaError_t cudaStatus;
+	unsigned int size = stats.uSize;	// input size
+	int blockSize = stats.nBlockSize;	// block size 
+	int gridSize = stats.nGridSize;		// grid size needed, based on input size
+
+	// Launch the parallel kernel operation
+	SetImKernel<<<gridSize, blockSize>>>(out_1, in_1, size);
+
+	// Check for any errors launching the kernel
+	cudaStatus = cudaGetLastError();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "- SetImKernel launch failed: %s\n", cudaGetErrorString(cudaStatus));
+		fprintf(stderr, "  - gridSize: %i, blockSize: %i\n", gridSize, blockSize);
+		goto Error;
+	}
+
+	// synchronize threads and wait for all to be finished
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaDeviceSynchronize failed after launching SetImKernel: %s\n", cudaGetErrorString(cudaStatus));
+		goto Error;
+	}
+
+Error:
+	return cudaStatus;
+}
+
+// gets out_1 as the real part of in_1: out_1[i] = in_1[i].x on device 
+cudaError_t ArrayOpGetRe(float *out_1, cuComplex *in_1, ArrayOpStats1 stats)
+{
+	cudaError_t cudaStatus;
+	unsigned int size = stats.uSize;	// input size
+	int blockSize = stats.nBlockSize;	// block size 
+	int gridSize = stats.nGridSize;		// grid size needed, based on input size
+
+	// Launch the parallel kernel operation
+	GetReKernel<<<gridSize, blockSize>>>(out_1, in_1, size);
+
+	// Check for any errors launching the kernel
+	cudaStatus = cudaGetLastError();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "- GetReKernel launch failed: %s\n", cudaGetErrorString(cudaStatus));
+		fprintf(stderr, "  - gridSize: %i, blockSize: %i\n", gridSize, blockSize);
+		goto Error;
+	}
+
+	// synchronize threads and wait for all to be finished
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaDeviceSynchronize failed after launching GetReKernel: %s\n", cudaGetErrorString(cudaStatus));
+		goto Error;
+	}
+
+Error:
+	return cudaStatus;
+}
+
+// gets out_1 as the imaginary part of in_1: out_1[i] = in_1[i].y on device 
+cudaError_t ArrayOpGetIm(float *out_1, cuComplex *in_1, ArrayOpStats1 stats)
+{
+	cudaError_t cudaStatus;
+	unsigned int size = stats.uSize;	// input size
+	int blockSize = stats.nBlockSize;	// block size 
+	int gridSize = stats.nGridSize;		// grid size needed, based on input size
+
+	// Launch the parallel kernel operation
+	GetImKernel<<<gridSize, blockSize>>>(out_1, in_1, size);
+
+	// Check for any errors launching the kernel
+	cudaStatus = cudaGetLastError();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "- GetImKernel launch failed: %s\n", cudaGetErrorString(cudaStatus));
+		fprintf(stderr, "  - gridSize: %i, blockSize: %i\n", gridSize, blockSize);
+		goto Error;
+	}
+
+	// synchronize threads and wait for all to be finished
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaDeviceSynchronize failed after launching GetImKernel: %s\n", cudaGetErrorString(cudaStatus));
+		goto Error;
+	}
+
+Error:
+	return cudaStatus;
+}
+
 
 // calculates complex linear combination out_1[i] = in_1[i] * a + in_2[i] * b + c on device 
 cudaError_t ArrayOpAdd(cuComplex *out_1, cuComplex *in_1, cuComplex *in_2, cuComplex a, cuComplex b, cuComplex c, ArrayOpStats1 stats)
@@ -837,6 +1026,36 @@ cudaError_t ArrayOpAdd(cuComplex *out_1, cuComplex *in_1, cuComplex *in_2, cuCom
 	cudaStatus = cudaDeviceSynchronize();
 	if (cudaStatus != cudaSuccess) {
 		fprintf(stderr, "cudaDeviceSynchronize failed after launching AddKernel: %s\n", cudaGetErrorString(cudaStatus));
+		goto Error;
+	}
+
+Error:
+	return cudaStatus;
+}
+
+// calculates complex sum out_1[i] = in_1[i] + in_2[i] on device 
+cudaError_t ArrayOpAdd0(cuComplex *out_1, cuComplex *in_1, cuComplex *in_2, ArrayOpStats1 stats)
+{
+	cudaError_t cudaStatus;
+	unsigned int size = stats.uSize;	// input size
+	int blockSize = stats.nBlockSize;	// block size 
+	int gridSize = stats.nGridSize;		// grid size needed, based on input size
+
+	// Launch the parallel kernel operation
+	AddKernel0<<<gridSize, blockSize>>>(out_1, in_1, in_2, size);
+
+	// Check for any errors launching the kernel
+	cudaStatus = cudaGetLastError();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "- AddKernel0 launch failed: %s\n", cudaGetErrorString(cudaStatus));
+		fprintf(stderr, "  - gridSize: %i, blockSize: %i\n", gridSize, blockSize);
+		goto Error;
+	}
+
+	// synchronize threads and wait for all to be finished
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaDeviceSynchronize failed after launching AddKernel0: %s\n", cudaGetErrorString(cudaStatus));
 		goto Error;
 	}
 
@@ -1350,6 +1569,36 @@ cudaError_t ArrayOpCPowSca(float *out_1, cuComplex *in_1, float sca, ArrayOpStat
 	cudaStatus = cudaDeviceSynchronize();
 	if (cudaStatus != cudaSuccess) {
 		fprintf(stderr, "cudaDeviceSynchronize failed after launching CPowScaKernel: %s\n", cudaGetErrorString(cudaStatus));
+		goto Error;
+	}
+
+Error:
+	return cudaStatus;
+}
+
+
+cudaError_t ArrayOpMulPP00(cuComplex *out_1, cuComplex *in_1, float *in_2, float *in_3, float dx, float dy, ArrayOpStats1 stats)
+{
+	cudaError_t cudaStatus;
+	unsigned int size = stats.uSize;	// input size
+	int blockSize = stats.nBlockSize;	// block size 
+	int gridSize = stats.nGridSize;		// grid size needed, based on input size
+
+	// Launch the parallel kernel operation
+	MulPhasePlate00Kernel <<<gridSize, blockSize>>>(out_1, in_1, in_2, in_3, dx, dy, size);
+
+	// Check for any errors launching the kernel
+	cudaStatus = cudaGetLastError();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "MulPhasePlate00Kernel launch failed: %s\n", cudaGetErrorString(cudaStatus));
+		fprintf(stderr, "  - gridSize: %i, blockSize: %i\n", gridSize, blockSize);
+		goto Error;
+	}
+
+	// synchronize threads and wait for all to be finished
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaDeviceSynchronize failed after launching MulPhasePlate00Kernel: %s\n", cudaGetErrorString(cudaStatus));
 		goto Error;
 	}
 

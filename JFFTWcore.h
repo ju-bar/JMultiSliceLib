@@ -73,6 +73,8 @@ public:
 	// Transformation operation interface:
 	int FT(void); // does a forward FFT with the current plan and data in the core
 	int IFT(void); // does a backward FFT with the current plan and data in the core
+	int FT_h(fcmplx* src); // does a forward FFT with the current plan and given data src
+	int IFT_h(fcmplx* src); // does a backward FFT with the current plan and given data src
 	int Zero(void); // sets the core data values to zero
 	int Conjugate(void); // applies complex conjugate to the data
 	int Scale(float sca); // scales the data

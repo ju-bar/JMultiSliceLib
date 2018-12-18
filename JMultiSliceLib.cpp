@@ -3,9 +3,10 @@
 // compile with: cl /c /EHsc JMultiSliceLib.cpp
 // post-build command: lib JMultiSliceLib.obj
 //
+// This defines library wrapper function around class CJMultiSlice
 //
 // Copyright (C) 2018 - Juri Barthel (juribarthel@gmail.com)
-// Copyright (C) 2018 - RWTH Aachen University, 52074 Aachen, Germany
+// Copyright (C) 2018 - Forschungszentrum Jülich GmbH, 52425 Jülich, Germany
 //
 /*
 This program is free software : you can redistribute it and/or modify
@@ -75,6 +76,11 @@ void __stdcall SetGridSize(int nx, int ny)
 	JMS.SetGridSize(nx, ny);
 }
 
+void __stdcall GetGridSize(int &nx, int &ny)
+{
+	JMS.GetGridSize(nx, ny);
+}
+
 void __stdcall SetSupercellSize(float *a0)
 {
 	JMS.SetSupercellSize(a0);
@@ -83,6 +89,31 @@ void __stdcall SetSupercellSize(float *a0)
 void __stdcall SetSupercellSizeABC(float a, float b, float c)
 {
 	JMS.SetSupercellSize(a, b, c);
+}
+
+void __stdcall SetSliceThickness(int islc, float fthickness)
+{
+	JMS.SetSliceThickness(islc, fthickness);
+}
+
+void __stdcall DiffractionDescan(bool bActivate)
+{
+	JMS.DiffractionDescan(bActivate);
+}
+
+void __stdcall SetDiffractionDescanN(int whichcode, int ndescanx, int ndescany, int iThread)
+{
+	JMS.SetDiffractionDescanN(whichcode, ndescanx, ndescany, iThread);
+}
+
+void __stdcall SetDiffractionDescan(int whichcode, float descanx, float descany, int iThread)
+{
+	JMS.SetDiffractionDescan(whichcode, descanx, descany, iThread);
+}
+
+void __stdcall SetDiffractionDescanMRad(int whichcode, float descanx, float descany, int iThread)
+{
+	JMS.SetDiffractionDescanMRad(whichcode, descanx, descany, iThread);
 }
 
 int __stdcall PhaseGratingSetup(int whichcode, int nx, int ny, int nslc, int nvarmax, int* nslcvar)
@@ -130,16 +161,52 @@ int __stdcall SetIncidentWave(int whichcode, fcmplx* wav)
 	return JMS.SetIncidentWave(whichcode, wav);
 }
 
+int __stdcall GetUnscrambleHash(UINT* phash)
+{
+	return JMS.GetUnscrambleHash(phash);
+}
 int __stdcall Cleanup(void)
 {
 	return JMS.Cleanup();
 }
+
+void __stdcall CleanFFTW(void)
+{
+	JMS.CleanFFTW();
+	return;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+//
+// CALCULATIONS
+//
+////////////////////////////////////////////////////////////////////////////////
 
 int __stdcall OffsetIncomingWave(int whichcode, float dx, float dy, float dz, int iThread)
 {
 	return JMS.OffsetIncomingWave(whichcode, dx, dy, dz, iThread);
 }
 
+int __stdcall CalculateProbeWaveFourier(CJProbeParams* prm, fcmplx *wav)
+{
+	return JMS.CalculateProbeWaveFourier(prm, wav);
+}
+
+int __stdcall CalculatePropagator(float fthick, float otx, float oty, fcmplx *pro, int ntype)
+{
+	return JMS.CalculatePropagator(fthick, otx, oty, pro, ntype);
+}
+
+int __stdcall CalculateRingDetector(float beta0, float beta1, float phi0, float phi1, float theta0x, float theta0y, std::string sdsprofile, float *det, int &msklen, int *msk)
+{
+	return JMS.CalculateRingDetector(beta0, beta1, phi0, phi1, theta0x, theta0x, sdsprofile, det, msklen, msk);
+}
+
+int __stdcall GetResult(int whichcode, int whichresult, float *dst, int iThread)
+{
+	return JMS.GetResult(whichcode, whichresult, dst, iThread);
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -152,9 +219,19 @@ int __stdcall GetCPUNum(void)
 	return JMS.GetCPUNum();
 }
 
+int __stdcall SetIncomingWaveCPU(fcmplx* wav, bool bTranspose, int iThread)
+{
+	return JMS.SetIncomingWaveCPU(wav, bTranspose, iThread);
+}
+
 int __stdcall CPUMultislice(int islc0, int accmode, float weight, int iThread)
 {
 	return JMS.CPUMultislice(islc0, accmode, weight, iThread);
+}
+
+int __stdcall ClearDetMem_h(int iThread)
+{
+	return JMS.ClearDetMem_h(iThread);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -193,12 +270,17 @@ int __stdcall GetGPUCores(int idev, int &nMultiProc, int &nCores, int& nMaxThrea
 	return JMS.GetGPUCores(idev, nMultiProc, nCores, nMaxThreadPerProc);
 }
 
+int __stdcall SetIncomingWaveGPU(fcmplx* wav, bool bTranspose)
+{
+	return JMS.SetIncomingWaveGPU(wav, bTranspose);
+}
+
 int __stdcall GPUMultislice(int islc0, int accmode, float weight)
 {
 	return JMS.GPUMultislice(islc0, accmode, weight);
 }
 
-int __stdcall GetResult(int whichcode, int whichresult, float *dst, int iThread)
+int __stdcall ClearDetMem_d(void)
 {
-	return JMS.GetResult(whichcode, whichresult, dst, iThread);
+	return JMS.ClearDetMem_d();
 }

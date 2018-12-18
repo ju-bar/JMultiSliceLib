@@ -65,8 +65,24 @@ struct ArrayOpStats1 { // 1D kernel call stats
 //__global__ void MetKernel(int *out_1, int *out_2, int * out_3, int * out_4, unsigned int size);
 //cudaError_t ArrayOpMet(int *out_1, int *out_2, int * out_3, int * out_4, ArrayOpStats1 stats);
 
+// sets in_1 as the real part of out_1: out_1[i].x = in_1[i]
+__global__ void SetReKernel(cuComplex* out_1, float* in_1, unsigned int size);
+
+// sets in_1 as the imaginary part of out_1: out_1[i].y = in_1[i]
+__global__ void SetImKernel(cuComplex* out_1, float* in_1, unsigned int size);
+
+// gets out_1 as the real part of in_1: out_1[i] = in_1[i].x
+__global__ void GetReKernel(float* out_1, cuComplex* in_1, unsigned int size);
+
+// gets out_1 as the imaginary part of in_1: out_1[i] = in_1[i].y
+__global__ void GetImKernel(float *out_1, cuComplex* in_1, unsigned int size);
+
+
 // calculates a linear combination of two complex arrays with offset: out_1[i] = in_1[i] * a + in_2[i] * b + c
 __global__ void AddKernel(cuComplex *out_1, cuComplex *in_1, cuComplex* in_2, cuComplex a, cuComplex b, cuComplex c, unsigned int size);
+
+// calculates the sum of two complex arrays with offset: out_1[i] = in_1[i] + in_2[i]
+__global__ void AddKernel0(cuComplex *out_1, cuComplex *in_1, cuComplex* in_2, unsigned int size);
 
 // calculates a linear combination of two float arrays with offset: out_1[i] = in_1[i] * a + in_2[i] * b + c
 __global__ void FAddKernel(float *out_1, float *in_1, float* in_2, float a, float b, float c, unsigned int size);
@@ -95,7 +111,7 @@ __global__ void MulKernel(cuComplex *out_1, cuComplex *in_1, cuComplex *in_2, un
 // calculates complex*complex elemet-wise: out_1[j1][i1] = in_1[j1][i1] * in_2[j2][i2]
 // - use this to apply complex transmission functions smaller than the wavefunction
 // - uses periodic boundary conditions on in_2
-__global__ void MulKernel(cuComplex *out_1, cuComplex *in_1, cuComplex *in_2, unsigned int n0, unsigned int n1, unsigned int m0, unsigned int m1);
+__global__ void MulSub2dKernel(cuComplex *out_1, cuComplex *in_1, cuComplex *in_2, unsigned int n0, unsigned int n1, unsigned int m0, unsigned int m1, unsigned int size);
 
 // calculates complex*float elemet-wise: out_1[i] = in_1[i] * in_2[i]
 // - use this to apply real transmission functions
@@ -130,6 +146,13 @@ __global__ void CPowKernel(float *out_1, cuComplex *in_1, unsigned int size);
 // - use this to calculate probability distributions from wave
 __global__ void CPowScaKernel(float *out_1, cuComplex *in_1, float sca, unsigned int size);
 
+// applies a shift and defocus offset to a wave-function: out_1[i] = in_[1]*Exp{ -I *2*Pi * [ dx*in_2[i] + dy*in_3[i] ] }
+// - in_1 -> input wave function (Fourier space)
+// - in_2 -> kx field [1/nm]
+// - in_3 -> ky field [1/nm]
+// - dx, dy = shifts x and y [nm]
+__global__ void MulPhasePlate00Kernel(cuComplex *out_1, cuComplex *in_1, float *in_2, float *in_3, float dx, float dy, unsigned int size);
+
 // applies a shift and defocus offset to a wave-function: out_1[i] = in_[1]*Exp{ -I *2*Pi * [ dx*in_2[i] + dy*in_3[i] + dz*(in_2[i]*in_2[i]+in_3[i]*in_3[i]) ] }
 // - in_1 -> input wave function (Fourier space)
 // - in_2 -> kx field [1/nm]
@@ -163,8 +186,23 @@ cudaError_t GetOptimizedMultStats(unsigned int *size, int *blockSize, int *gridS
 // Kernel wrapper functions
 // -----------------------------------------------------------------------------
 
+// sets the real part of out_1 from in_1: out_1[i].x = in_1[i] on device 
+cudaError_t ArrayOpSetRe(cuComplex *out_1, float *in_1, ArrayOpStats1 stats);
+
+// sets the imaginary part of out_1 from in_1: out_1[i].y = in_1[i] on device 
+cudaError_t ArrayOpSetIm(cuComplex *out_1, float *in_1, ArrayOpStats1 stats);
+
+// gets out_1 as the real part of in_1: out_1[i] = in_1[i].x on device 
+cudaError_t ArrayOpGetRe(float *out_1, cuComplex *in_1, ArrayOpStats1 stats);
+
+// gets out_1 as the imaginary part of in_1: out_1[i] = in_1[i].y on device 
+cudaError_t ArrayOpGetIm(float *out_1, cuComplex *in_1, ArrayOpStats1 stats);
+
 // calculates complex linear combination out_1[i] = in_1[i] * a + in_2[i] * b + c on device 
 cudaError_t ArrayOpAdd(cuComplex *out_1, cuComplex *in_1, cuComplex *in_2, cuComplex a, cuComplex b, cuComplex c, ArrayOpStats1 stats);
+
+// calculates complex sum out_1[i] = in_1[i] + in_2[i] on device 
+cudaError_t ArrayOpAdd0(cuComplex *out_1, cuComplex *in_1, cuComplex *in_2, ArrayOpStats1 stats);
 
 // calculates float linear combination out_1[i] = in_1[i] * a + in_2[i] * b + c on device 
 cudaError_t ArrayOpFAdd(float *out_1, float *in_1, float *in_2, float a, float b, float c, ArrayOpStats1 stats);
@@ -217,6 +255,14 @@ cudaError_t ArrayOpCPow(float *out_1, cuComplex *in_1, ArrayOpStats1 stats);
 
 // calculates out_1[i] = in_1[i] * conjg(in_1[i]) * sca  on device 
 cudaError_t ArrayOpCPowSca(float *out_1, cuComplex *in_1, float sca, ArrayOpStats1 stats);
+
+// multiplies a shift phase plate to a complex array
+// - out_1 is the modified wave function
+// - in_1 is the input wave function
+// - in_2 is the kx-array [1/nm] (full field)
+// - in_3 is the ky-array [1/nm] (full field)
+// - dx and dy are the shift coordinates [nm]
+cudaError_t ArrayOpMulPP00(cuComplex *out_1, cuComplex *in_1, float *in_2, float *in_3, float dx, float dy, ArrayOpStats1 stats);
 
 // multiplies a shift and defocus phase plate to a complex array
 // - out_1 is the modified wave function

@@ -151,10 +151,4 @@ CPU and GPU code can be used in parallel.
 
 ## Further development
 
-The following points could be developed
-* test better (faster) detector readout approaches which do not need extra error correction
-* interface for wave function readout
-* householding of elastic wave functions for separating thermal diffuse scattering
-* calculating plane and vortex wave functions
-* calculating object transmission functions from structure files, including structure data I/O
-* calculation of transition potentials for inelastic scattering
+You are welcome to propose further changes. The current list is maintained in the file "ToDo.txt".

@@ -2,13 +2,12 @@ List of next steps and wishes for JMultiSliceLib
 
 - Extend the LIB interface to a similar level as the C++ class interface
 	* target for linking to Fortran
+	* test the interface
 - Detector readout becomes the bottle neck when applied at many slices.
 	* check the readout core for optimizations / cache and loop vectorization
 	* check for optimization including the loop over multiple detectors
+- Test functionality of the wave function accumulation and readout interface
 - Implement compiler flags to exclude the CUDA code
-- Test new functions for probe generation
-- Interface for wave function readout
-- Householding of elastic wave functions for separating thermal diffuse scattering
-- Calculating plane, probe, and vortex wave functions
+- Calculating plane and vortex wave functions
 - Calculating object transmission functions from structure files, including structure data I/O
 - Calculation of transition potentials for inelastic scattering

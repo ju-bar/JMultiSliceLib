@@ -6,7 +6,7 @@
 // Copyright (C) 2018 - Juri Barthel (juribarthel@gmail.com)
 // Copyright (C) 2018 - Forschungszentrum Juelich GmbH, 52425 Juelich, Germany
 //
-// Verions of JMultiSlice: 0.16 (2018 - December - 06)
+// Verions of JMultiSlice: 0.21 (2018 - December - 16)
 //
 /*
 This program is free software : you can redistribute it and/or modify
@@ -64,6 +64,9 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 //
 // GPU code works on device arrays and outputs to host as well as to device
 // arrays. This code will allocate all arrays on the device and on the host.
+//
+// Interface routines are with public flag, internal routines are with
+// protected or private flag.
 // 
 // The GetResult function allows to copy the results from the result arrays
 // on host and device to be stored in host memory. All output arrays are
@@ -108,11 +111,15 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 //
 #ifndef __JMS__
 #define __JMS__
+// VERSION NUMBERS
 #define __JMS_VERSION__			0
-#define __JMS_VERSION_SUB__		1
-#define __JMS_VERSION_SUB_SUB__	3
+#define __JMS_VERSION_SUB__		2
+#define __JMS_VERSION_SUB_SUB__	1
+#define __JMS_VERSION_BUILD__	20181218
+// CODE IDs
 #define _JMS_CODE_CPU			1
 #define _JMS_CODE_GPU			2
+// STATUS IDs
 #define _JMS_STATUS_NONE		0
 #define _JMS_STATUS_PGR			1
 #define _JMS_STATUS_OBJ			2
@@ -121,11 +128,15 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 #define _JMS_STATUS_CORE		16
 #define _JMS_THRESHOLD_CORE		15 // status threshold for core initialization
 #define _JMS_THRESHOLD_CALC		31 // status threshold for calculation
+// DETECTION AND ACCUMULATION FLAGS
 #define _JMS_ACCMODE_NONE		0
 #define _JMS_ACCMODE_INTEGRATE	1
 #define _JMS_DETECT_INTEGRATED	0
 #define _JMS_DETECT_IMAGE		1
 #define _JMS_DETECT_DIFFRACTION	2
+#define _JMS_DETECT_WAVEREAL	4
+#define _JMS_DETECT_WAVEFOURIER	8
+// OTHER PARAMETERS
 #define _JMS_MESSAGE_LEN		2048 // max. length of message strings
 #define _JMS_RELAPERTURE		(2./3.) // relative size of band-width limit
 //
@@ -195,7 +206,7 @@ protected:
 	int m_ndet;
 	// detector readout period (used also for wave extraction)
 	int m_ndetper;
-	// intensity distribution output flag (0: off, 1: image, 2: diffraction, 3: image and diffraction)
+	// intensity distribution output flag (0: off, 1: image, 2: diffraction, 4: wave real, 8: wave fourier, and all OR combinations of these numbers)
 	int m_imagedet;
 	// number of slices with detection (sum of _JMS_objslc_det)
 	int m_ndetslc;
@@ -203,12 +214,15 @@ protected:
 	int m_status_setup_CPU;
 	// status flag for GPU multislice setup
 	int m_status_setup_GPU;
+	// global diffraction de-scan flag (0: off, 1: on)
+	int m_dif_descan_flg;
+public:
 	// default message string for output (not initialized)
 	char m_msg[_JPG_MESSAGE_LEN];
 
 // ----------------------------------------------------------------------------
 // multislice data objects
-
+protected:
 	// number of CPU thread output channels initialized
 	int m_threads_CPU_out;
 	// number of CPU threads initialized (should be less than or equal to m_threads_CPU_out)
@@ -247,9 +261,9 @@ protected:
 	fcmplx **m_h_pgr;
 	// list of host memory holding propagators (pointers for each propagator to external arrays, ID via m_proidx)
 	fcmplx **m_h_pro;
-	// host memory holding detector functions (pointers for each detector function to external arrays)
+	// host memory holding integrating diffraction detector functions (pointers for each detector function to external arrays)
 	float **m_h_det;
-	// host memory holding detector masks (pointers for each detector function to external arrays)
+	// host memory holding integrating diffraction detector masks (pointers for each detector function to external arrays)
 	int **m_h_detmask;
 	// per thread list of host memory holding integrated detector results for all detection thicknesses ( iThread, -> idet + idetslc*m_ndet )
 	float *m_h_det_int;
@@ -257,6 +271,14 @@ protected:
 	float *m_h_det_img;
 	// per thread list of host memory holding probe diffraction patterns all detection thicknesses ( iThread, -> idetslc*m_nscx*m_nscy )
 	float *m_h_det_dif;
+	// per thread list of host memory holding real-space wave functions for all detection thicknesses ( iThread, -> idetslc*m_nscx*m_nscy )
+	fcmplx *m_h_det_wfr;
+	// per thread list of host memory holding Fourier-space wave functions for all detection thicknesses ( iThread, -> idetslc*m_nscx*m_nscy )
+	fcmplx *m_h_det_wff;
+	// per thread list of host memory diffraction de-scan in x direction [pixels]
+	int *m_h_dif_ndescanx;
+	// per thread list of host memory diffraction de-scan in y direction [pixels]
+	int *m_h_dif_ndescany;
 	// device memory holding the incident wave function (one)
 	cuComplex *m_d_wav;
 	// device memory holding a backup of the incident wave function (one)
@@ -277,8 +299,18 @@ protected:
 	float *m_d_det_img;
 	// device memory holding probe diffraction patterns for all detection thicknesses ( -> idetslc*m_nscx*m_nscy )
 	float *m_d_det_dif;
+	// device memory holding real-space wave functions for all detection thicknesses ( -> idetslc*m_nscx*m_nscy )
+	cuComplex *m_d_det_wfr;
+	// device memory holding Fourier-space wave functions for all detection thicknesses ( -> idetslc*m_nscx*m_nscy )
+	cuComplex *m_d_det_wff;
 	// device memory used temporary for readout steps (managed by InitCore)
 	float *m_d_det_tmp;
+	// device memory used temporary for readout steps (managed by InitCore)
+	cuComplex *m_d_det_tmpwav;
+	// device diffraction de-scan in x-direction pixels
+	int m_d_dif_ndescanx;
+	// device diffraction de-scan in y-direction pixels
+	int m_d_dif_ndescany;
 
 // ----------------------------------------------------------------------------
 // multislice objects doing calculations
@@ -326,10 +358,13 @@ public:
 	// Sets high tension in [keV] and returns previous high tension value
 	// - also changes wave length
 	float SetHighTension(float ht);
+	
 	// Sets size of the super cell [nm]
 	void SetSupercellSize(float *a0);
+	
 	// Sets size of the super cell [nm]
 	void SetSupercellSize(float a, float b, float c);
+	
 	// Sets calculation grid dimensions in global parameters
 	// - nx, ny: grid plane size (wave functions, transmission functions, ...)
 	void SetGridSize(int nx, int ny);
@@ -339,6 +374,34 @@ public:
 	// - fthickness: the thickness of slice islc in nm
 	void SetSliceThickness(int islc, float fthickness);
 
+	// Turns the diffraction de-scan on or off
+	void DiffractionDescan(bool bActivate);
+
+	// Set the diffraction descan values for a specific calculation thread.
+	// Use the same beam tilts as in the probe tilt, the routine inverts it.
+	// Requires successful InitCore.
+	// - whichcode: flag code type, either _JMS_CODE_CPU or _JMS_CODE_GPU
+	// - ndescanx, ndescany: horizontal and vertical descan [pixel]
+	// - iThread: thread ID (for calls with whichcode == _JMS_CODE_CPU)
+	void SetDiffractionDescanN(int whichcode, int ndescanx, int ndescany, int iThread = 0);
+
+	// Set the diffraction descan values for a specific calculation thread.
+	// Use the same beam tilts as in the probe tilt, the routine inverts it.
+	// Requires successful InitCore.
+	// - whichcode: flag code type, either _JMS_CODE_CPU or _JMS_CODE_GPU
+	// - descanx, descany: horizontal and vertical descan [1/nm]
+	// - iThread: thread ID (for calls with whichcode == _JMS_CODE_CPU)
+	void SetDiffractionDescan(int whichcode, float descanx, float descany, int iThread = 0);
+
+	// Set the diffraction descan values for a specific calculation thread.
+	// Use the same beam tilts as in the probe tilt, the routine inverts it.
+	// Requires successful InitCore.
+	// - whichcode: flag code type, either _JMS_CODE_CPU or _JMS_CODE_GPU
+	// - descanx, descany: horizontal and vertical descan [mrad]
+	// - iThread: thread ID (for calls with whichcode == _JMS_CODE_CPU)
+	void SetDiffractionDescanMRad(int whichcode, float descanx, float descany, int iThread = 0);
+
+protected:
 	// Load a detector sensitivity profile from a text file
 	int LoadSTEMDetectorProfile(std::string sfile, int &len, float &refpix, float** profile);
 
@@ -351,10 +414,11 @@ public:
 	// - beta1: reference pixel collection angle [rad]
 	float GetRadialDetectorSensitivity(float theta, float* profile, int len, float refpix, float beta1);
 
+public:
 	// Calculates a STEM probe wavefunction in Fourier space using current parameters
 	// - prm: address of a CJProbeParams object defining physical probe parameters
 	// - wav: address receiving the probe wave function
-	int CalculateProbeWaveFourier(CJProbeParams prm, fcmplx *wav);
+	int CalculateProbeWaveFourier(CJProbeParams* prm, fcmplx *wav);
 
 	// Calculates a propagator function for a given thickness, object tilt
 	// and current size and wavelength parameters. The propagator amplitudes
@@ -493,10 +557,12 @@ public:
 //   success and return values of >0 indicate failure of the routine, error
 //   codes may be returned
 
+protected:
 	// Posts a CUDA error message to the standard error console
 	void PostCUDAError(char* smsg, cudaError code);
 	// Posts a CUDA memory allocation problem
 	void PostCUDAMemory(size_t nrequestedbytes);
+public:
 	// Returns number of available GPU devices
 	int GetCPUNum(void);
 	// Returns number of available GPU devices
@@ -527,6 +593,7 @@ public:
 	// Returns a new random number with the local RNG
 	int GetRand(void);
 
+protected:
 	// Returns a random sequence of variant numbers for a given sequence of
 	// object slices based on the current slice variant data
 	// - out: (output) list of variant indices for each slice in input objslc
@@ -556,53 +623,97 @@ public:
 	// - _d_a: device memory address to free (will be nulled afterwards)
 	void DeallocMem_d(void ** _d_a);
 
+public:
 	// clears host detector memory for a thread
 	// - thread ID is not checked
 	int ClearDetMem_h(int iThread);
+	
 	// clears device detector memory
 	int ClearDetMem_d(void);
+	
+protected:
 	// returns host memory phase grating for a slice
 	fcmplx* GetPhaseGrating_h(int iSlice, int* pVarID);
+	
 	// returns device memory phase grating for a slice
 	cuComplex* GetPhaseGrating_d(int iSlice, int* pVarID);
+	
 	// returns host memory propagator for a slice
 	fcmplx* GetPropagator_h(int iSlice);
+	
 	// returns device memory propagator for a slice
 	cuComplex* GetPropagator_d(int iSlice);
+	
 	// returns the absolute square total of a wave function array (free)
 	// - wav: pointer to wave function data
 	// - len: number of values
 	float GetAbsTotal(fcmplx* wav, size_t len);
+	
 	// returns the absolute total of a float array (free)
 	// - dat pointer to the array
 	// - len: number of values
 	float GetTotalF(float* dat, size_t len);
+	
 	// returns the absolute square total of the current CPU core wave function
 	// ! Take care to only use from the correct thread to avoid synchroneous access !
 	float GetCoreAbsTotal_h(int iThread);
+	
 	// returns the absolute square total of the current GPU core wave function
 	// ! Take care to only use from the correct thread to avoid synchroneous access !
 	float GetCoreAbsTotal_d(void);
+	
 	// returns the dot product of two vectors on host memory
 	float DotProduct_h(float *in_1, float *in_2, size_t len);
+	
 	// returns the dot product of two vectors on device memory
 	float DotProduct_d(float *in_1, float *in_2, size_t len, int nBlockSize);
+	
 	// returns the masked dot product of two vectors on host memory
 	float MaskedDotProduct_h(int *mask, float *in_1, float *in_2, size_t lenmask);
+	
 	// returns the masked dot product of two vectors on device memory
 	float MaskedDotProduct_d(int *mask, float *in_1, float *in_2, size_t lenmask, int nBlockSize);
+	
 	// performs diffraction detector readouts for CPU thread in given slice
 	int ReadoutDifDet_h(int iSlice, int iThread, float weight = 1.0f);
+	
 	// performs diffraction detector readouts for GPU in given slice
 	int ReadoutDifDet_d(int iSlice, float weight = 1.0f);
+	
 	// performs image detector readouts for CPU thread in given slice
 	int ReadoutImgDet_h(int iSlice, int iThread, float weight = 1.0f);
+	
 	// performs image detector readouts for GPU in given slice
 	int ReadoutImgDet_d(int iSlice, float weight = 1.0f);
+
+	// Applies a descan and records the diffraction pattern, storing in dif.
+	// Allows only integer pixel shifts.
+	// - whichcode: flag signaling which code to work on, either _JMS_CODE_CPU or _JMS_CODE_GPU.
+	//              DOESN'T ALLOW COMBINING MODES. RETURNS AN ERROR IF CALLED WITH BOTH MODES.
+	// - dnx, dny: de-scan in the diffraction plane in [pixels]
+	// - dif: address of the diffraction pattern for output (on device or host depending on whichcode)
+	// - iThread: thread ID for CPU code, ignored for GPU code
+	int DescanDifN(int whichcode, int dnx, int dny, float *dif, int iThread = 0);
+
+	//int CJMultiSlice::DescanDif(int whichcode, float dx, float dy, float* dif, int iThread)
+
+	// Applies a descan and records the Fourier space wave function, storing in wav on device.
+	// Allows only integer pixel shifts.
+	// - dnx, dny: de-scan in the diffraction plane in [pixels]
+	// - wav: address of the wave function for output (on device)
+	int DescanDifWavN_d(int dnx, int dny, cuComplex *wav);
+	
+	// Applies a descan and records the Fourier space wave function, storing in wav on host.
+	// Allows only integer pixel shifts.
+	// - dnx, dny: de-scan in the diffraction plane in [pixels]
+	// - wav: address of the wave function for output (on device)
+	// - iThread: thread ID for CPU code
+	int DescanDifWavN_h(int dnx, int dny, fcmplx *wav, int iThread);
 
 // ----------------------------------------------------------------------------
 // multislice functions
 
+public:
 	// Takes a copy of the backup wave function m_h_wav0 / m_d_wav0,
 	// applies offsets in (x, y, z), and stores the result in the the active
 	// wave function channels m_h_wav / m_d_wav used for the multislice calculation.

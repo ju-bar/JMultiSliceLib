@@ -503,7 +503,7 @@ int CJFFTCUDAcore::SetDataC_d(cuComplex * src)
 		cerr << "Error(JFFTCUDAcore::SetDataC_d): Invalid source pointer." << endl;
 		return 2;
 	}
-	// copy from host to device
+	// copy from device to device
 	size_t nbytes = sizeof(cuComplex)*GetDataSize();
 	m_cuerrLast = cudaMemcpy(m_pcw, src, nbytes, ::cudaMemcpyDeviceToDevice);
 	if (m_cuerrLast != cudaSuccess) {
@@ -590,6 +590,42 @@ int CJFFTCUDAcore::SetDataIm(float * src)
 	return 0;
 }
 
+int CJFFTCUDAcore::SetDataRe_d(float * src)
+{
+	if (m_nstatus < 1) {
+		cerr << "Error(JFFTCUDAcore::SetDataRe_d): Cannot transfer data, not initialized." << endl;
+		return 1;
+	}
+	if (src == NULL) { // error: invalid source pointer
+		cerr << "Error(JFFTCUDAcore::SetDataRe_d): Invalid source pointer." << endl;
+		return 2;
+	}
+	m_cuerrLast = ArrayOpSetRe(m_pcw, src, m_aos1dMult);
+	if (m_cuerrLast != cudaSuccess) {
+		PostCUDAError("(JFFTCUDAcore::SetDataRe_d): Set data real part on device", m_cuerrLast);
+		return 3;
+	}
+	return 0;
+}
+
+int CJFFTCUDAcore::SetDataIm_d(float * src)
+{
+	if (m_nstatus < 1) {
+		cerr << "Error(JFFTCUDAcore::SetDataIm_d): Cannot transfer data, not initialized." << endl;
+		return 1;
+	}
+	if (src == NULL) { // error: invalid source pointer
+		cerr << "Error(JFFTCUDAcore::SetDataIm_d): Invalid source pointer." << endl;
+		return 2;
+	}
+	m_cuerrLast = ArrayOpSetIm(m_pcw, src, m_aos1dMult);
+	if (m_cuerrLast != cudaSuccess) {
+		PostCUDAError("(JFFTCUDAcore::SetDataIm_d): Set data imaginary part on device", m_cuerrLast);
+		return 3;
+	}
+	return 0;
+}
+
 int CJFFTCUDAcore::GetDataC(fcmplx * dst)
 {
 	if (m_nstatus < 1) {
@@ -664,6 +700,42 @@ int CJFFTCUDAcore::GetDataIm(float * dst)
 		dst[i] = dsttmp[i].y;
 	}
 	free(dsttmp);
+	return 0;
+}
+
+int CJFFTCUDAcore::GetDataRe_d(float * src)
+{
+	if (m_nstatus < 1) {
+		cerr << "Error(JFFTCUDAcore::GetDataRe_d): Cannot transfer data, not initialized." << endl;
+		return 1;
+	}
+	if (src == NULL) { // error: invalid source pointer
+		cerr << "Error(JFFTCUDAcore::GetDataRe_d): Invalid source pointer." << endl;
+		return 2;
+	}
+	m_cuerrLast = ArrayOpGetRe(src, m_pcw, m_aos1dMult);
+	if (m_cuerrLast != cudaSuccess) {
+		PostCUDAError("(JFFTCUDAcore::GetDataRe_d): Get data real part on device", m_cuerrLast);
+		return 3;
+	}
+	return 0;
+}
+
+int CJFFTCUDAcore::GetDataIm_d(float * src)
+{
+	if (m_nstatus < 1) {
+		cerr << "Error(JFFTCUDAcore::GetDataIm_d): Cannot transfer data, not initialized." << endl;
+		return 1;
+	}
+	if (src == NULL) { // error: invalid source pointer
+		cerr << "Error(JFFTCUDAcore::GetDataIm_d): Invalid source pointer." << endl;
+		return 2;
+	}
+	m_cuerrLast = ArrayOpGetIm(src, m_pcw, m_aos1dMult);
+	if (m_cuerrLast != cudaSuccess) {
+		PostCUDAError("(JFFTCUDAcore::GetDataIm_d): Set data imaginary part on device", m_cuerrLast);
+		return 3;
+	}
 	return 0;
 }
 
@@ -796,6 +868,38 @@ int CJFFTCUDAcore::GetDataPow_d(float * dst)
 		goto Error;
 	}
 Error:
+	return nerr;
+}
+
+
+int CJFFTCUDAcore::GetDataPow(float * dst)
+{
+	int nerr = 0;
+	size_t nd = 0;
+	size_t nbytes = 0;
+	float *d_tmp = NULL;
+	if (m_nstatus < 1) {
+		cerr << "Error(JFFTCUDAcore::GetDataPow_d): Cannot transfer data, not initialized." << endl;
+		nerr = 1;
+		goto Error;
+	}
+	nd = GetDataSize();
+	nbytes = sizeof(float)*nd;
+	m_cuerrLast = cudaMalloc((void**)&d_tmp, nbytes);
+	m_cuerrLast = ArrayOpCPow(d_tmp, m_pcw, m_aos1dMult);
+	if (m_cuerrLast != cudaSuccess) {
+		PostCUDAError("(JFFTCUDAcore::GetDataPow_d): Failed calculate complex power on device", m_cuerrLast);
+		nerr = 2;
+		goto Error;
+	}
+	m_cuerrLast = cudaMemcpy(dst, d_tmp, nbytes, ::cudaMemcpyDeviceToHost);
+	if (m_cuerrLast != cudaSuccess) {
+		PostCUDAError("(JFFTCUDAcore::GetDataArg): Failed to copy from device to host", m_cuerrLast);
+		nerr = 5;
+		goto Error;
+	}
+Error:
+	if (NULL != d_tmp) cudaFree(d_tmp);
 	return nerr;
 }
 
