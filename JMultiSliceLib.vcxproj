@@ -190,6 +190,16 @@
     <CudaCompile Include="src\cu\ArrayOps.cu" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="backup\JMSLib_BIN_Backup_181112.zip" />
+    <None Include="backup\JMSLib_BIN_Backup_181207.zip" />
+    <None Include="backup\JMSLib_BIN_Backup_181220.zip" />
+    <None Include="backup\JMSLib_PRJ_Backup_181112.zip" />
+    <None Include="backup\JMSLib_PRJ_Backup_181207.zip" />
+    <None Include="backup\JMSLib_PRJ_Backup_181220.zip" />
+    <None Include="backup\JMSLib_SRC_Backup_181005.zip" />
+    <None Include="backup\JMSLib_SRC_Backup_181112.zip" />
+    <None Include="backup\JMSLib_SRC_Backup_181207.zip" />
+    <None Include="backup\JMSLib_SRC_Backup_181220.zip" />
     <None Include="CUDA EULA.pdf" />
     <None Include="README.md" />
   </ItemGroup>

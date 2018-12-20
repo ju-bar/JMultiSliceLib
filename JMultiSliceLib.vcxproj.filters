@@ -55,6 +55,36 @@
   <ItemGroup>
     <None Include="CUDA EULA.pdf" />
     <None Include="README.md" />
+    <None Include="backup\JMSLib_BIN_Backup_181112.zip">
+      <Filter>Backup</Filter>
+    </None>
+    <None Include="backup\JMSLib_BIN_Backup_181207.zip">
+      <Filter>Backup</Filter>
+    </None>
+    <None Include="backup\JMSLib_PRJ_Backup_181112.zip">
+      <Filter>Backup</Filter>
+    </None>
+    <None Include="backup\JMSLib_PRJ_Backup_181207.zip">
+      <Filter>Backup</Filter>
+    </None>
+    <None Include="backup\JMSLib_SRC_Backup_181005.zip">
+      <Filter>Backup</Filter>
+    </None>
+    <None Include="backup\JMSLib_SRC_Backup_181112.zip">
+      <Filter>Backup</Filter>
+    </None>
+    <None Include="backup\JMSLib_SRC_Backup_181207.zip">
+      <Filter>Backup</Filter>
+    </None>
+    <None Include="backup\JMSLib_BIN_Backup_181220.zip">
+      <Filter>Backup</Filter>
+    </None>
+    <None Include="backup\JMSLib_PRJ_Backup_181220.zip">
+      <Filter>Backup</Filter>
+    </None>
+    <None Include="backup\JMSLib_SRC_Backup_181220.zip">
+      <Filter>Backup</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Text Include="Changes.txt" />
@@ -68,6 +98,9 @@
     </Filter>
     <Filter Include="Source Files">
       <UniqueIdentifier>{3fe7cdf7-ff95-4261-8c34-256fd0ff02ce}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Backup">
+      <UniqueIdentifier>{508b0d7c-cad8-4a23-9787-46d61d1439ac}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
