@@ -153,7 +153,7 @@ CPU and GPU code can be used in parallel.
 
 Current version: 0.22
 
-See "Changes.txt" for reading on recent modifications.
+See [Changes.txt](https://github.com/ju-bar/JMultiSliceLib/blob/master/Changes.txt) for reading on recent modifications.
 
 You are welcome to propose further changes. A list with possible future steps is maintained
-in the file "ToDo.txt".
+in the file [ToDo.txt](https://github.com/ju-bar/JMultiSliceLib/blob/master/ToDo.txt).

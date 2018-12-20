@@ -98,7 +98,7 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>$(ProjectDir)\..\fftw\include;%(AdditionalIncludeDirectories);$(CudaToolkitIncludeDir)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)\src\fftw\include;%(AdditionalIncludeDirectories);$(CudaToolkitIncludeDir)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
     </ClCompile>
     <Link>
@@ -106,7 +106,7 @@
     </Link>
     <Lib>
       <AdditionalDependencies>libfftwf-3.3.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>..\fftw\lib\x64\Static-Debug</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)\src\fftw\lib\x64\Static-Debug</AdditionalLibraryDirectories>
     </Lib>
     <CudaCompile>
       <CodeGeneration>compute_30,sm_30;compute_50,sm_50;compute_52,sm_52;compute_61,sm_61</CodeGeneration>
@@ -138,7 +138,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>$(ProjectDir)\..\fftw\include;%(AdditionalIncludeDirectories);$(CudaToolkitIncludeDir)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)\src\fftw\include;%(AdditionalIncludeDirectories);$(CudaToolkitIncludeDir)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
@@ -148,7 +148,7 @@
     </Link>
     <Lib>
       <AdditionalDependencies>libfftwf-3.3.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>..\fftw\lib\x64\Static-Release</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)\src\fftw\lib\x64\Static-Release</AdditionalLibraryDirectories>
     </Lib>
     <CudaCompile>
       <CodeGeneration>compute_30,sm_30;compute_50,sm_50;compute_52,sm_52;compute_61,sm_61</CodeGeneration>
@@ -162,24 +162,24 @@
     <Text Include="ToDo.txt" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="ArrayOps.cuh" />
-    <ClInclude Include="fcomplex.h" />
-    <ClInclude Include="JFFTCUDAcore.h" />
-    <ClInclude Include="JFFTWcore.h" />
-    <ClInclude Include="JMultiSlice.h" />
-    <ClInclude Include="JMultiSliceLib.h" />
-    <ClInclude Include="JProbeGen.h" />
-    <ClInclude Include="NatureConstants.h" />
-    <ClInclude Include="stdafx.h" />
-    <ClInclude Include="targetver.h" />
+    <ClInclude Include="src\cu\ArrayOps.cuh" />
+    <ClInclude Include="src\fcomplex.h" />
+    <ClInclude Include="src\JFFTCUDAcore.h" />
+    <ClInclude Include="src\JFFTWcore.h" />
+    <ClInclude Include="src\JMultiSlice.h" />
+    <ClInclude Include="src\JMultiSliceLib.h" />
+    <ClInclude Include="src\JProbeGen.h" />
+    <ClInclude Include="src\NatureConstants.h" />
+    <ClInclude Include="src\stdafx.h" />
+    <ClInclude Include="src\targetver.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="JFFTCUDAcore.cpp" />
-    <ClCompile Include="JFFTWcore.cpp" />
-    <ClCompile Include="JMultiSlice.cpp" />
-    <ClCompile Include="JMultiSliceLib.cpp" />
-    <ClCompile Include="JProbeGen.cpp" />
-    <ClCompile Include="stdafx.cpp">
+    <ClCompile Include="src\JFFTCUDAcore.cpp" />
+    <ClCompile Include="src\JFFTWcore.cpp" />
+    <ClCompile Include="src\JMultiSlice.cpp" />
+    <ClCompile Include="src\JMultiSliceLib.cpp" />
+    <ClCompile Include="src\JProbeGen.cpp" />
+    <ClCompile Include="src\stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
@@ -187,7 +187,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="ArrayOps.cu" />
+    <CudaCompile Include="src\cu\ArrayOps.cu" />
   </ItemGroup>
   <ItemGroup>
     <None Include="CUDA EULA.pdf" />
