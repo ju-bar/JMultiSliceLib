@@ -44,6 +44,80 @@ using namespace std;
 
 inline int mod(int a, int b) { int ret = a % b; return ret >= 0 ? ret : ret + b; }
 
+void fdncs2m(float *a, size_t n, float *s)
+{
+	// roll out to 5
+	if (n <= 0) { *s = 0.; return; }
+	if (n == 1) { *s = a[0]; return; }
+	if (n == 2) { *s = a[0] + a[1]; return; }
+	if (n == 3) { *s = a[0] + a[1] + a[2]; return; }
+	if (n == 4) { *s = a[0] + a[1] + a[2] + a[3]; return; }
+	if (n == 5) { *s = a[0] + a[1] + a[2] + a[3] + a[4]; return; }
+	// recurse shift 2
+	*s = 0.f;
+	size_t n0 = 0, n1 = 1, n2 = 2, nc = 0, idx = 0, itmp = 0;
+	// calculate number of strides through the buffer
+	size_t ntmp = (size_t)ceil((double)n / (double)_JMS_SUMMATION_BUFFER);
+	float* dst = s; // preset destination with single result number
+	if (ntmp > 1) { // there will be more than one stride -> more than one number
+		dst = (float*)calloc(ntmp, sizeof(float)); // allocate new destination buffer
+	}
+	else { // array smaller than stride buffer, expecting insignificant loss and gain with straight sum
+		for (idx = 0; idx < n; idx++) {
+			*s += a[idx];
+		}
+		return;
+	}
+	float* tmp = a; // prolink to beginning of input temp buffer
+	while (n0 < n) { // loop over strides
+		nc = __min(_JMS_SUMMATION_BUFFER, n - n0); // number of copied items
+		if (nc == _JMS_SUMMATION_BUFFER) { // working on full buffer length. This is repeated ntmp-1 times
+			tmp = &a[n0]; // link to offset in a
+			n2 = 2; n1 = 1;
+			while (n2 < _JMS_SUMMATION_BUFFER) {
+				for (idx = n2 - 1; idx < _JMS_SUMMATION_BUFFER; idx += n2) {
+					tmp[idx] += tmp[idx - n1];
+				}
+				n1 = n2;
+				n2 = n2 << 1;
+			}
+			dst[itmp] += (tmp[n1 - 1] + tmp[n2 - 1]); // store intermediate result in stride slot of destination
+		}
+		else { // working on reduced buffer length (not power of two), this happens only once!
+			   // roll-out to 5
+			if (1 == nc) { dst[itmp] = a[n0]; }
+			else if (2 == nc) { dst[itmp] = a[n0] + a[1 + n0]; }
+			else if (3 == nc) { dst[itmp] = a[n0] + a[1 + n0] + a[2 + n0]; }
+			else if (4 == nc) { dst[itmp] = a[n0] + a[1 + n0] + a[2 + n0] + a[3 + n0]; }
+			else if (5 == nc) { dst[itmp] = a[n0] + a[1 + n0] + a[2 + n0] + a[3 + n0] + a[4 + n0]; }
+			else if (5 < nc) {
+				float r = 0.0f;
+				tmp = &a[n0]; // link to offset in a
+				n2 = 2; n1 = 1;
+				while (n2 < nc) {
+					for (idx = n2 - 1; idx < nc; idx += n2) {
+						tmp[idx] += tmp[idx - n1];
+					}
+					if (n1 <= nc % n2) { // handle left-over component
+						r += tmp[idx - n1];
+					}
+					n1 = n2;
+					n2 = n2 << 1;
+				}
+				dst[itmp] += (tmp[n1 - 1] + r);
+			}
+		}
+		n0 += _JMS_SUMMATION_BUFFER;
+		itmp++;
+	}
+	if (ntmp > 1) { // recurse if more than one buffer stride happened
+		fdncs2m(dst, ntmp, s); // sum on dst buffer
+		free(dst); // release dst buffer memory
+	}
+	return;
+}
+
+
 CJMultiSlice::CJMultiSlice()
 {
 	// initialize the class members
@@ -2074,43 +2148,56 @@ float CJMultiSlice::GetTotalF(float* dat, size_t len)
 
 float CJMultiSlice::DotProduct_h(float *in_1, float *in_2, size_t len)
 {
-	/*       Performs a Kahan sum on in_1[i]*in_2[i]                              */
-	/*       https://en.wikipedia.org/wiki/Kahan_summation_algorithm              */
-	double dsum = 0.0;
-	double dc = 0.0;
-	double dy = 0.0;
-	double dt = 0.0;
+	float fsum = 0.0f;
+	float *fdat = NULL;
 	if (len > 0) {
-		for (size_t i = 0; i < len; i++) {
-			dy = ((double)in_1[i])*(double)in_2[i] - dc; // next value including previous correction
-			dt = dsum + dy; // intermediate new sum value
-			dc = (dt - dsum) - dy; // new correction
-			dsum = dt; // update result
+		size_t idx = 0;
+		size_t nodd = len % 2;
+		size_t nlen2 = (len + nodd) / 2; // by 2 reduced length
+		fdat = (float*)calloc(nlen2, sizeof(float));
+		if (NULL != fdat) { // allocation successful
+			for (size_t i = 0; i < len; i += 2) { // pre-multiply loop into fdat with x2 interleave (32 bit -> 64 bit)
+				fdat[idx] = in_1[i] * in_2[i] + in_1[i+1] * in_2[i+1]; // products of intensity and detector sensitivity
+				idx++; // increment fdat index
+			}
+			if (0 < nodd) { // there is one element left
+				fdat[idx] = in_1[len - 1] * in_2[len - 1];
+			}
+			fdncs2m(fdat, nlen2, &fsum); // do the butterfly sum
+			free(fdat); // free temp. memory with products
 		}
 	}
-	return (float)dsum;
+	return fsum;
 }
 
 float CJMultiSlice::MaskedDotProduct_h(int *mask, float *in_1, float *in_2, size_t lenmask)
 {
-	/*       Performs a Kahan sum on in_1[i]*in_2[i]                              */
-	/*       https://en.wikipedia.org/wiki/Kahan_summation_algorithm              */
-	double dsum = 0.0;
-	double dc = 0.0;
-	double dy = 0.0;
-	double dt = 0.0;
-	unsigned int imask;
+	float fsum = 0.0f;
+	float *fdat = NULL;
+	unsigned int imask0, imask1;
 	if (lenmask > 0) {
-		for (size_t i = 0; i < lenmask; i++) {
-			imask = (unsigned)mask[i];
-			dy = ((double)in_1[imask])*(double)in_2[imask] - dc; // next value including previous correction
-			dt = dsum + dy; // intermediate new sum value
-			dc = (dt - dsum) - dy; // new correction
-			dsum = dt; // update result
+		size_t idx = 0;
+		size_t nodd = lenmask % 2;
+		size_t nlen2 = (lenmask + nodd) / 2; // by 2 reduced length
+		fdat = (float*)calloc(nlen2, sizeof(float));
+		if (NULL != fdat) { // allocation successful
+			for (size_t i = 0; i < lenmask; i += 2) { // pre-multiply loop into fdat with x2 interleave (32 bit -> 64 bit)
+				imask0 = (unsigned)mask[i];
+				imask1 = (unsigned)mask[i + 1];
+				fdat[idx] = in_1[imask0] * in_2[imask0] + in_1[imask1] * in_2[imask1]; // products of intensity and detector sensitivity
+				idx++; // increment fdat index
+			}
+			if (0 < nodd) { // there is one element left
+				imask0 = (unsigned)mask[lenmask-1];
+				fdat[idx] = in_1[imask0] * in_2[imask0];
+			}
+			fdncs2m(fdat, nlen2, &fsum); // do the butterfly sum
+			free(fdat); // free temp. memory with products
 		}
 	}
-	return (float)dsum;
+	return fsum;
 }
+
 
 
 fcmplx* CJMultiSlice::GetPhaseGrating_h(int iSlice, int* pVarID)

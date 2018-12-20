@@ -151,4 +151,9 @@ CPU and GPU code can be used in parallel.
 
 ## Further development
 
-You are welcome to propose further changes. The current list is maintained in the file "ToDo.txt".
+Current version: 0.22
+
+See "Changes.txt" for reading on recent modifications.
+
+You are welcome to propose further changes. A list with possible future steps is maintained
+in the file "ToDo.txt".

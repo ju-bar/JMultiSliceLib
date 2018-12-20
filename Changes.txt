@@ -1,5 +1,12 @@
 List of changes to JMultiSliceLib
 
+2018-12-20: 0.22 JB
+- Implemented a strided two-fold butterfly float summation speeding
+  up the integration of diffraction detector signal by a significant
+  ammount. The routine is slightly faster than straight summation
+  but doesn't require error correction (which was 4 times more
+  expensive than a straight float summation.)
+
 2018-12-18: 0.21 JB
 - Added diffraction de-scan (global m_dif_descan == 0: off, 1: on)
   per thread de-scan parameters: m_d/h_dif_ndescanx/y in [pixel]

@@ -6,7 +6,7 @@
 // Copyright (C) 2018 - Juri Barthel (juribarthel@gmail.com)
 // Copyright (C) 2018 - Forschungszentrum Juelich GmbH, 52425 Juelich, Germany
 //
-// Verions of JMultiSlice: 0.21 (2018 - December - 16)
+// Verions of JMultiSlice: 0.22 (2018 - December - 20)
 //
 /*
 This program is free software : you can redistribute it and/or modify
@@ -114,8 +114,8 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 // VERSION NUMBERS
 #define __JMS_VERSION__			0
 #define __JMS_VERSION_SUB__		2
-#define __JMS_VERSION_SUB_SUB__	1
-#define __JMS_VERSION_BUILD__	20181218
+#define __JMS_VERSION_SUB_SUB__	2
+#define __JMS_VERSION_BUILD__	20181220
 // CODE IDs
 #define _JMS_CODE_CPU			1
 #define _JMS_CODE_GPU			2
@@ -139,6 +139,15 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 // OTHER PARAMETERS
 #define _JMS_MESSAGE_LEN		2048 // max. length of message strings
 #define _JMS_RELAPERTURE		(2./3.) // relative size of band-width limit
+#define _JMS_SUMMATION_BUFFER	0x1000	// number of temporary buffer items for summation
+//
+// global functions
+
+// strided 2-fold butterfly summation
+// ! Warning: This routine may modify the input a.
+// ! Make a backup of the data or provide a copy if you still need it!
+void fdncs2m(float* a, size_t n, float *s);
+//
 //
 //
 // ----------------------------------------------------------------------------
@@ -670,7 +679,7 @@ protected:
 	
 	// returns the masked dot product of two vectors on host memory
 	float MaskedDotProduct_h(int *mask, float *in_1, float *in_2, size_t lenmask);
-	
+
 	// returns the masked dot product of two vectors on device memory
 	float MaskedDotProduct_d(int *mask, float *in_1, float *in_2, size_t lenmask, int nBlockSize);
 	
