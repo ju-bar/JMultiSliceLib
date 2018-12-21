@@ -1,5 +1,8 @@
 List of changes to JMultiSliceLib
 
+2018-12-21: 0.22 JB fix
+- Bug fix in the 2-fold summation routine.
+
 2018-12-20: 0.22 JB
 - Implemented a strided two-fold butterfly float summation speeding
   up the integration of diffraction detector signal by a significant

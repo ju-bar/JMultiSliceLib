@@ -58,20 +58,36 @@ void fdncs2m(float *a, size_t n, float *s)
 	size_t n0 = 0, n1 = 1, n2 = 2, nc = 0, idx = 0, itmp = 0;
 	// calculate number of strides through the buffer
 	size_t ntmp = (size_t)ceil((double)n / (double)_JMS_SUMMATION_BUFFER);
+	float r = 0.0f, t = 0.0f;
 	float* dst = s; // preset destination with single result number
 	if (ntmp > 1) { // there will be more than one stride -> more than one number
 		dst = (float*)calloc(ntmp, sizeof(float)); // allocate new destination buffer
 	}
-	else { // array smaller than stride buffer, expecting insignificant loss and gain with straight sum
-		for (idx = 0; idx < n; idx++) {
+	else { // butterfly on "a" directly, using s as output target
+		/*for (idx = 0; idx < n; idx++) {
 			*s += a[idx];
 		}
+		t = *s;
+		*s = 0.0f;*/
+		r = 0.0f;
+		n2 = 2; n1 = 1;
+		while (n2 <= n) {
+			for (idx = n2 - 1; idx < n; idx += n2) {
+				a[idx] += a[idx - n1];
+			}
+			if (n1 <= n % n2) { // handle left-over component
+				r += a[idx - n1];
+			}
+			n1 = n2;
+			n2 = n2 << 1;
+		}
+		*s += (a[n1 - 1] + r);
 		return;
 	}
-	float* tmp = a; // prolink to beginning of input temp buffer
-	while (n0 < n) { // loop over strides
+	float* tmp = a; // pre-link to beginning of input temp buffer
+	while (n0 < n) { // loop over strides, using dst as output target
 		nc = __min(_JMS_SUMMATION_BUFFER, n - n0); // number of copied items
-		if (nc == _JMS_SUMMATION_BUFFER) { // working on full buffer length. This is repeated ntmp-1 times
+		if (nc == _JMS_SUMMATION_BUFFER) { // butterfly on full 2^M buffer length. This is repeated ntmp-1 times.
 			tmp = &a[n0]; // link to offset in a
 			n2 = 2; n1 = 1;
 			while (n2 < _JMS_SUMMATION_BUFFER) {
@@ -83,18 +99,22 @@ void fdncs2m(float *a, size_t n, float *s)
 			}
 			dst[itmp] += (tmp[n1 - 1] + tmp[n2 - 1]); // store intermediate result in stride slot of destination
 		}
-		else { // working on reduced buffer length (not power of two), this happens only once!
-			   // roll-out to 5
+		else { // butterfly on remaining buffer length (not power of two), this happens only once!
+			// roll-out to 5
 			if (1 == nc) { dst[itmp] = a[n0]; }
 			else if (2 == nc) { dst[itmp] = a[n0] + a[1 + n0]; }
 			else if (3 == nc) { dst[itmp] = a[n0] + a[1 + n0] + a[2 + n0]; }
 			else if (4 == nc) { dst[itmp] = a[n0] + a[1 + n0] + a[2 + n0] + a[3 + n0]; }
 			else if (5 == nc) { dst[itmp] = a[n0] + a[1 + n0] + a[2 + n0] + a[3 + n0] + a[4 + n0]; }
 			else if (5 < nc) {
-				float r = 0.0f;
 				tmp = &a[n0]; // link to offset in a
+				/*for (idx = 0; idx < nc; idx++) {
+					dst[itmp] += tmp[idx];
+				}
+				t = dst[itmp];
+				dst[itmp] = 0.0f;*/
 				n2 = 2; n1 = 1;
-				while (n2 < nc) {
+				while (n2 <= nc) {
 					for (idx = n2 - 1; idx < nc; idx += n2) {
 						tmp[idx] += tmp[idx - n1];
 					}
@@ -110,11 +130,11 @@ void fdncs2m(float *a, size_t n, float *s)
 		n0 += _JMS_SUMMATION_BUFFER;
 		itmp++;
 	}
-	if (ntmp > 1) { // recurse if more than one buffer stride happened
-		fdncs2m(dst, ntmp, s); // sum on dst buffer
+	if (ntmp > 1) { // recurse dst if more than one buffer stride happened
+		fdncs2m(dst, ntmp, s); // sum on dst buffer to s
 		free(dst); // release dst buffer memory
 	}
-	return;
+	return; // s received the result
 }
 
 
@@ -2176,12 +2196,13 @@ float CJMultiSlice::MaskedDotProduct_h(int *mask, float *in_1, float *in_2, size
 	float *fdat = NULL;
 	unsigned int imask0, imask1;
 	if (lenmask > 0) {
-		size_t idx = 0;
+		size_t idx = 0, i = 0;
 		size_t nodd = lenmask % 2;
-		size_t nlen2 = (lenmask + nodd) / 2; // by 2 reduced length
+		size_t neve = lenmask - nodd;
+		size_t nlen2 = 1 + neve / 2; // half length
 		fdat = (float*)calloc(nlen2, sizeof(float));
 		if (NULL != fdat) { // allocation successful
-			for (size_t i = 0; i < lenmask; i += 2) { // pre-multiply loop into fdat with x2 interleave (32 bit -> 64 bit)
+			for (i = 0; i < neve; i += 2) { // pre-multiply loop into fdat with x2 interleave (32 bit -> 64 bit)
 				imask0 = (unsigned)mask[i];
 				imask1 = (unsigned)mask[i + 1];
 				fdat[idx] = in_1[imask0] * in_2[imask0] + in_1[imask1] * in_2[imask1]; // products of intensity and detector sensitivity
