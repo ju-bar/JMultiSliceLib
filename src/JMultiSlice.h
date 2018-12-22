@@ -6,7 +6,7 @@
 // Copyright (C) 2018 - Juri Barthel (juribarthel@gmail.com)
 // Copyright (C) 2018 - Forschungszentrum Juelich GmbH, 52425 Juelich, Germany
 //
-// Verions of JMultiSlice: 0.22 (2018 - December - 21)
+// Verions of JMultiSlice: 0.22 (2018 - December - 22)
 //
 /*
 This program is free software : you can redistribute it and/or modify
@@ -143,11 +143,20 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 //
 // global functions
 
+// straight float summation with double accumulator
+void fdstrsum(float* a, size_t n, float *s);
+
+// kahan summation with float error correction
+// see <https://en.wikipedia.org/wiki/Kahan_summation_algorithm>
+void fkahan(float* a, size_t n, float *s);
+
 // strided 2-fold butterfly summation
 // ! Warning: This routine may modify the input a.
 // ! Make a backup of the data or provide a copy if you still need it!
 void fdncs2m(float* a, size_t n, float *s);
-//
+// strided 2-fold butterfly summation
+void fdncs2(float* a, size_t n, float *s);
+
 //
 //
 // ----------------------------------------------------------------------------

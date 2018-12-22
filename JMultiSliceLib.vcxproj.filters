@@ -94,15 +94,15 @@
     <None Include="src\fftw\include\fftw3.f03.in">
       <Filter>Include Files</Filter>
     </None>
-    <None Include="src\fftw\lib\x64\Static-Debug\libfftwf-3.3.pdb">
-      <Filter>Libraries\x64\Static-Debug</Filter>
-    </None>
-    <None Include="src\fftw\lib\x64\Static-Release\libfftwf-3.3.pdb">
-      <Filter>Libraries\x64\Static-Release</Filter>
-    </None>
     <None Include="Update_BIN_Backup.bat" />
     <None Include="Update_PRJ_Backup.bat" />
     <None Include="Update_SRC_Backup.bat" />
+    <None Include="src\fftw\lib\x64\Static-Debug\libfftwf-3.3.pdb">
+      <Filter>Library Files\x64\Debug</Filter>
+    </None>
+    <None Include="src\fftw\lib\x64\Static-Release\libfftwf-3.3.pdb">
+      <Filter>Library Files\x64\Release</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Text Include="Changes.txt" />
@@ -123,17 +123,17 @@
     <Filter Include="Include Files">
       <UniqueIdentifier>{5fbc0f3f-263e-43af-8afc-dcfe370e1b2b}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Libraries">
-      <UniqueIdentifier>{1fab539e-cf07-429c-ad6c-7b53d5e085ce}</UniqueIdentifier>
+    <Filter Include="Library Files">
+      <UniqueIdentifier>{6a5ff2c4-9989-4057-9404-3ee03d296aa4}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Libraries\x64">
-      <UniqueIdentifier>{9ad0e5b9-ac68-46da-8694-86ff338e5dac}</UniqueIdentifier>
+    <Filter Include="Library Files\x64">
+      <UniqueIdentifier>{b5f93aee-18ca-4461-9696-9ff7ea511da8}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Libraries\x64\Static-Release">
-      <UniqueIdentifier>{a0c78eb9-5e3c-408f-bdd8-0802a039d354}</UniqueIdentifier>
+    <Filter Include="Library Files\x64\Release">
+      <UniqueIdentifier>{accd6bea-6b98-4c75-9cc7-aa3e4ebbb457}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Libraries\x64\Static-Debug">
-      <UniqueIdentifier>{92dd4e40-1653-4260-935c-18195863832b}</UniqueIdentifier>
+    <Filter Include="Library Files\x64\Debug">
+      <UniqueIdentifier>{b986ff59-eaa3-40b6-84cf-d133f2adcdcc}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -143,10 +143,10 @@
   </ItemGroup>
   <ItemGroup>
     <Library Include="src\fftw\lib\x64\Static-Debug\libfftwf-3.3.lib">
-      <Filter>Libraries\x64\Static-Debug</Filter>
+      <Filter>Library Files\x64\Debug</Filter>
     </Library>
     <Library Include="src\fftw\lib\x64\Static-Release\libfftwf-3.3.lib">
-      <Filter>Libraries\x64\Static-Release</Filter>
+      <Filter>Library Files\x64\Release</Filter>
     </Library>
   </ItemGroup>
 </Project>
