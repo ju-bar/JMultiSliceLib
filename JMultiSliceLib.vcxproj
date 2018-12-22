@@ -166,6 +166,7 @@
   <ItemGroup>
     <ClInclude Include="src\cu\ArrayOps.cuh" />
     <ClInclude Include="src\fcomplex.h" />
+    <ClInclude Include="src\fftw\include\fftw3.h" />
     <ClInclude Include="src\JFFTCUDAcore.h" />
     <ClInclude Include="src\JFFTWcore.h" />
     <ClInclude Include="src\JMultiSlice.h" />
@@ -204,6 +205,17 @@
     <None Include="backup\JMSLib_SRC_Backup_181221.zip" />
     <None Include="CUDA EULA.pdf" />
     <None Include="README.md" />
+    <None Include="src\fftw\include\fftw3.f" />
+    <None Include="src\fftw\include\fftw3.f03.in" />
+    <None Include="src\fftw\lib\x64\Static-Debug\libfftwf-3.3.pdb" />
+    <None Include="src\fftw\lib\x64\Static-Release\libfftwf-3.3.pdb" />
+    <None Include="Update_BIN_Backup.bat" />
+    <None Include="Update_PRJ_Backup.bat" />
+    <None Include="Update_SRC_Backup.bat" />
+  </ItemGroup>
+  <ItemGroup>
+    <Library Include="src\fftw\lib\x64\Static-Debug\libfftwf-3.3.lib" />
+    <Library Include="src\fftw\lib\x64\Static-Release\libfftwf-3.3.lib" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

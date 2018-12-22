@@ -6,7 +6,7 @@
 	Copyright (C) 2018 - Forschungszentrum Juelich GmbH, Germany
 	Email: juribarthel@gmail.com
 
-	Last Version: 0.22 - 2018-12-20
+	Last Version: 0.22 - 2018-12-22
 
 ========================================================================
 
@@ -69,42 +69,18 @@ comply with the FFTW and CUDA software licenses.
 
 4) Statement of license
 
-	1)	JMultiSliceLib is provided as freeware, but only for private, 
-		educational, academic, non-commercial use (that means at home
-		or in educational or academic institutions).
-	1a)	JMultiSliceLib is free for educational use (schools,
-		universities, museums and libraries) and for use in charity
-		or humanitarian organisations.
-	1b)	If you intend to use JMultiSliceLib at your place of business
-		or for commercial purposes, please register and purchase it.
-		Commercial users: please contact the author by E-Mail for 
-		prices, discounts and payment methods.
-	2)	JMultiSliceLib is owned by the RWTH Aachen University and is 
-		protected by copyright laws and international treaty provisions.
-		Therefore, you must treat this Software library like any other 
-		copyrighted material.
-	3)	You may not distribute, rent, sub-license or otherwise make
-		available to others the Software or documentation or copies
-		thereof, except as expressly permitted in this License without
-		prior written consent from the RWTH Aachen University. In the
-		case of an authorized transfer, the transferee must agree to be
-		bound by the terms and conditions of this License Agreement.
-	4)	You may not remove any proprietary notices, labels, trademarks
-		on the Software or documentation. You may not modify, de-compile,
-		disassemble or reverse engineer the Software.
-	5)	Limited warranty: JMultiSliceLib, related programs in the
-		package, and documentation are "as is" without any warranty
-		as to their performance, merchantability or fitness for any
-		particular purpose. The licensee assumes the entire risk as to
-		the quality and performance of the software. In no event shall
-		the RWTH Aachen University or anyone else who has been involved
-		in the creation, development, production, or delivery of this
-		software be liable for any direct, incidental or consequential
-		damages, such as, but not limited to, loss of anticipated
-		profits, benefits, use, or data resulting from the use of this
-		software, or arising out of any breach of warranty.
-	6)	Dependency licenses remain active and must be treated separately
-		to this license.
+	This program is free software : you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with this program.If not, see <https://www.gnu.org/licenses/>
 
 
 

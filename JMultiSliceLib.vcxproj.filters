@@ -51,6 +51,9 @@
     <ClInclude Include="src\targetver.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\fftw\include\fftw3.h">
+      <Filter>Include Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="CUDA EULA.pdf" />
@@ -85,6 +88,21 @@
     <None Include="backup\JMSLib_SRC_Backup_181221.zip">
       <Filter>Backup</Filter>
     </None>
+    <None Include="src\fftw\include\fftw3.f">
+      <Filter>Include Files</Filter>
+    </None>
+    <None Include="src\fftw\include\fftw3.f03.in">
+      <Filter>Include Files</Filter>
+    </None>
+    <None Include="src\fftw\lib\x64\Static-Debug\libfftwf-3.3.pdb">
+      <Filter>Libraries\x64\Static-Debug</Filter>
+    </None>
+    <None Include="src\fftw\lib\x64\Static-Release\libfftwf-3.3.pdb">
+      <Filter>Libraries\x64\Static-Release</Filter>
+    </None>
+    <None Include="Update_BIN_Backup.bat" />
+    <None Include="Update_PRJ_Backup.bat" />
+    <None Include="Update_SRC_Backup.bat" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="Changes.txt" />
@@ -102,10 +120,33 @@
     <Filter Include="Backup">
       <UniqueIdentifier>{508b0d7c-cad8-4a23-9787-46d61d1439ac}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Include Files">
+      <UniqueIdentifier>{5fbc0f3f-263e-43af-8afc-dcfe370e1b2b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Libraries">
+      <UniqueIdentifier>{1fab539e-cf07-429c-ad6c-7b53d5e085ce}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Libraries\x64">
+      <UniqueIdentifier>{9ad0e5b9-ac68-46da-8694-86ff338e5dac}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Libraries\x64\Static-Release">
+      <UniqueIdentifier>{a0c78eb9-5e3c-408f-bdd8-0802a039d354}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Libraries\x64\Static-Debug">
+      <UniqueIdentifier>{92dd4e40-1653-4260-935c-18195863832b}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="src\cu\ArrayOps.cu">
       <Filter>Source Files</Filter>
     </CudaCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Library Include="src\fftw\lib\x64\Static-Debug\libfftwf-3.3.lib">
+      <Filter>Libraries\x64\Static-Debug</Filter>
+    </Library>
+    <Library Include="src\fftw\lib\x64\Static-Release\libfftwf-3.3.lib">
+      <Filter>Libraries\x64\Static-Release</Filter>
+    </Library>
   </ItemGroup>
 </Project>

@@ -11,7 +11,7 @@ echo Zipping up all files:
 "C:\Program Files\7-Zip\7z.exe" a "JMSLib_BIN_Backup.zip" "x64\Release\*.dll"
 "C:\Program Files\7-Zip\7z.exe" a "JMSLib_BIN_Backup.zip" "x64\Release\*.lib"
 "C:\Program Files\7-Zip\7z.exe" a "JMSLib_BIN_Backup.zip" "*.dll"
-"C:\Program Files\7-Zip\7z.exe" a "JMSLib_BIN_Backup.zip" "JMultiSliceLib.h"
+"C:\Program Files\7-Zip\7z.exe" a "JMSLib_BIN_Backup.zip" "src\JMultiSliceLib.h"
 "C:\Program Files\7-Zip\7z.exe" a "JMSLib_BIN_Backup.zip" "*.txt"
 "C:\Program Files\7-Zip\7z.exe" a "JMSLib_BIN_Backup.zip" "*.pdf"
 echo ---------------------------------------------------

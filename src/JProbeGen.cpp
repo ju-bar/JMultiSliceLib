@@ -4,7 +4,7 @@
 //
 //
 // Copyright (C) 2018 - Juri Barthel (juribarthel@gmail.com)
-// Copyright (C) 2018 - RWTH Aachen University, 52074 Aachen, Germany
+// Copyright (C) 2018 - Forschungszentrum Jülich GmbH, 52425 Jülich, Germany
 //
 //
 /*
