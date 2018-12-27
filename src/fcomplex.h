@@ -25,7 +25,14 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 #ifndef FCOMPLEX_H_
 #define FCOMPLEX_H_
 typedef std::complex<float> fcmplx;
-#define J fcmplx(0.F,1.F)
+#define FJ fcmplx(0.F,1.F)
 #endif /* FCOMPLEX_H_ */
+//
+#ifndef DCOMPLEX_H_
+#define DCOMPLEX_H_
+typedef std::complex<double> dcmplx;
+#define DJ dcmplx(0.,1.)
+#endif /* DCOMPLEX_H_ */
+
 //
 

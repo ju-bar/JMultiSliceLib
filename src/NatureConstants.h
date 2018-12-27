@@ -63,5 +63,7 @@
 #define _EEL0KEV				_EEL0/_QEL/1000. // electron rest energy [ keV ]
 
 #define _WLELKEV				_C0*_HPL/_QEL*1.0E+6 // electron wave length from energy [ nm keV ]
+
+#define _CFFA					_ME0 * _QEL * _QEL / (2.0* _HPL*_HPL) / (_FPI*_EPS0) * 1.0E-10 // Coulombic form factor amplitude : m0 e^2 / ( 2 h^2 ) / ( 4 Pi eps0 ) *10^-10 [ -> A^-1 ]
 //
 #endif

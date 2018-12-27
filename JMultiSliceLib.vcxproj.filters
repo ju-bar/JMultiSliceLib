@@ -19,6 +19,9 @@
     <ClCompile Include="src\stdafx.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\wekoscat.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\cu\ArrayOps.cuh">
@@ -53,6 +56,9 @@
     </ClInclude>
     <ClInclude Include="src\fftw\include\fftw3.h">
       <Filter>Include Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\wekoscat.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -103,6 +109,7 @@
     <None Include="src\fftw\lib\x64\Static-Release\libfftwf-3.3.pdb">
       <Filter>Library Files\x64\Release</Filter>
     </None>
+    <None Include="src\fftw\lib\x64\Static-Release\libfftwf-3.3.lib" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="Changes.txt" />
@@ -144,9 +151,6 @@
   <ItemGroup>
     <Library Include="src\fftw\lib\x64\Static-Debug\libfftwf-3.3.lib">
       <Filter>Library Files\x64\Debug</Filter>
-    </Library>
-    <Library Include="src\fftw\lib\x64\Static-Release\libfftwf-3.3.lib">
-      <Filter>Library Files\x64\Release</Filter>
     </Library>
   </ItemGroup>
 </Project>
