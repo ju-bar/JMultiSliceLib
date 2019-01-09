@@ -44,6 +44,18 @@ using namespace std;
 
 inline int mod(int a, int b) { int ret = a % b; return ret >= 0 ? ret : ret + b; }
 
+void ffstrsum(float *a, size_t n, float *s)
+{
+	*s = 0.f;
+	float ftmp = 0.f;
+	if (n > 0) {
+		for (size_t i = 0; i < n; i++) {
+			ftmp += a[i];
+		}
+		*s = ftmp;
+	}
+	return;
+}
 
 void fdstrsum(float *a, size_t n, float *s)
 {
@@ -80,9 +92,7 @@ void fdncs2m(float *a, size_t n, float *s)
 	if (n <= 0) { *s = 0.; return; }
 	if (n == 1) { *s = a[0]; return; }
 	if (n == 2) { *s = a[0] + a[1]; return; }
-	if (n == 3) { *s = a[0] + a[1] + a[2]; return; }
-	if (n == 4) { *s = a[0] + a[1] + a[2] + a[3]; return; }
-	if (n == 5) { *s = a[0] + a[1] + a[2] + a[3] + a[4]; return; }
+	if (n < _JMS_SUMMATION_BTF_THR) { ffstrsum(a, n, s); return; }
 	// recurse shift 2
 	*s = 0.f;
 	size_t n0 = 0, n1 = 1, n2 = 2, nc = 0, idx = 0, itmp = 0;
@@ -94,11 +104,6 @@ void fdncs2m(float *a, size_t n, float *s)
 		dst = (float*)calloc(ntmp, sizeof(float)); // allocate new destination buffer
 	}
 	else { // butterfly on "a" directly, using s as output target
-		/*for (idx = 0; idx < n; idx++) {
-			*s += a[idx];
-		}
-		t = *s;
-		*s = 0.0f;*/
 		r = 0.0f;
 		n2 = 2; n1 = 1;
 		while (n2 <= n) {
@@ -133,16 +138,9 @@ void fdncs2m(float *a, size_t n, float *s)
 			// roll-out to 5
 			if (1 == nc) { dst[itmp] = a[n0]; }
 			else if (2 == nc) { dst[itmp] = a[n0] + a[1 + n0]; }
-			else if (3 == nc) { dst[itmp] = a[n0] + a[1 + n0] + a[2 + n0]; }
-			else if (4 == nc) { dst[itmp] = a[n0] + a[1 + n0] + a[2 + n0] + a[3 + n0]; }
-			else if (5 == nc) { dst[itmp] = a[n0] + a[1 + n0] + a[2 + n0] + a[3 + n0] + a[4 + n0]; }
-			else if (5 < nc) {
+			else if (_JMS_SUMMATION_BTF_THR > nc) { ffstrsum(&a[n0], nc, &dst[itmp]); }
+			else if (_JMS_SUMMATION_BTF_THR <= nc) {
 				tmp = &a[n0]; // link to offset in a
-				/*for (idx = 0; idx < nc; idx++) {
-					dst[itmp] += tmp[idx];
-				}
-				t = dst[itmp];
-				dst[itmp] = 0.0f;*/
 				n2 = 2; n1 = 1;
 				while (n2 <= nc) {
 					for (idx = n2 - 1; idx < nc; idx += n2) {
@@ -174,9 +172,7 @@ void fdncs2(float *a, size_t n, float *s)
 	if (n <= 0) { *s = 0.; return; }
 	if (n == 1) { *s = a[0]; return; }
 	if (n == 2) { *s = a[0] + a[1]; return; }
-	if (n == 3) { *s = a[0] + a[1] + a[2]; return; }
-	if (n == 4) { *s = a[0] + a[1] + a[2] + a[3]; return; }
-	if (n == 5) { *s = a[0] + a[1] + a[2] + a[3] + a[4]; return; }
+	if (n < _JMS_SUMMATION_BTF_THR) { ffstrsum(a, n, s); return; }
 	// recurse shift 2
 	*s = 0.f;
 	size_t n0 = 0, n1 = 1, n2 = 2, nc = 0, idx = 0, itmp = 0;
@@ -191,11 +187,6 @@ void fdncs2(float *a, size_t n, float *s)
 		dst = (float*)calloc(ntmp, sizeof(float)); // allocate new destination buffer
 	}
 	else { // small n -> butterfly on tmp (copy of a), using s as output target
-		/*for (idx = 0; idx < n; idx++) {
-			*s += a[idx];
-		}
-		t = *s;
-		*s = 0.0f;*/
 		memcpy(tmp, a, sizeof(float)*n); // prepare summation buffer
 		r = 0.0f;
 		n2 = 2; n1 = 1;
@@ -231,16 +222,9 @@ void fdncs2(float *a, size_t n, float *s)
 			// roll-out to 5
 			if (1 == nc) { dst[itmp] = a[n0]; }
 			else if (2 == nc) { dst[itmp] = a[n0] + a[1 + n0]; }
-			else if (3 == nc) { dst[itmp] = a[n0] + a[1 + n0] + a[2 + n0]; }
-			else if (4 == nc) { dst[itmp] = a[n0] + a[1 + n0] + a[2 + n0] + a[3 + n0]; }
-			else if (5 == nc) { dst[itmp] = a[n0] + a[1 + n0] + a[2 + n0] + a[3 + n0] + a[4 + n0]; }
-			else if (5 < nc) {
+			else if (_JMS_SUMMATION_BTF_THR > nc) { ffstrsum(&a[n0], nc, &dst[itmp]); }
+			else if (_JMS_SUMMATION_BTF_THR <= nc) {
 				memcpy(tmp, &a[n0], sizeof(float)*nc); // prepare summation buffer
-				/*for (idx = 0; idx < nc; idx++) {
-					dst[itmp] += tmp[idx];
-				}
-				t = dst[itmp];
-				dst[itmp] = 0.0f;*/
 				n2 = 2; n1 = 1;
 				while (n2 <= nc) {
 					for (idx = n2 - 1; idx < nc; idx += n2) {
@@ -1451,7 +1435,7 @@ int CJMultiSlice::InitCore(int whichcode, int nCPUthreads)
 		} // failed to allocate FFTW objects
 		if (0 < AllocMem_h((void**)&m_status_calc_CPU, sizeof(int)*m_nfftwthreads, "InitCore", "CPU calculation status", true)) { nerr = 10; goto _Exit; }
 		for (icore = 0; icore < m_nfftwthreads; icore++) { // initialize all FFTW cores
-			if (0 == m_jcpuco[icore].Init(2, pdims, FFTW_MEASURE)) {
+			if (0 == m_jcpuco[icore].Init(2, pdims, _JMS_FFTW_PLANFLAG)) {
 				ncore_ready++;
 			}
 			else {

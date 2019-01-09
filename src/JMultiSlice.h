@@ -3,10 +3,10 @@
 // declaration for library JMultislice.lib (implementation see JMultislice.cpp)
 //
 //
-// Copyright (C) 2018 - Juri Barthel (juribarthel@gmail.com)
-// Copyright (C) 2018 - Forschungszentrum Juelich GmbH, 52425 Juelich, Germany
+// Copyright (C) 2018, 2019 - Juri Barthel (juribarthel@gmail.com)
+// Copyright (C) 2018, 2019 - Forschungszentrum Juelich GmbH, 52425 Juelich, Germany
 //
-// Verions of JMultiSlice: 0.22 (2018 - December - 22)
+// Verions of JMultiSlice: 0.23b (2019 - January - 07)
 //
 /*
 This program is free software : you can redistribute it and/or modify
@@ -114,8 +114,8 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 // VERSION NUMBERS
 #define __JMS_VERSION__			0
 #define __JMS_VERSION_SUB__		2
-#define __JMS_VERSION_SUB_SUB__	2
-#define __JMS_VERSION_BUILD__	20181221
+#define __JMS_VERSION_SUB_SUB__	3
+#define __JMS_VERSION_BUILD__	20190107
 // CODE IDs
 #define _JMS_CODE_CPU			1
 #define _JMS_CODE_GPU			2
@@ -139,9 +139,15 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 // OTHER PARAMETERS
 #define _JMS_MESSAGE_LEN		2048 // max. length of message strings
 #define _JMS_RELAPERTURE		(2./3.) // relative size of band-width limit
+#define _JMS_FFTW_PLANFLAG		FFTW_MEASURE // used FFTW planner flag, on typical sizes FFTW_MEASURE perfoms best, whereas FFTW_PATIENT requires much more initialization time
 #define _JMS_SUMMATION_BUFFER	0x1000	// number of temporary buffer items for summation
+#define _JMS_SUMMATION_BTF_THR	32	// min. number of items for a butterfly to work, otherwise fallback to straight sum
+									// Using numbers larger than 100 may lead to increased computation time.
 //
 // global functions
+
+// straight float summation with float accumulator
+void ffstrsum(float* a, size_t n, float *s);
 
 // straight float summation with double accumulator
 void fdstrsum(float* a, size_t n, float *s);

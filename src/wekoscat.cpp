@@ -257,7 +257,7 @@ double CWEKOScat::rih1(double x1, double x2, double x3)
 	double r = 0.0;
 	if (x2 <= 20.  && x3 <= 20.) {
 		r = exp(-x1) * (ei(x2) - ei(x3));
-		return;
+		return r;
 	}
 	if (x2 > 20.) {
 		r = exp(x2 - x1)*rih2(x2) / x2;

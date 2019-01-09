@@ -2,11 +2,11 @@
 	STATIC LIBRARY : JMultiSliceLib Project Overview
 ========================================================================
 
-	Copyright (C) 2018 - Juri Barthel
-	Copyright (C) 2018 - Forschungszentrum Juelich GmbH, Germany
+	Copyright (C) 2018, 2019 - Juri Barthel
+	Copyright (C) 2018, 2019 - Forschungszentrum Juelich GmbH, Germany
 	Email: juribarthel@gmail.com
 
-	Last Version: 0.22 - 2018-12-22
+	Last Version: 0.23 - 2019-01-08
 
 ========================================================================
 

@@ -1,9 +1,10 @@
 List of changes to JMultiSliceLib
 
-2018-12-27: 0.23.beta JB
+2019-01-08: 0.23 JB
+- Modified the butterfly summation unroll and fallback scenario.
 - Added a class for calculating atomic form factors using the
   parameterization of Weickenmeier and Kohl, including absorptive
-  form factors.
+  form factors (still not tested).
 
 2018-12-21: 0.22 JB fix
 - Bug fix in the 2-fold summation routine.
