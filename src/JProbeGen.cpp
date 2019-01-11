@@ -388,7 +388,7 @@ float CJProbeGen::ApertureFunction(float qx, float qy, float qcx, float qcy, flo
 	if (qlim>0.f) {
 		float dqx = qx - qcx;
 		float dqy = qy - qcy;
-		if (dqx * dqx + dqy * dqy <= qlim) {
+		if (sqrtf(dqx * dqx + dqy * dqy) <= qlim) {
 			rtmp = 1.f;
 		}
 	}
