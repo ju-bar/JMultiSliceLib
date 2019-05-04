@@ -3,8 +3,8 @@
 // implementation for library JMultislice.lib (declarations see JProbeGen.h)
 //
 //
-// Copyright (C) 2018 - Juri Barthel (juribarthel@gmail.com)
-// Copyright (C) 2018 - Forschungszentrum Jülich GmbH, 52425 Jülich, Germany
+// Copyright (C) 2018, 2019 - Juri Barthel (juribarthel@gmail.com)
+// Copyright (C) 2018, 2019 - Forschungszentrum Jülich GmbH, 52425 Jülich, Germany
 //
 //
 /*
@@ -63,6 +63,8 @@ CJProbeParams::CJProbeParams()
 	m_alpha = 0.025f;
 	m_alpha_x0 = 0.0f;
 	m_alpha_y0 = 0.0f;
+	m_alpha_asym = 0.0f;
+	m_alpha_adir = 0.0f;
 	m_btx = 0.0f;
 	m_bty = 0.0f;
 	m_source_width = 0.0f;
@@ -89,6 +91,8 @@ CJProbeParams::CJProbeParams(const CJProbeParams & src)
 	m_alpha = src.m_alpha;
 	m_alpha_x0 = src.m_alpha_x0;
 	m_alpha_y0 = src.m_alpha_y0;
+	m_alpha_asym = src.m_alpha_asym;
+	m_alpha_adir = src.m_alpha_adir;
 	m_btx = src.m_btx;
 	m_bty = src.m_bty;
 	m_source_width = src.m_source_width;
@@ -117,6 +121,8 @@ void CJProbeParams::operator=(const CJProbeParams &other)
 	m_alpha = other.m_alpha;
 	m_alpha_x0 = other.m_alpha_x0;
 	m_alpha_y0 = other.m_alpha_y0;
+	m_alpha_asym = other.m_alpha_asym;
+	m_alpha_adir = other.m_alpha_adir;
 	m_btx = other.m_btx;
 	m_bty = other.m_bty;
 	m_source_width = other.m_source_width;
@@ -139,6 +145,8 @@ bool CJProbeParams::operator==(const CJProbeParams &other) const
 		bResult &= (m_alpha == other.m_alpha);
 		bResult &= (m_alpha_x0 == other.m_alpha_x0);
 		bResult &= (m_alpha_y0 == other.m_alpha_y0);
+		bResult &= (m_alpha_asym == other.m_alpha_asym);
+		bResult &= (m_alpha_adir == other.m_alpha_adir);
 		bResult &= (m_btx == other.m_btx);
 		bResult &= (m_bty == other.m_bty);
 		bResult &= (m_source_width == other.m_source_width);
@@ -353,20 +361,12 @@ int CJProbeGen::GetProbeFunctionName(int idx, string * func_name)
 
 float CJProbeGen::GetTotalIntensity(size_t n, float* pdata)
 {
-	// Performs a Kahan sum on the data
-	// https://en.wikipedia.org/wiki/Kahan_summation_algorithm
 	double dsum = 0.0;
-	double dc = 0.0;
-	double dy = 0.0;
-	double dt = 0.0;
 	double val = 0.0;
 	if (n > 0 && pdata != NULL) {
 		for (size_t i = 0; i < n; i++) {
 			val = (double)pdata[i];
-			dy = val - dc; // next value including previous correction
-			dt = dsum + dy; // intermediate new sum value
-			dc = (dt - dsum) - dy; // new correction
-			dsum = dt; // update result
+			dsum += val;
 		}
 	}
 	return (float)dsum;
@@ -410,6 +410,33 @@ float CJProbeGen::ApertureFunctionS(float qx, float qy, float qcx, float qcy, fl
 			float dpy = dqy * ay; // y pixel distance
 			float dpm = sqrtf(dpx * dpx + dpy * dpy); // total pixel distance
 			float dlr = qlim / dqm; // ratio between q and qlim
+			float dlpx = dqx * dlr * ax; // rescale to aperture edge pixel distance along x
+			float dlpy = dqy * dlr * ay; // rescale to aperture edge pixel distance along y
+			float dpl = sqrtf(dlpx * dlpx + dlpy * dlpy); // aperture total pixel distance
+			rtmp = (1.f - tanhf((dpm - dpl)*((float)_PI) / smooth)) *0.5f; // sigmoid edge
+		}
+		else { // at center of aperture set amplitude to 1.
+			rtmp = 1.f;
+		}
+	}
+	return rtmp;
+}
+
+float CJProbeGen::ApertureFunctionA(float qx, float qy, float qcx, float qcy, float qlim, float alim, float adir, float ax, float ay, float smooth)
+{
+	// needs physical grid size: ax and ay
+	// A <smooth>-pixel wide smoothing is applied to the aperture edge
+	float rtmp = 0.f;
+	if (qlim > 0.f) {
+		float dqx = qx - qcx; // qx distance from aperture center
+		float dqy = qy - qcy; // qy distance from aperture center
+		float dq2 = dqx * dqx + dqy * dqy;
+		float dqm = sqrtf(dq2); // magnitude of distance
+		if (dqm > 0.f) { // q is not at center
+			float dpx = dqx * ax; // x pixel distance
+			float dpy = dqy * ay; // y pixel distance
+			float dpm = sqrtf(dpx * dpx + dpy * dpy); // total pixel distance
+			float dlr = qlim*(1.f-alim*alim) / sqrtf(dq2*(1.f + alim*alim) + 2.f*(dqy*dqy - dqx*dqx)*alim*cos(2.f*adir) - 4.f*dqx*dqy*alim*sin(2.f*adir)); // ratio between q and qlim
 			float dlpx = dqx * dlr * ax; // rescale to aperture edge pixel distance along x
 			float dlpy = dqy * dlr * ay; // rescale to aperture edge pixel distance along y
 			float dpl = sqrtf(dlpx * dlpx + dlpy * dlpy); // aperture total pixel distance
@@ -639,12 +666,14 @@ int CJProbeGen::CalculateProbeWaveFourier(CJProbeParams* prm, int nx, int ny, fl
 	float *qnx = NULL;
 	float *qny = NULL;
 	float btx = 0.f, bty = 0.f;
-	float qlcx = 0.f, qlcy = 0.f, qlim = 0.f;
+	float qlcx = 0.f, qlcy = 0.f, qlim = 0.f, alim=0.f, adir=0.f;
 	float chi = 0.f;
 	float wap = 0.f;
 	float wpow = 0.f, fsca = 1.f;
 	nab = prm->GetAberrationNum();
 	qlim = prm->m_alpha * 0.001f / prm->m_wl; // mrad -> 1/nm
+	alim = prm->m_alpha_asym;
+	adir = prm->m_alpha_adir * 0.0174533f; // deg -> rad
 	qlcx = prm->m_alpha_x0 * 0.001f / prm->m_wl; // mrad -> 1/nm
 	qlcy = prm->m_alpha_y0 * 0.001f / prm->m_wl; // mrad -> 1/nm
 	btx = prm->m_btx * 0.001f / prm->m_wl; // mrad -> 1/nm
@@ -665,7 +694,7 @@ int CJProbeGen::CalculateProbeWaveFourier(CJProbeParams* prm, int nx, int ny, fl
 	for (j = 0; j < ny; j++) { // loop over grid rows
 		ij = j * nx;
 		for (i = 0; i < nx; i++) { // loop over grid columns
-			wap = ApertureFunctionS(qnx[i], qny[j], qlcx, qlcy, qlim, ax, ay); // aperture with smoothing of 1 pixel
+			wap = ApertureFunctionA(qnx[i], qny[j], qlcx, qlcy, qlim, alim, adir, ax, ay, 2.0f); // aperture with smoothing of 1 pixel
 			if (wap >(float)_JPG_PROBE_APERTURE_THRESH) {
 				if (nab > 0) {
 					chi = AberrationFunction(qnx[i], qny[j], prm->m_wl, nab, prm->m_abrr_coeff);
@@ -716,6 +745,9 @@ int CJProbeGen::CalculateProbeIntensityCoh(CJProbeParams* prm, int ndim, float s
 	float btx = lprm.m_btx * 0.001f / lprm.m_wl; // beam tilt X: mrad -> 1/nm
 	float bty = lprm.m_bty * 0.001f / lprm.m_wl; // beam tilt Y: mrad -> 1/nm
 	float qlim = lprm.m_alpha * 0.001f / lprm.m_wl; // aperture size: mrad -> 1/nm
+	float alim = lprm.m_alpha_asym; // aperture asymmetry
+	if (fabsf(alim) >= 1.0f) alim = 0.f; // deactivate on invalid value
+	float adir = lprm.m_alpha_adir * 0.0174533f; // asymmetry direction
 	float qlcx = lprm.m_alpha_x0 * 0.001f / lprm.m_wl; // aperture shift X: mrad -> 1/nm
 	float qlcy = lprm.m_alpha_y0 * 0.001f / lprm.m_wl; // aperture shift Y: mrad -> 1/nm
 	lprm.m_abrr_coeff[0] += 0.5f * a; // apply an image shift of 1/2 of the box to place the probe in the center
@@ -734,7 +766,7 @@ int CJProbeGen::CalculateProbeIntensityCoh(CJProbeParams* prm, int ndim, float s
 		ij = j * ndim;
 		for (i = 0; i < ndim; i++) { // loop over grid columns
 			qx = qn[i] + btx;
-			wap = ApertureFunctionS(qx, qy, qlcx, qlcy, qlim, a, a); // aperture with smoothing of 1 pixel
+			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, a, a, 2.0f); // aperture with smoothing of 2 pixels
 			if (wap >(float)_JPG_PROBE_APERTURE_THRESH) {
 				if (nab > 0) {
 					chi = AberrationFunction(qx, qy, lprm.m_wl, nab, lprm.m_abrr_coeff);
@@ -789,6 +821,9 @@ int CJProbeGen::CalculateProbeIntensityPSC(CJProbeParams* prm, int ndim, float s
 	float btx = lprm.m_btx * 0.001f / lprm.m_wl; // beam tilt X: mrad -> 1/nm
 	float bty = lprm.m_bty * 0.001f / lprm.m_wl; // beam tilt Y: mrad -> 1/nm
 	float qlim = lprm.m_alpha * 0.001f / lprm.m_wl; // aperture size: mrad -> 1/nm
+	float alim = lprm.m_alpha_asym; // aperture asymmetry
+	if (fabsf(alim) >= 1.0f) alim = 0.f; // deactivate on invalid value
+	float adir = lprm.m_alpha_adir * 0.0174533f; // asymmetry direction
 	float qlcx = lprm.m_alpha_x0 * 0.001f / lprm.m_wl; // aperture shift X: mrad -> 1/nm
 	float qlcy = lprm.m_alpha_y0 * 0.001f / lprm.m_wl; // aperture shift Y: mrad -> 1/nm
 	lprm.m_abrr_coeff[0] += 0.5f * a; // apply an image shift of 1/2 of the box to place the probe in the center
@@ -807,7 +842,7 @@ int CJProbeGen::CalculateProbeIntensityPSC(CJProbeParams* prm, int ndim, float s
 		ij = j * ndim;
 		for (i = 0; i < ndim; i++) { // loop over grid columns
 			qx = qn[i] + btx;
-			wap = ApertureFunctionS(qx, qy, qlcx, qlcy, qlim, a, a); // aperture with smoothing of 1 pixel
+			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, a, a, 2.0f); // aperture with smoothing of 2 pixels
 			if (wap >(float)_JPG_PROBE_APERTURE_THRESH) {
 				if (nab > 0) {
 					chi = AberrationFunction(qx, qy, lprm.m_wl, nab, lprm.m_abrr_coeff);
@@ -889,6 +924,9 @@ int CJProbeGen::CalculateProbeIntensityPTC(CJProbeParams* prm, int ndim, float s
 	float btx = lprm.m_btx * 0.001f / lprm.m_wl; // beam tilt X: mrad -> 1/nm
 	float bty = lprm.m_bty * 0.001f / lprm.m_wl; // beam tilt Y: mrad -> 1/nm
 	float qlim = lprm.m_alpha * 0.001f / lprm.m_wl; // aperture size: mrad -> 1/nm
+	float alim = lprm.m_alpha_asym; // aperture asymmetry
+	if (fabsf(alim) >= 1.0f) alim = 0.f; // deactivate on invalid value
+	float adir = lprm.m_alpha_adir * 0.0174533f; // asymmetry direction
 	float qlcx = lprm.m_alpha_x0 * 0.001f / lprm.m_wl; // aperture shift X: mrad -> 1/nm
 	float qlcy = lprm.m_alpha_y0 * 0.001f / lprm.m_wl; // aperture shift Y: mrad -> 1/nm
 	lprm.m_abrr_coeff[0] += 0.5f * a; // apply an image shift of 1/2 of the box to place the probe in the center
@@ -912,7 +950,7 @@ int CJProbeGen::CalculateProbeIntensityPTC(CJProbeParams* prm, int ndim, float s
 		for (i = 0; i < ndim; i++) { // loop over grid columns
 			ptmp3 = &tmp3[3 * i + ij3];
 			qx = qn[i] + btx;
-			wap = ApertureFunctionS(qx, qy, qlcx, qlcy, qlim, a, a); // aperture with smoothing of 1 pixel
+			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, a, a, 2.0f); // aperture with smoothing of 2 pixel
 			chi = 0.f;
 			zchi = 0.f;
 			if (wap >(float)_JPG_PROBE_APERTURE_THRESH) {
@@ -1011,6 +1049,9 @@ int CJProbeGen::CalculateProbeIntensity(CJProbeParams *prm, int ndim, float s, f
 	float btx = lprm.m_btx * 0.001f / lprm.m_wl; // beam tilt X: mrad -> 1/nm
 	float bty = lprm.m_bty * 0.001f / lprm.m_wl; // beam tilt Y: mrad -> 1/nm
 	float qlim = lprm.m_alpha * 0.001f / lprm.m_wl; // aperture size: mrad -> 1/nm
+	float alim = lprm.m_alpha_asym; // aperture asymmetry
+	if (fabsf(alim) >= 1.0f) alim = 0.f; // deactivate on invalid value
+	float adir = lprm.m_alpha_adir * 0.0174533f; // asymmetry direction
 	float qlcx = lprm.m_alpha_x0 * 0.001f / lprm.m_wl; // aperture shift X: mrad -> 1/nm
 	float qlcy = lprm.m_alpha_y0 * 0.001f / lprm.m_wl; // aperture shift Y: mrad -> 1/nm
 	lprm.m_abrr_coeff[0] += 0.5f * a; // apply an image shift of 1/2 of the box to place the probe in the center
@@ -1034,7 +1075,7 @@ int CJProbeGen::CalculateProbeIntensity(CJProbeParams *prm, int ndim, float s, f
 		for (i = 0; i < ndim; i++) { // loop over grid columns
 			ptmp3 = &tmp3[3 * i + ij3];
 			qx = qn[i] + btx;
-			wap = ApertureFunctionS(qx, qy, qlcx, qlcy, qlim, a, a); // aperture with smoothing of 1 pixel
+			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, a, a, 2.0f); // aperture with smoothing of 2 pixels
 			chi = 0.f;
 			zchi = 0.f;
 			if (wap > (float)_JPG_PROBE_APERTURE_THRESH) {
@@ -1135,6 +1176,9 @@ int CJProbeGen::CalculateProbePhase(CJProbeParams* prm, int ndim, float s, float
 	float btx = lprm.m_btx * 0.001f / lprm.m_wl; // beam tilt X: mrad -> 1/nm
 	float bty = lprm.m_bty * 0.001f / lprm.m_wl; // beam tilt Y: mrad -> 1/nm
 	float qlim = lprm.m_alpha * 0.001f / lprm.m_wl; // aperture size: mrad -> 1/nm
+	float alim = lprm.m_alpha_asym; // aperture asymmetry
+	if (fabsf(alim) >= 1.0f) alim = 0.f; // deactivate on invalid value
+	float adir = lprm.m_alpha_adir * 0.0174533f; // asymmetry direction
 	float qlcx = lprm.m_alpha_x0 * 0.001f / lprm.m_wl; // aperture shift X: mrad -> 1/nm
 	float qlcy = lprm.m_alpha_y0 * 0.001f / lprm.m_wl; // aperture shift Y: mrad -> 1/nm
 	lprm.m_abrr_coeff[0] += 0.5f * a; // apply an image shift of 1/2 of the box to place the probe in the center
@@ -1153,7 +1197,7 @@ int CJProbeGen::CalculateProbePhase(CJProbeParams* prm, int ndim, float s, float
 		ij = j * ndim;
 		for (i = 0; i < ndim; i++) { // loop over grid columns
 			qx = qn[i] + btx;
-			wap = ApertureFunctionS(qx, qy, qlcx, qlcy, qlim, a, a); // aperture with smoothing of 1 pixel
+			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, a, a, 2.0f); // aperture with smoothing of 2 pixels
 			if (wap >(float)_JPG_PROBE_APERTURE_THRESH) {
 				if (nab > 0) {
 					chi = AberrationFunction(qx, qy, lprm.m_wl, nab, lprm.m_abrr_coeff);
@@ -1203,6 +1247,9 @@ int CJProbeGen::CalculateProbeRe(CJProbeParams *prm, int ndim, float s, float* p
 	float btx = lprm.m_btx * 0.001f / lprm.m_wl; // beam tilt X: mrad -> 1/nm
 	float bty = lprm.m_bty * 0.001f / lprm.m_wl; // beam tilt Y: mrad -> 1/nm
 	float qlim = lprm.m_alpha * 0.001f / lprm.m_wl; // aperture size: mrad -> 1/nm
+	float alim = lprm.m_alpha_asym; // aperture asymmetry
+	if (fabsf(alim) >= 1.0f) alim = 0.f; // deactivate on invalid value
+	float adir = lprm.m_alpha_adir * 0.0174533f; // asymmetry direction
 	float qlcx = lprm.m_alpha_x0 * 0.001f / lprm.m_wl; // aperture shift X: mrad -> 1/nm
 	float qlcy = lprm.m_alpha_y0 * 0.001f / lprm.m_wl; // aperture shift Y: mrad -> 1/nm
 	lprm.m_abrr_coeff[0] += 0.5f * a; // apply an image shift of 1/2 of the box to place the probe in the center
@@ -1221,7 +1268,7 @@ int CJProbeGen::CalculateProbeRe(CJProbeParams *prm, int ndim, float s, float* p
 		ij = j * ndim;
 		for (i = 0; i < ndim; i++) { // loop over grid columns
 			qx = qn[i] + btx;
-			wap = ApertureFunctionS(qx, qy, qlcx, qlcy, qlim, a, a); // aperture with smoothing of 1 pixel
+			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, a, a, 2.0f); // aperture with smoothing of 2 pixels
 			if (wap >(float)_JPG_PROBE_APERTURE_THRESH) {
 				if (nab > 0) {
 					chi = AberrationFunction(qx, qy, lprm.m_wl, nab, lprm.m_abrr_coeff);
@@ -1270,6 +1317,9 @@ int CJProbeGen::CalculateProbeIm(CJProbeParams *prm, int ndim, float s, float* p
 	float btx = lprm.m_btx * 0.001f / lprm.m_wl; // beam tilt X: mrad -> 1/nm
 	float bty = lprm.m_bty * 0.001f / lprm.m_wl; // beam tilt Y: mrad -> 1/nm
 	float qlim = lprm.m_alpha * 0.001f / lprm.m_wl; // aperture size: mrad -> 1/nm
+	float alim = lprm.m_alpha_asym; // aperture asymmetry
+	if (fabsf(alim) >= 1.0f) alim = 0.f; // deactivate on invalid value
+	float adir = lprm.m_alpha_adir * 0.0174533f; // asymmetry direction
 	float qlcx = lprm.m_alpha_x0 * 0.001f / lprm.m_wl; // aperture shift X: mrad -> 1/nm
 	float qlcy = lprm.m_alpha_y0 * 0.001f / lprm.m_wl; // aperture shift Y: mrad -> 1/nm
 	lprm.m_abrr_coeff[0] += 0.5f * a; // apply an image shift of 1/2 of the box to place the probe in the center
@@ -1288,7 +1338,7 @@ int CJProbeGen::CalculateProbeIm(CJProbeParams *prm, int ndim, float s, float* p
 		ij = j * ndim;
 		for (i = 0; i < ndim; i++) { // loop over grid columns
 			qx = qn[i] + btx;
-			wap = ApertureFunctionS(qx, qy, qlcx, qlcy, qlim, a, a); // aperture with smoothing of 1 pixel
+			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim,adir, a, a, 2.0f); // aperture with smoothing of 1 pixel
 			if (wap >(float)_JPG_PROBE_APERTURE_THRESH) {
 				if (nab > 0) {
 					chi = AberrationFunction(qx, qy, lprm.m_wl, nab, lprm.m_abrr_coeff);
@@ -1472,6 +1522,9 @@ int CJProbeGen::CalculateRonchigram(CJProbeParams* prm, int ndim, float s, float
 	float qlim = lprm.m_alpha * 0.001f / lprm.m_wl; // aperture size: mrad -> 1/nm
 	float qlcx = lprm.m_alpha_x0 * 0.001f / lprm.m_wl; // aperture shift X: mrad -> 1/nm
 	float qlcy = lprm.m_alpha_y0 * 0.001f / lprm.m_wl; // aperture shift Y: mrad -> 1/nm
+	float alim = lprm.m_alpha_asym; // aperture asymmetry
+	if (fabsf(alim) >= 1.0f) alim = 0.f; // deactivate on invalid value
+	float adir = lprm.m_alpha_adir * 0.0174533f; // asymmetry direction
 	float fswgt = 1.f; // focal kernel weight
 	float dzval = 0.f; // addional defocus in focal averaging
 	float chi = 0.f; // aberration function value
@@ -1495,7 +1548,7 @@ int CJProbeGen::CalculateRonchigram(CJProbeParams* prm, int ndim, float s, float
 		for (i = 0; i < ndim; i++) { // loop over grid columns
 			ptmp3 = &tmp3[3 * i + ij3];
 			qx = qn[i] + btx;
-			wap = ApertureFunctionS(qx, qy, qlcx, qlcy, qlim, a, a); // aperture with smoothing of 1 pixel
+			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, a, a, 2.0f); // aperture with smoothing of 1 pixel
 			chi = 0.f;
 			zchi = 0.f;
 			if (wap >(float)_JPG_PROBE_APERTURE_THRESH) {

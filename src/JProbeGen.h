@@ -6,7 +6,7 @@
 // Copyright (C) 2018 - Juri Barthel (juribarthel@gmail.com)
 // Copyright (C) 2018 - Forschungszentrum Juelich GmbH, 52425 Juelich, Germany
 //
-// Verions of JProbeGen: 0.10 (2018 - December - 14)
+// Verions of JProbeGen: 0.11 (2019 - May - 03)
 //
 /*
 This program is free software : you can redistribute it and/or modify
@@ -90,6 +90,10 @@ public:
 	// illumination aperture center [mrad]
 	float m_alpha_x0;
 	float m_alpha_y0;
+	// illumination aperture asymmetry
+	float m_alpha_asym;
+	// illumination aperture asymmetry direction [deg]
+	float m_alpha_adir;
 	// beam tilt [mrad]
 	float m_btx;
 	float m_bty;
@@ -216,6 +220,17 @@ public:
 	// - ax, ay: physical grid size [nm]
 	// - smooth: amount of smoothing in Fourier pixels
 	float ApertureFunctionS(float qx, float qy, float qcx, float qcy, float qlim, float ax, float ay, float smooth = 1.f);
+
+	// calculates the value of an elliptical aperture function in the diffraction plane
+	// The edge of the aperture is smoothed by about one pixel
+	// - qx, qy: diffraction plane coordinate [1/nm]
+	// - qcx, qcy: aperture center [1/nm]
+	// - qlim: radius of the aperture [1/nm]
+	// - alim: asymmetry of the aperture
+	// - adir: direction of asymettry [rad]
+	// - ax, ay: physical grid size [nm]
+	// - smooth: amount of smoothing in Fourier pixels
+	float ApertureFunctionA(float qx, float qy, float qcx, float qcy, float qlim, float alim, float adir, float ax, float ay, float smooth = 1.f);
 	
 	// calculates the value of an aberration function for a given diffraction plane coordinate {qx,qy}
 	// - qx, qy: diffraction plane coordinate [1/nm]

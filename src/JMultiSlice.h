@@ -6,7 +6,7 @@
 // Copyright (C) 2018, 2019 - Juri Barthel (juribarthel@gmail.com)
 // Copyright (C) 2018, 2019 - Forschungszentrum Juelich GmbH, 52425 Juelich, Germany
 //
-// Verions of JMultiSlice: 0.23b (2019 - January - 07)
+// Verions of JMultiSlice: 0.24b (2019 - May - 03)
 //
 /*
 This program is free software : you can redistribute it and/or modify

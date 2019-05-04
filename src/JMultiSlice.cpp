@@ -3,8 +3,8 @@
 // implementation for library JMultislice.lib (declarations see JMultislice.h)
 //
 //
-// Copyright (C) 2018 - Juri Barthel (juribarthel@gmail.com)
-// Copyright (C) 2018 - Forschungszentrum Jülich GmbH, 52425 Jülich, Germany
+// Copyright (C) 2018, 2019 - Juri Barthel (juribarthel@gmail.com)
+// Copyright (C) 2018, 2019 - Forschungszentrum Jülich GmbH, 52425 Jülich, Germany
 //
 //
 /*
@@ -445,7 +445,7 @@ int CJMultiSlice::PhaseGratingSetup(int whichcode, int nx, int ny, int nslc, int
 	int nerr = 0;
 	int i = 0;
 	int64_t memoffset = 0;
-	int nitems = nx*ny;
+	int64_t nitems = (int64_t)nx*ny;
 	m_npgx = 0;
 	m_npgy = 0;
 	m_nscslc = 0;
@@ -523,7 +523,7 @@ int CJMultiSlice::PropagatorSetup(int whichcode, int npro, int *proidx)
 	// the length of array proidx is assumed to be m_nscslc
 	int nerr = 0;
 	int64_t nproitems = 0;
-	int nitems = m_nscx*m_nscy;
+	int64_t nitems = (int64_t)m_nscx*m_nscy;
 	m_npro = 0;
 	if (npro < 1 || NULL == proidx) goto _Exit;
 

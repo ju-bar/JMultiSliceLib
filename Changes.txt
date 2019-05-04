@@ -1,5 +1,8 @@
 List of changes to JMultiSliceLib
 
+2019-05-03: 0.24 JB
+- Added probe-forming aperture asymmetry.
+
 2019-01-08: 0.23 JB
 - Modified the butterfly summation unroll and fallback scenario.
 - Added a class for calculating atomic form factors using the
