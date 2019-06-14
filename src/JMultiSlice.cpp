@@ -960,18 +960,19 @@ float CJMultiSlice::GetRadialDetectorSensitivity(float theta, float* profile, in
 {
 	// This function returns the detector sensitivity for a given diffraction angle.
 	// It assumes that the first pixel of the profile corresponds to theta = 0.
-	// The angular calibration is done via refpix and beta1 which identify the pixel and diffraction angle
+	// The angular calibration is done via refpix and beta1 which identify the pixel+1 and diffraction angle
 	// providing scale for a linear dependency. Linear interpolation is used.
 	float sens = 1.0f;
 	float tpix = 0.f; // target pixel of the profile
 	float tfrac = 0.f;
+	float rpix = max(0.f, refpix - 1.f); // reduce refpix by 1 (this value is the sample number, starting to count with 1)
 	int ipix = 0;
-	if (NULL != profile && len > 0 && refpix >= 0.f) {
-		tpix = min( max(0.f, theta * refpix / beta1), (float)(len-1) ); // get target pixel clipped(!) to range 0 ... len-1
+	if (NULL != profile && len > 0 && rpix >= 0.f) {
+		tpix = max(0.f, theta * rpix / beta1); // get target pixel
 		ipix = (int)tpix; // get integer part for linear interpolation
 		tfrac = tpix - ipix; // get fractional part for linear interpolation
-		if (ipix == (len - 1)) { // special case at the upper bound
-			sens = profile[ipix];
+		if (ipix > (len - 2)) { // special case at the upper bound
+			sens = profile[len-1]; // ... set the sensitivity to that of the last profile value
 		}
 		else { // default case inside the range
 			sens = (1.f-tfrac)*profile[ipix] + tfrac*profile[ipix + 1];

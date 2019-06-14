@@ -1,5 +1,8 @@
 List of changes to JMultiSliceLib
 
+2019-05-24: 0.24 JB
+- Fixed a minor scaling issue in the sensitivity profile.
+
 2019-05-03: 0.24 JB
 - Added probe-forming aperture asymmetry.
 
