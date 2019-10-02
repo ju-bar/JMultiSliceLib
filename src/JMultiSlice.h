@@ -6,7 +6,7 @@
 // Copyright (C) 2018, 2019 - Juri Barthel (juribarthel@gmail.com)
 // Copyright (C) 2018, 2019 - Forschungszentrum Juelich GmbH, 52425 Juelich, Germany
 //
-// Verions of JMultiSlice: 0.24b (2019 - May - 03)
+// Verions of JMultiSlice: 0.30b (2019 - Oct - 02)
 //
 /*
 This program is free software : you can redistribute it and/or modify
@@ -25,15 +25,17 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 //
 //
 // JMultiSlice implements routines of running the multislice algorithm on CPU and GPU.
-// Uses libraries cufft.lib; cudart_static.lib; libfftw3f-3.lib
+// Uses libraries cufft.lib; cudart_static.lib;
+//                mkl_intel_lp64.lib; mkl_sequential.lib; mkl_core.lib
+//                (libfftw3f-3.lib is currently no longer used)
 //
 //
 // Concerning Multithreading:
 //
-// The FFTW-part of the class supports CPU multi-threading organized from
-// external code. By initializing for a given number of threads, separate
-// plans and arrays will be generated to allow independent calculation
-// by different threads or processes.
+// The FFT-part of the class supports CPU multi-threading organized from
+// external code (MKL). By initializing for a given number of threads,
+// separate plans and arrays will be generated to allow independent
+// calculation by different threads or processes.
 // The CUDA-part of the class assumes that all parallel computing is done
 // on the CUDA device.
 //
@@ -105,7 +107,8 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 //
 #pragma once
 //
-#include "JFFTWcore.h"
+//#include "JFFTWcore.h"
+#include "JFFTMKLcore.h"
 #include "JFFTCUDAcore.h"
 #include "JProbeGen.h"
 //
@@ -113,9 +116,9 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 #define __JMS__
 // VERSION NUMBERS
 #define __JMS_VERSION__			0
-#define __JMS_VERSION_SUB__		2
-#define __JMS_VERSION_SUB_SUB__	3
-#define __JMS_VERSION_BUILD__	20190107
+#define __JMS_VERSION_SUB__		3
+#define __JMS_VERSION_SUB_SUB__	0
+#define __JMS_VERSION_BUILD__	20191002
 // CODE IDs
 #define _JMS_CODE_CPU			1
 #define _JMS_CODE_GPU			2
@@ -250,7 +253,7 @@ protected:
 	// number of CPU thread output channels initialized
 	int m_threads_CPU_out;
 	// number of CPU threads initialized (should be less than or equal to m_threads_CPU_out)
-	int m_nfftwthreads;
+	int m_ncputhreads;
 	// status flags for CPU multislice calculations
 	int* m_status_calc_CPU;
 	// status flag for GPU multislice calculation
@@ -342,7 +345,8 @@ protected:
 	// Probe function calculations
 	CJProbeGen m_jpg;
 	// CPU core objects for FFTs and array ops on host
-	CJFFTWcore* m_jcpuco;
+	//CJFFTWcore* m_jcpuco;
+	CJFFTMKLcore* m_jcpuco;
 	// GPU core object for FFTs and array ops on device
 	CJFFTCUDAcore m_jgpuco;
 

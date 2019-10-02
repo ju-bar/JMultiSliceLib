@@ -1,0 +1,16 @@
+Linking with FFTW
+- include:
+	fftw3.h
+	$(ProjectDir)src\fftw\include
+- link:
+	libfftwf-3.3.lib
+	$(ProjectDir)src\fftw\lib\x64\Static-Release
+	$(ProjectDir)src\fftw\lib\x64\Static-Debug
+
+Linking with Intel MKL
+- include:
+	mkl_dfti.h
+	C:\Program Files (x86)\IntelSWTools\parallel_studio_xe_2018\compilers_and_libraries_2018\windows\mkl\include
+- link:
+	mkl_intel_lp64.lib;mkl_sequential.lib;mkl_core.lib
+	C:\Program Files (x86)\IntelSWTools\parallel_studio_xe_2018\compilers_and_libraries_2018\windows\mkl\lib\intel64

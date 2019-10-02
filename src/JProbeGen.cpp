@@ -61,6 +61,7 @@ CJProbeParams::CJProbeParams()
 	//
 	m_wl = 0.001969f;
 	m_alpha = 0.025f;
+	m_alpha_rs = 0.03f;
 	m_alpha_x0 = 0.0f;
 	m_alpha_y0 = 0.0f;
 	m_alpha_asym = 0.0f;
@@ -89,6 +90,7 @@ CJProbeParams::CJProbeParams(const CJProbeParams & src)
 	//
 	m_wl = src.m_wl;
 	m_alpha = src.m_alpha;
+	m_alpha_rs = src.m_alpha_rs;
 	m_alpha_x0 = src.m_alpha_x0;
 	m_alpha_y0 = src.m_alpha_y0;
 	m_alpha_asym = src.m_alpha_asym;
@@ -119,6 +121,7 @@ void CJProbeParams::operator=(const CJProbeParams &other)
 	int naccpy = min(nacsrc, nac); // number of coefficients to copy
 	m_wl = other.m_wl;
 	m_alpha = other.m_alpha;
+	m_alpha_rs = other.m_alpha_rs;
 	m_alpha_x0 = other.m_alpha_x0;
 	m_alpha_y0 = other.m_alpha_y0;
 	m_alpha_asym = other.m_alpha_asym;
@@ -143,6 +146,7 @@ bool CJProbeParams::operator==(const CJProbeParams &other) const
 	if (bResult) {
 		bResult &= (m_wl == other.m_wl);
 		bResult &= (m_alpha == other.m_alpha);
+		bResult &= (m_alpha_rs == other.m_alpha_rs);
 		bResult &= (m_alpha_x0 == other.m_alpha_x0);
 		bResult &= (m_alpha_y0 == other.m_alpha_y0);
 		bResult &= (m_alpha_asym == other.m_alpha_asym);
@@ -396,24 +400,25 @@ float CJProbeGen::ApertureFunction(float qx, float qy, float qcx, float qcy, flo
 }
 
 
-float CJProbeGen::ApertureFunctionS(float qx, float qy, float qcx, float qcy, float qlim, float ax, float ay, float smooth)
+float CJProbeGen::ApertureFunctionS(float qx, float qy, float qcx, float qcy, float qlim, float smooth)
 {
-	// needs physical grid size: ax and ay
 	// A <smooth>-pixel wide smoothing is applied to the aperture edge
 	float rtmp = 0.f;
 	if (qlim>0.f) {
 		float dqx = qx - qcx; // qx distance from aperture center
 		float dqy = qy - qcy; // qy distance from aperture center
 		float dqm = sqrtf(dqx * dqx + dqy * dqy); // magnitude of distance
+		float dqs = abs(smooth*qlim); // absolute smoothness on the scale of qlim
 		if (dqm > 0.f) { // q is not at center
-			float dpx = dqx * ax; // x pixel distance
-			float dpy = dqy * ay; // y pixel distance
-			float dpm = sqrtf(dpx * dpx + dpy * dpy); // total pixel distance
-			float dlr = qlim / dqm; // ratio between q and qlim
-			float dlpx = dqx * dlr * ax; // rescale to aperture edge pixel distance along x
-			float dlpy = dqy * dlr * ay; // rescale to aperture edge pixel distance along y
-			float dpl = sqrtf(dlpx * dlpx + dlpy * dlpy); // aperture total pixel distance
-			rtmp = (1.f - tanhf((dpm - dpl)*((float)_PI) / smooth)) *0.5f; // sigmoid edge
+			if (dqs > 0.f) { // edge smoothness is given
+				float darg = (float)_PI * (dqm - qlim) / dqs;
+				rtmp = (1.f - tanhf(darg)) *0.5f; // sigmoid edge
+			}
+			else {
+				if (dqm < qlim) {
+					rtmp = 1.f;
+				}
+			}
 		}
 		else { // at center of aperture set amplitude to 1.
 			rtmp = 1.f;
@@ -422,25 +427,33 @@ float CJProbeGen::ApertureFunctionS(float qx, float qy, float qcx, float qcy, fl
 	return rtmp;
 }
 
-float CJProbeGen::ApertureFunctionA(float qx, float qy, float qcx, float qcy, float qlim, float alim, float adir, float ax, float ay, float smooth)
+float CJProbeGen::ApertureFunctionA(float qx, float qy, float qcx, float qcy, float qlim, float alim, float adir, float smooth)
 {
-	// needs physical grid size: ax and ay
 	// A <smooth>-pixel wide smoothing is applied to the aperture edge
 	float rtmp = 0.f;
 	if (qlim > 0.f) {
+		float a1x = alim * cos(2.f * adir); // x - component of the asymmetry parameter
+		float a1y = alim * sin(2 * adir); // y - component of the asymmetry parameter
+		float adet = 1.f - alim * alim;
+		if (adet == 0.f) return rtmp; // closed aperture by distortion, exit
+		float radet = 1.f / adet;
 		float dqx = qx - qcx; // qx distance from aperture center
 		float dqy = qy - qcy; // qy distance from aperture center
-		float dq2 = dqx * dqx + dqy * dqy;
+		float dqx1 = ((1.f - a1x)*dqx - a1y * dqy) * radet; // back project qx to undistorted plane
+		float dqy1 = (-a1y * dqx + (1.f + a1x)*dqy) * radet; // back project ky to undistorted plane
+		float dq2 = dqx1 * dqx1 + dqy1 * dqy1;
 		float dqm = sqrtf(dq2); // magnitude of distance
+		float dqs = abs(smooth*qlim); // absolute smoothness on the scale of qlim
 		if (dqm > 0.f) { // q is not at center
-			float dpx = dqx * ax; // x pixel distance
-			float dpy = dqy * ay; // y pixel distance
-			float dpm = sqrtf(dpx * dpx + dpy * dpy); // total pixel distance
-			float dlr = qlim*(1.f-alim*alim) / sqrtf(dq2*(1.f + alim*alim) + 2.f*(dqy*dqy - dqx*dqx)*alim*cos(2.f*adir) - 4.f*dqx*dqy*alim*sin(2.f*adir)); // ratio between q and qlim
-			float dlpx = dqx * dlr * ax; // rescale to aperture edge pixel distance along x
-			float dlpy = dqy * dlr * ay; // rescale to aperture edge pixel distance along y
-			float dpl = sqrtf(dlpx * dlpx + dlpy * dlpy); // aperture total pixel distance
-			rtmp = (1.f - tanhf((dpm - dpl)*((float)_PI) / smooth)) *0.5f; // sigmoid edge
+			if (dqs > 0.f) { // edge smoothness is given
+				float darg = (float)_PI * (dqm - qlim) / dqs;
+				rtmp = (1.f - tanhf(darg)) *0.5f; // sigmoid edge
+			}
+			else {
+				if (dqm < qlim) {
+					rtmp = 1.f;
+				}
+			}
 		}
 		else { // at center of aperture set amplitude to 1.
 			rtmp = 1.f;
@@ -627,7 +640,7 @@ int CJProbeGen::GetSourceDistribution(int src_type, float src_width, int nx, int
 			for (i = 0; i < nx; i++) {
 				r2 = y2 + xn[i] * xn[i];
 				if (r2 <= rlim2) { // apply radial cut-off
-					kval = ApertureFunctionS(xn[i],yn[j],0.f,0.f,kprm,ax,ay);
+					kval = ApertureFunctionS(xn[i],yn[j],0.f,0.f,kprm);
 					ksum += (double)kval;
 					krn[i + ij] = kval; // write to kernel array
 				}
@@ -666,12 +679,13 @@ int CJProbeGen::CalculateProbeWaveFourier(CJProbeParams* prm, int nx, int ny, fl
 	float *qnx = NULL;
 	float *qny = NULL;
 	float btx = 0.f, bty = 0.f;
-	float qlcx = 0.f, qlcy = 0.f, qlim = 0.f, alim=0.f, adir=0.f;
+	float qlcx = 0.f, qlcy = 0.f, qlim = 0.f, alim=0.f, adir=0.f, qrs = 0.05f;
 	float chi = 0.f;
 	float wap = 0.f;
 	float wpow = 0.f, fsca = 1.f;
 	nab = prm->GetAberrationNum();
 	qlim = prm->m_alpha * 0.001f / prm->m_wl; // mrad -> 1/nm
+	qrs = prm->m_alpha_rs;
 	alim = prm->m_alpha_asym;
 	adir = prm->m_alpha_adir * 0.0174533f; // deg -> rad
 	qlcx = prm->m_alpha_x0 * 0.001f / prm->m_wl; // mrad -> 1/nm
@@ -694,7 +708,7 @@ int CJProbeGen::CalculateProbeWaveFourier(CJProbeParams* prm, int nx, int ny, fl
 	for (j = 0; j < ny; j++) { // loop over grid rows
 		ij = j * nx;
 		for (i = 0; i < nx; i++) { // loop over grid columns
-			wap = ApertureFunctionA(qnx[i], qny[j], qlcx, qlcy, qlim, alim, adir, ax, ay, 2.0f); // aperture with smoothing of 1 pixel
+			wap = ApertureFunctionA(qnx[i], qny[j], qlcx, qlcy, qlim, alim, adir, qrs); // aperture with smoothing of 1 pixel
 			if (wap >(float)_JPG_PROBE_APERTURE_THRESH) {
 				if (nab > 0) {
 					chi = AberrationFunction(qnx[i], qny[j], prm->m_wl, nab, prm->m_abrr_coeff);
@@ -727,7 +741,8 @@ int CJProbeGen::CalculateProbeIntensityCoh(CJProbeParams* prm, int ndim, float s
 		return 1;
 	}
 	int nft[2] = { ndim,ndim };
-	CJFFTWcore jfft;
+	//CJFFTWcore jfft;
+	CJFFTMKLcore jfft;
 	jfft.Init(2, nft);
 	size_t nbytes = sizeof(float) * ndim; // number of bytes per row and column
 	size_t nsbytes = sizeof(float) * ndim * ndim; // number of bytes in output
@@ -745,6 +760,7 @@ int CJProbeGen::CalculateProbeIntensityCoh(CJProbeParams* prm, int ndim, float s
 	float btx = lprm.m_btx * 0.001f / lprm.m_wl; // beam tilt X: mrad -> 1/nm
 	float bty = lprm.m_bty * 0.001f / lprm.m_wl; // beam tilt Y: mrad -> 1/nm
 	float qlim = lprm.m_alpha * 0.001f / lprm.m_wl; // aperture size: mrad -> 1/nm
+	float qrs = lprm.m_alpha_rs; // edge smoothness
 	float alim = lprm.m_alpha_asym; // aperture asymmetry
 	if (fabsf(alim) >= 1.0f) alim = 0.f; // deactivate on invalid value
 	float adir = lprm.m_alpha_adir * 0.0174533f; // asymmetry direction
@@ -766,7 +782,7 @@ int CJProbeGen::CalculateProbeIntensityCoh(CJProbeParams* prm, int ndim, float s
 		ij = j * ndim;
 		for (i = 0; i < ndim; i++) { // loop over grid columns
 			qx = qn[i] + btx;
-			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, a, a, 2.0f); // aperture with smoothing of 2 pixels
+			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, qrs); // aperture with smoothing of 2 pixels
 			if (wap >(float)_JPG_PROBE_APERTURE_THRESH) {
 				if (nab > 0) {
 					chi = AberrationFunction(qx, qy, lprm.m_wl, nab, lprm.m_abrr_coeff);
@@ -798,8 +814,10 @@ int CJProbeGen::CalculateProbeIntensityPSC(CJProbeParams* prm, int ndim, float s
 		return 1;
 	}
 	int nft[2] = { ndim,ndim };
-	CJFFTWcore jfft;
-	jfft.Init(2, nft, FFTW_MEASURE);
+	//CJFFTWcore jfft;
+	//jfft.Init(2, nft, FFTW_MEASURE);
+	CJFFTMKLcore jfft;
+	jfft.Init(2, nft);
 	size_t nbytes = sizeof(float) * ndim; // number of bytes per row and column
 	size_t nsbytes = sizeof(float) * ndim * ndim; // number of bytes in output
 	memset(pdata, 0, nsbytes);
@@ -821,6 +839,7 @@ int CJProbeGen::CalculateProbeIntensityPSC(CJProbeParams* prm, int ndim, float s
 	float btx = lprm.m_btx * 0.001f / lprm.m_wl; // beam tilt X: mrad -> 1/nm
 	float bty = lprm.m_bty * 0.001f / lprm.m_wl; // beam tilt Y: mrad -> 1/nm
 	float qlim = lprm.m_alpha * 0.001f / lprm.m_wl; // aperture size: mrad -> 1/nm
+	float qrs = lprm.m_alpha_rs; // edge smoothness
 	float alim = lprm.m_alpha_asym; // aperture asymmetry
 	if (fabsf(alim) >= 1.0f) alim = 0.f; // deactivate on invalid value
 	float adir = lprm.m_alpha_adir * 0.0174533f; // asymmetry direction
@@ -842,7 +861,7 @@ int CJProbeGen::CalculateProbeIntensityPSC(CJProbeParams* prm, int ndim, float s
 		ij = j * ndim;
 		for (i = 0; i < ndim; i++) { // loop over grid columns
 			qx = qn[i] + btx;
-			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, a, a, 2.0f); // aperture with smoothing of 2 pixels
+			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, qrs); // aperture with smoothing of 2 pixels
 			if (wap >(float)_JPG_PROBE_APERTURE_THRESH) {
 				if (nab > 0) {
 					chi = AberrationFunction(qx, qy, lprm.m_wl, nab, lprm.m_abrr_coeff);
@@ -896,8 +915,10 @@ int CJProbeGen::CalculateProbeIntensityPTC(CJProbeParams* prm, int ndim, float s
 		return 1;
 	}
 	int nft[2] = { ndim,ndim };
-	CJFFTWcore jfft;
-	jfft.Init(2, nft, FFTW_MEASURE);
+	//CJFFTWcore jfft;
+	//jfft.Init(2, nft, FFTW_MEASURE);
+	CJFFTMKLcore jfft;
+	jfft.Init(2, nft);
 	size_t nbytes = sizeof(float) * ndim; // number of bytes per row and column
 	size_t nsbytes = sizeof(float) * ndim * ndim; // number of bytes in output
 	memset(pdata, 0, nsbytes);
@@ -924,6 +945,7 @@ int CJProbeGen::CalculateProbeIntensityPTC(CJProbeParams* prm, int ndim, float s
 	float btx = lprm.m_btx * 0.001f / lprm.m_wl; // beam tilt X: mrad -> 1/nm
 	float bty = lprm.m_bty * 0.001f / lprm.m_wl; // beam tilt Y: mrad -> 1/nm
 	float qlim = lprm.m_alpha * 0.001f / lprm.m_wl; // aperture size: mrad -> 1/nm
+	float qrs = lprm.m_alpha_rs; // edge smoothness
 	float alim = lprm.m_alpha_asym; // aperture asymmetry
 	if (fabsf(alim) >= 1.0f) alim = 0.f; // deactivate on invalid value
 	float adir = lprm.m_alpha_adir * 0.0174533f; // asymmetry direction
@@ -950,7 +972,7 @@ int CJProbeGen::CalculateProbeIntensityPTC(CJProbeParams* prm, int ndim, float s
 		for (i = 0; i < ndim; i++) { // loop over grid columns
 			ptmp3 = &tmp3[3 * i + ij3];
 			qx = qn[i] + btx;
-			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, a, a, 2.0f); // aperture with smoothing of 2 pixel
+			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, qrs); // aperture with smoothing of 2 pixel
 			chi = 0.f;
 			zchi = 0.f;
 			if (wap >(float)_JPG_PROBE_APERTURE_THRESH) {
@@ -1016,8 +1038,10 @@ int CJProbeGen::CalculateProbeIntensity(CJProbeParams *prm, int ndim, float s, f
 		return 1;
 	}
 	int nft[2] = { ndim,ndim };
-	CJFFTWcore jfft;
-	jfft.Init(2, nft, FFTW_MEASURE);
+	//CJFFTWcore jfft;
+	//jfft.Init(2, nft, FFTW_MEASURE);
+	CJFFTMKLcore jfft;
+	jfft.Init(2, nft);
 	size_t nbytes = sizeof(float) * ndim; // number of bytes per row and column
 	size_t nsbytes = sizeof(float) * ndim * ndim; // number of bytes in output
 	memset(pdata, 0, nsbytes);
@@ -1049,6 +1073,7 @@ int CJProbeGen::CalculateProbeIntensity(CJProbeParams *prm, int ndim, float s, f
 	float btx = lprm.m_btx * 0.001f / lprm.m_wl; // beam tilt X: mrad -> 1/nm
 	float bty = lprm.m_bty * 0.001f / lprm.m_wl; // beam tilt Y: mrad -> 1/nm
 	float qlim = lprm.m_alpha * 0.001f / lprm.m_wl; // aperture size: mrad -> 1/nm
+	float qrs = lprm.m_alpha_rs; // edge smoothness
 	float alim = lprm.m_alpha_asym; // aperture asymmetry
 	if (fabsf(alim) >= 1.0f) alim = 0.f; // deactivate on invalid value
 	float adir = lprm.m_alpha_adir * 0.0174533f; // asymmetry direction
@@ -1075,7 +1100,7 @@ int CJProbeGen::CalculateProbeIntensity(CJProbeParams *prm, int ndim, float s, f
 		for (i = 0; i < ndim; i++) { // loop over grid columns
 			ptmp3 = &tmp3[3 * i + ij3];
 			qx = qn[i] + btx;
-			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, a, a, 2.0f); // aperture with smoothing of 2 pixels
+			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, qrs); // aperture with smoothing of 2 pixels
 			chi = 0.f;
 			zchi = 0.f;
 			if (wap > (float)_JPG_PROBE_APERTURE_THRESH) {
@@ -1158,7 +1183,9 @@ int CJProbeGen::CalculateProbePhase(CJProbeParams* prm, int ndim, float s, float
 		return 1;
 	}
 	int nft[2] = { ndim,ndim };
-	CJFFTWcore jfft;
+	//CJFFTWcore jfft;
+	//jfft.Init(2, nft, FFTW_MEASURE);
+	CJFFTMKLcore jfft;
 	jfft.Init(2, nft);
 	size_t nbytes = sizeof(float) * ndim; // number of bytes per row and column
 	size_t nsbytes = sizeof(float) * ndim * ndim; // number of bytes in output
@@ -1176,6 +1203,7 @@ int CJProbeGen::CalculateProbePhase(CJProbeParams* prm, int ndim, float s, float
 	float btx = lprm.m_btx * 0.001f / lprm.m_wl; // beam tilt X: mrad -> 1/nm
 	float bty = lprm.m_bty * 0.001f / lprm.m_wl; // beam tilt Y: mrad -> 1/nm
 	float qlim = lprm.m_alpha * 0.001f / lprm.m_wl; // aperture size: mrad -> 1/nm
+	float qrs = lprm.m_alpha_rs; // edge smoothness
 	float alim = lprm.m_alpha_asym; // aperture asymmetry
 	if (fabsf(alim) >= 1.0f) alim = 0.f; // deactivate on invalid value
 	float adir = lprm.m_alpha_adir * 0.0174533f; // asymmetry direction
@@ -1197,7 +1225,7 @@ int CJProbeGen::CalculateProbePhase(CJProbeParams* prm, int ndim, float s, float
 		ij = j * ndim;
 		for (i = 0; i < ndim; i++) { // loop over grid columns
 			qx = qn[i] + btx;
-			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, a, a, 2.0f); // aperture with smoothing of 2 pixels
+			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, qrs); // aperture with smoothing of 2 pixels
 			if (wap >(float)_JPG_PROBE_APERTURE_THRESH) {
 				if (nab > 0) {
 					chi = AberrationFunction(qx, qy, lprm.m_wl, nab, lprm.m_abrr_coeff);
@@ -1229,7 +1257,9 @@ int CJProbeGen::CalculateProbeRe(CJProbeParams *prm, int ndim, float s, float* p
 		return 1;
 	}
 	int nft[2] = { ndim,ndim };
-	CJFFTWcore jfft;
+	//CJFFTWcore jfft;
+	//jfft.Init(2, nft, FFTW_MEASURE);
+	CJFFTMKLcore jfft;
 	jfft.Init(2, nft);
 	size_t nbytes = sizeof(float) * ndim; // number of bytes per row and column
 	size_t nsbytes = sizeof(float) * ndim * ndim; // number of bytes in output
@@ -1247,6 +1277,7 @@ int CJProbeGen::CalculateProbeRe(CJProbeParams *prm, int ndim, float s, float* p
 	float btx = lprm.m_btx * 0.001f / lprm.m_wl; // beam tilt X: mrad -> 1/nm
 	float bty = lprm.m_bty * 0.001f / lprm.m_wl; // beam tilt Y: mrad -> 1/nm
 	float qlim = lprm.m_alpha * 0.001f / lprm.m_wl; // aperture size: mrad -> 1/nm
+	float qrs = lprm.m_alpha_rs; // edge smoothness
 	float alim = lprm.m_alpha_asym; // aperture asymmetry
 	if (fabsf(alim) >= 1.0f) alim = 0.f; // deactivate on invalid value
 	float adir = lprm.m_alpha_adir * 0.0174533f; // asymmetry direction
@@ -1268,7 +1299,7 @@ int CJProbeGen::CalculateProbeRe(CJProbeParams *prm, int ndim, float s, float* p
 		ij = j * ndim;
 		for (i = 0; i < ndim; i++) { // loop over grid columns
 			qx = qn[i] + btx;
-			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, a, a, 2.0f); // aperture with smoothing of 2 pixels
+			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, qrs); // aperture with smoothing of 2 pixels
 			if (wap >(float)_JPG_PROBE_APERTURE_THRESH) {
 				if (nab > 0) {
 					chi = AberrationFunction(qx, qy, lprm.m_wl, nab, lprm.m_abrr_coeff);
@@ -1299,7 +1330,9 @@ int CJProbeGen::CalculateProbeIm(CJProbeParams *prm, int ndim, float s, float* p
 		return 1;
 	}
 	int nft[2] = { ndim,ndim };
-	CJFFTWcore jfft;
+	//CJFFTWcore jfft;
+	//jfft.Init(2, nft, FFTW_MEASURE);
+	CJFFTMKLcore jfft;
 	jfft.Init(2, nft);
 	size_t nbytes = sizeof(float) * ndim; // number of bytes per row and column
 	size_t nsbytes = sizeof(float) * ndim * ndim; // number of bytes in output
@@ -1317,6 +1350,7 @@ int CJProbeGen::CalculateProbeIm(CJProbeParams *prm, int ndim, float s, float* p
 	float btx = lprm.m_btx * 0.001f / lprm.m_wl; // beam tilt X: mrad -> 1/nm
 	float bty = lprm.m_bty * 0.001f / lprm.m_wl; // beam tilt Y: mrad -> 1/nm
 	float qlim = lprm.m_alpha * 0.001f / lprm.m_wl; // aperture size: mrad -> 1/nm
+	float qrs = lprm.m_alpha_rs; // edge smoothness
 	float alim = lprm.m_alpha_asym; // aperture asymmetry
 	if (fabsf(alim) >= 1.0f) alim = 0.f; // deactivate on invalid value
 	float adir = lprm.m_alpha_adir * 0.0174533f; // asymmetry direction
@@ -1338,7 +1372,7 @@ int CJProbeGen::CalculateProbeIm(CJProbeParams *prm, int ndim, float s, float* p
 		ij = j * ndim;
 		for (i = 0; i < ndim; i++) { // loop over grid columns
 			qx = qn[i] + btx;
-			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim,adir, a, a, 2.0f); // aperture with smoothing of 1 pixel
+			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim,adir, qrs); // aperture with smoothing of 1 pixel
 			if (wap >(float)_JPG_PROBE_APERTURE_THRESH) {
 				if (nab > 0) {
 					chi = AberrationFunction(qx, qy, lprm.m_wl, nab, lprm.m_abrr_coeff);
@@ -1452,8 +1486,10 @@ int CJProbeGen::SetAmorph(int ndim, float s, bool bForce)
 			rndpha[ls] = (float)(_TPI * (double)urnd / (double)(UINT_MAX-1) ); // set random phase values from 0 to 2*Pi
 		}
 		// 3) transform random phase to Fourier-space
-		CJFFTWcore jfft;
 		int nd2[2] = { ndim,ndim };
+		//CJFFTWcore jfft;
+		//jfft.Init(2, nd2, FFTW_MEASURE);
+		CJFFTMKLcore jfft;
 		jfft.Init(2, nd2);
 		jfft.Zero();
 		jfft.SetDataRe(rndpha);
@@ -1490,8 +1526,10 @@ int CJProbeGen::CalculateRonchigram(CJProbeParams* prm, int ndim, float s, float
 		return 1;
 	}
 	int nft[2] = { ndim,ndim };
-	CJFFTWcore jfft;
-	jfft.Init(2, nft, FFTW_MEASURE);
+	//CJFFTWcore jfft;
+	//jfft.Init(2, nft, FFTW_MEASURE);
+	CJFFTMKLcore jfft;
+	jfft.Init(2, nft);
 	size_t nbytes = sizeof(float) * ndim; // number of bytes per row and column
 	size_t nsbytes = sizeof(float) * ndim * ndim; // number of bytes in output
 	memset(pdata, 0, nsbytes);
@@ -1520,6 +1558,7 @@ int CJProbeGen::CalculateRonchigram(CJProbeParams* prm, int ndim, float s, float
 	float btx = lprm.m_btx * 0.001f / lprm.m_wl; // beam tilt X: mrad -> 1/nm
 	float bty = lprm.m_bty * 0.001f / lprm.m_wl; // beam tilt Y: mrad -> 1/nm
 	float qlim = lprm.m_alpha * 0.001f / lprm.m_wl; // aperture size: mrad -> 1/nm
+	float qrs = lprm.m_alpha_rs; // edge smoothness
 	float qlcx = lprm.m_alpha_x0 * 0.001f / lprm.m_wl; // aperture shift X: mrad -> 1/nm
 	float qlcy = lprm.m_alpha_y0 * 0.001f / lprm.m_wl; // aperture shift Y: mrad -> 1/nm
 	float alim = lprm.m_alpha_asym; // aperture asymmetry
@@ -1548,7 +1587,7 @@ int CJProbeGen::CalculateRonchigram(CJProbeParams* prm, int ndim, float s, float
 		for (i = 0; i < ndim; i++) { // loop over grid columns
 			ptmp3 = &tmp3[3 * i + ij3];
 			qx = qn[i] + btx;
-			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, a, a, 2.0f); // aperture with smoothing of 1 pixel
+			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, qrs); // aperture with smoothing of 1 pixel
 			chi = 0.f;
 			zchi = 0.f;
 			if (wap >(float)_JPG_PROBE_APERTURE_THRESH) {

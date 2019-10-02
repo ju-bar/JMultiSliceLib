@@ -10,9 +10,11 @@
 //
 //
 // JMultiSlice implements routines of running the multislice algorithm on CPU and GPU.
-// Uses libraries cufft.lib; cudart_static.lib; libfftw3f-3.lib
+// Uses libraries cufft.lib; cudart_static.lib
+//                mkl_intel_lp64.lib; mkl_sequential.lib; mkl_core.lib
+//                (libfftw3f-3.lib is currently no longer used)
 //
-// Link cufft.lib; cudart_static.lib; libfftw3f-3.lib with the main program.
+// Link cufft.lib; cudart_static.lib; with the main program.
 // You need to provide a version of the cuda fft runtime library ...
 // - CUDA version 9.0: cufft64_90.dll
 //

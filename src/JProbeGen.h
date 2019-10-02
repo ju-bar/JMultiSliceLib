@@ -6,7 +6,7 @@
 // Copyright (C) 2018 - Juri Barthel (juribarthel@gmail.com)
 // Copyright (C) 2018 - Forschungszentrum Juelich GmbH, 52425 Juelich, Germany
 //
-// Verions of JProbeGen: 0.11 (2019 - May - 03)
+// Verions of JProbeGen: 0.12 (2019 - Sep - 16)
 //
 /*
 This program is free software : you can redistribute it and/or modify
@@ -43,7 +43,8 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 //
 #include <vector>
 #include <chrono>
-#include "JFFTWcore.h"
+//#include "JFFTWcore.h"
+#include "JFFTMKLcore.h"
 using namespace std;
 //
 #ifndef __JPROBEGEN__
@@ -87,10 +88,12 @@ public:
 	float m_wl;
 	// semi-angle of convergence [mrad], illumination aperture radius
 	float m_alpha;
+	// illumination aperture relative smoothness
+	float m_alpha_rs;
 	// illumination aperture center [mrad]
 	float m_alpha_x0;
 	float m_alpha_y0;
-	// illumination aperture asymmetry
+	// illumination aperture relative asymmetry
 	float m_alpha_asym;
 	// illumination aperture asymmetry direction [deg]
 	float m_alpha_adir;
@@ -217,20 +220,18 @@ public:
 	// - qx, qy: diffraction plane coordinate [1/nm]
 	// - qcx, qcy: aperture center [1/nm]
 	// - qlim: radius of the aperture [1/nm]
-	// - ax, ay: physical grid size [nm]
-	// - smooth: amount of smoothing in Fourier pixels
-	float ApertureFunctionS(float qx, float qy, float qcx, float qcy, float qlim, float ax, float ay, float smooth = 1.f);
+	// - smooth: relative smoothness of the edge
+	float ApertureFunctionS(float qx, float qy, float qcx, float qcy, float qlim, float smooth = 0.05f);
 
 	// calculates the value of an elliptical aperture function in the diffraction plane
 	// The edge of the aperture is smoothed by about one pixel
 	// - qx, qy: diffraction plane coordinate [1/nm]
 	// - qcx, qcy: aperture center [1/nm]
 	// - qlim: radius of the aperture [1/nm]
-	// - alim: asymmetry of the aperture
+	// - alim: relative asymmetry of the aperture
 	// - adir: direction of asymettry [rad]
-	// - ax, ay: physical grid size [nm]
-	// - smooth: amount of smoothing in Fourier pixels
-	float ApertureFunctionA(float qx, float qy, float qcx, float qcy, float qlim, float alim, float adir, float ax, float ay, float smooth = 1.f);
+	// - smooth: relative smoothness of the edge
+	float ApertureFunctionA(float qx, float qy, float qcx, float qcy, float qlim, float alim, float adir, float smooth = 0.05f);
 	
 	// calculates the value of an aberration function for a given diffraction plane coordinate {qx,qy}
 	// - qx, qy: diffraction plane coordinate [1/nm]

@@ -278,7 +278,7 @@ CJMultiSlice::CJMultiSlice()
 	m_status_setup_CPU = 0;
 	m_status_setup_GPU = 0;
 	m_threads_CPU_out = 0;
-	m_nfftwthreads = 0;
+	m_ncputhreads = 0;
 	m_status_calc_CPU = NULL;
 	m_status_calc_GPU = 0;
 	m_objslc = NULL;
@@ -834,7 +834,7 @@ void CJMultiSlice::SetDiffractionDescanN(int whichcode, int ndescanx, int ndesca
 		goto _Exit; // invalid whichcode
 	}
 	if (whichcode&_JMS_CODE_CPU && (m_status_setup_CPU & _JMS_THRESHOLD_CALC) > 0 &&
-		iThread >= 0 && iThread < m_nfftwthreads) {
+			iThread >= 0 && iThread < m_ncputhreads) {
 		m_h_dif_ndescanx[iThread] = ndescanx; // 1/nm -> pixel
 		m_h_dif_ndescany[iThread] = ndescany; // 1/nm -> pixel
 	}
@@ -855,7 +855,7 @@ void CJMultiSlice::SetDiffractionDescan(int whichcode, float descanx, float desc
 		goto _Exit; // invalid whichcode
 	}
 	if (whichcode&_JMS_CODE_CPU && (m_status_setup_CPU & _JMS_THRESHOLD_CALC) > 0 &&
-		iThread >= 0 && iThread < m_nfftwthreads) {
+		iThread >= 0 && iThread < m_ncputhreads) {
 		m_h_dif_ndescanx[iThread] = (int)round(descanx * m_a0[0]); // 1/nm -> pixel
 		m_h_dif_ndescany[iThread] = (int)round(descany * m_a0[1]); // 1/nm -> pixel
 	}
@@ -1418,37 +1418,39 @@ int CJMultiSlice::InitCore(int whichcode, int nCPUthreads)
 	}
 	
 	if (whichcode&_JMS_CODE_CPU && (m_status_setup_CPU & _JMS_THRESHOLD_CORE) > 0 && nitems > 0 ) {
-		if (NULL != m_jcpuco && m_nfftwthreads>0 ) { // there seem to be old cores, get rid of them
-			for (icore = 0; icore < m_nfftwthreads; icore++) {
+		if (NULL != m_jcpuco && m_ncputhreads>0 ) { // there seem to be old cores, get rid of them
+			for (icore = 0; icore < m_ncputhreads; icore++) {
 				m_jcpuco[icore].Deinit();
 			}
 			delete[] m_jcpuco;
 			m_jcpuco = NULL;
-			m_nfftwthreads = 0;
+			m_ncputhreads = 0;
 		}
 		if (nCPUthreads > m_threads_CPU_out) { nerr = 1; goto _Exit; }
-		m_nfftwthreads = max(1, nCPUthreads); // new number of cores
-		m_jcpuco = new CJFFTWcore[m_nfftwthreads]; // allocate new FFTW cores
+		m_ncputhreads = max(1, nCPUthreads); // new number of cores
+		//m_jcpuco = new CJFFTWcore[m_ncputhreads]; // allocate new FFTW cores
+		m_jcpuco = new CJFFTMKLcore[m_ncputhreads]; // allocate new FFTMKL cores
 		if (NULL == m_jcpuco) {
-			cerr << "Error: (InitCore): Failed to create " << m_nfftwthreads << " new CPU cores" << endl;
-			m_nfftwthreads = 0; 
+			cerr << "Error: (InitCore): Failed to create " << m_ncputhreads << " new CPU cores" << endl;
+			m_ncputhreads = 0;
 			nerr = 2; goto _Exit; 
 		} // failed to allocate FFTW objects
-		if (0 < AllocMem_h((void**)&m_status_calc_CPU, sizeof(int)*m_nfftwthreads, "InitCore", "CPU calculation status", true)) { nerr = 10; goto _Exit; }
-		for (icore = 0; icore < m_nfftwthreads; icore++) { // initialize all FFTW cores
-			if (0 == m_jcpuco[icore].Init(2, pdims, _JMS_FFTW_PLANFLAG)) {
+		if (0 < AllocMem_h((void**)&m_status_calc_CPU, sizeof(int)*m_ncputhreads, "InitCore", "CPU calculation status", true)) { nerr = 10; goto _Exit; }
+		for (icore = 0; icore < m_ncputhreads; icore++) { // initialize all FFTW cores
+			//if (0 == m_jcpuco[icore].Init(2, pdims, _JMS_FFTW_PLANFLAG)) {
+			if (0 == m_jcpuco[icore].Init(2, pdims)) {
 				ncore_ready++;
 			}
 			else {
 				cerr << "Error: (InitCore): Failed to initialize CPU core #" << icore+1 << endl;
 			}
 		}
-		if (ncore_ready < m_nfftwthreads) { nerr = 3; goto _Exit; } // not all cores are initialized
+		if (ncore_ready < m_ncputhreads) { nerr = 3; goto _Exit; } // not all cores are initialized
 		nbytes = sizeof(fcmplx)*(size_t)nitems;
 		if (0 < AllocMem_h((void**)&m_h_wav0, nbytes, "InitCore", "wave function backup", true)) { nerr = 4; goto _Exit; }
-		nbytes = sizeof(fcmplx)*(size_t)nitems*m_nfftwthreads;
+		nbytes = sizeof(fcmplx)*(size_t)nitems*m_ncputhreads;
 		if (0 < AllocMem_h((void**)&m_h_wav, nbytes, "InitCore", "wave functions", true)) { nerr = 5; goto _Exit; }
-		nbytes = sizeof(int)*(size_t)m_nfftwthreads;
+		nbytes = sizeof(int)*(size_t)m_ncputhreads;
 		if (0 < AllocMem_h((void**)&m_h_dif_ndescanx, nbytes, "InitCore", "de-scan x", true)) { nerr = 6; goto _Exit; }
 		if (0 < AllocMem_h((void**)&m_h_dif_ndescany, nbytes, "InitCore", "de-scan y", true)) { nerr = 7; goto _Exit; }
 		m_status_setup_CPU |= _JMS_STATUS_CORE; // mark CPU core setup as completed
@@ -1609,7 +1611,7 @@ int CJMultiSlice::OffsetIncomingWave(int whichcode, float dx, float dy, float dz
 	// ftmp1 = GetAbsTotal(m_h_wav0, nitems);
 
 	if (whichcode&_JMS_CODE_CPU && (m_status_setup_CPU & _JMS_THRESHOLD_CALC) > 0 &&
-		iThread >= 0 && iThread < m_nfftwthreads) {
+		iThread >= 0 && iThread < m_ncputhreads) {
 		_h_wav = m_h_wav + iThread*nitems; // get thread wave slot
 		if (0<AllocMem_h((void**)&_h_pp, nbytes, "OffsetIncomingWave", "phase plate")) { nerr = 2; goto _Exit; } // allocation of helper phase-plate failed
 		
@@ -1784,7 +1786,7 @@ int CJMultiSlice::DescanDifN(int whichcode, int dnx, int dny, float* dif, int iT
 	//
 	if ((dnx == 0 && dny == 0) || (0 == m_dif_descan_flg)) { // zero descan or no-descan flag -> speed up
 		if (whichcode&_JMS_CODE_CPU && (m_status_setup_CPU & _JMS_THRESHOLD_CALC) > 0 &&
-			iThread >= 0 && iThread < m_nfftwthreads) {
+			iThread >= 0 && iThread < m_ncputhreads) {
 			m_jcpuco[iThread].GetDataPow(dif); // direct readout to host buffer
 		}
 		if (whichcode&_JMS_CODE_GPU && (m_status_setup_GPU & _JMS_THRESHOLD_CALC) > 0) {
@@ -1799,7 +1801,7 @@ int CJMultiSlice::DescanDifN(int whichcode, int dnx, int dny, float* dif, int iT
 	if (0<AllocMem_h((void**)&_h_desc, nbytes, "DescanDif", "_h_desc")) { nerr = 3; goto _Exit; } // allocation of array failed
 	// fill data from cores
 	if (whichcode&_JMS_CODE_CPU && (m_status_setup_CPU & _JMS_THRESHOLD_CALC) > 0 &&
-		iThread >= 0 && iThread < m_nfftwthreads) {
+		iThread >= 0 && iThread < m_ncputhreads) {
 		nerr = m_jcpuco[iThread].GetDataPow(_h_cp); // direct readout to host buffer
 		dsum = GetTotalF(_h_cp, nitems);
 	}
@@ -1823,7 +1825,7 @@ int CJMultiSlice::DescanDifN(int whichcode, int dnx, int dny, float* dif, int iT
 		}
 	}
 	if (whichcode&_JMS_CODE_CPU && (m_status_setup_CPU & _JMS_THRESHOLD_CALC) > 0 &&
-		iThread >= 0 && iThread < m_nfftwthreads) {
+		iThread >= 0 && iThread < m_ncputhreads) {
 		dsum = GetTotalF(_h_desc, nitems);
 		if (dif != memcpy(dif, _h_desc, nbytes)) { // copy to host output buffer
 			nerr = 5; goto _Exit; // result copy error
@@ -1861,7 +1863,7 @@ int CJMultiSlice::DescanDifWavN_h(int dnx, int dny, fcmplx* wav, int iThread)
 	if (nitems <= 0 || NULL == wav) {
 		nerr = 1; goto _Exit; // invalid number of grid points or input array
 	}
-	if (0 == (m_status_setup_CPU & _JMS_THRESHOLD_CALC) || 0 > iThread || iThread >= m_nfftwthreads) {
+	if (0 == (m_status_setup_CPU & _JMS_THRESHOLD_CALC) || 0 > iThread || iThread >= m_ncputhreads) {
 		nerr = 1; goto _Exit; // cpu core is not ready or invalid thread ID
 	}
 	//
@@ -1971,7 +1973,7 @@ int CJMultiSlice::GetResult(int whichcode, int whichresult, float *dst, int iThr
 		goto _Exit;
 	}
 
-	if ((whichcode&_JMS_CODE_CPU) > 0 && iThread >=0 && iThread < m_nfftwthreads && m_ndetslc>0 ) {
+	if ((whichcode&_JMS_CODE_CPU) > 0 && iThread >=0 && iThread < m_ncputhreads && m_ndetslc>0 ) {
 		if (whichresult == _JMS_DETECT_INTEGRATED) {
 			nitems = (size_t)m_ndet*m_ndetslc;
 			nbytes = sizeof(float)*(size_t)nitems;
@@ -2031,13 +2033,13 @@ int CJMultiSlice::Cleanup(void)
 	DeallocMem_d((void**)&m_d_det_tmpwav);
 	DeallocMem_d((void**)&m_d_det_tmp);
 	DeallocMem_h((void**)&m_status_calc_CPU);
-	if (NULL != m_jcpuco && m_nfftwthreads>0) { // there seem to be old cores, get rid of them
-		for (icore = 0; icore < m_nfftwthreads; icore++) {
+	if (NULL != m_jcpuco && m_ncputhreads >0) { // there seem to be old cores, get rid of them
+		for (icore = 0; icore < m_ncputhreads; icore++) {
 			m_jcpuco[icore].Deinit();
 		}
 		delete[] m_jcpuco;
 		m_jcpuco = NULL;
-		m_nfftwthreads = 0;
+		m_ncputhreads = 0;
 	}
 	m_jgpuco.Deinit();
 	DeallocMem_h((void**)&m_h_fnx);
@@ -2107,8 +2109,8 @@ int CJMultiSlice::Cleanup(void)
 
 void CJMultiSlice::CleanFFTW(void)
 {
-	CJFFTWcore ctmp;
-	ctmp.CleanupFFTW();
+	//CJFFTWcore ctmp;
+	//ctmp.CleanupFFTW();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2219,7 +2221,7 @@ int CJMultiSlice::ClearDetMem_h(int iThread)
 float CJMultiSlice::GetCoreAbsTotal_h(int iThread)
 {
 	float ftot = 0.f;
-	if (iThread >= 0 && iThread < m_nfftwthreads && (0 < (m_status_setup_CPU & _JMS_THRESHOLD_CALC))) {
+	if (iThread >= 0 && iThread < m_ncputhreads && (0 < (m_status_setup_CPU & _JMS_THRESHOLD_CALC))) {
 		ftot = m_jcpuco[iThread].GetDataTotalPow();
 	}
 	return ftot;
@@ -2375,7 +2377,8 @@ int CJMultiSlice::ReadoutDifDet_h(int iSlice, int iThread, float weight)
 	//              m_h_det_int is allocated on host
 	//              m_h_det_dif is allocated on host
 	int nerr = 0;
-	CJFFTWcore *jco = NULL;
+	//CJFFTWcore *jco = NULL;
+	CJFFTMKLcore *jco = NULL;
 	float *dif = NULL;
 	float *det = NULL;
 	float *out = NULL;
@@ -2457,7 +2460,8 @@ int CJMultiSlice::ReadoutImgDet_h(int iSlice, int iThread, float weight)
 	// Assumes that the data in jcpuco[iThread] is in Real space
 	//              m_h_det_img is allocated on host
 	int nerr = 0;
-	CJFFTWcore *jco = NULL;
+	//CJFFTWcore *jco = NULL;
+	CJFFTMKLcore *jco = NULL;
 	float *img = NULL;
 	float *out = NULL;
 	fcmplx *wav = NULL;
@@ -2512,7 +2516,7 @@ int CJMultiSlice::SetIncomingWaveCPU(fcmplx* wav, bool bTranspose, int iThread)
 	fcmplx* _h_wav = NULL;
 	fcmplx* wavtmp = NULL; // temp buffer only used when bTranspose == true
 	if ( (m_status_setup_CPU & _JMS_THRESHOLD_CALC) == 0 || nitems <= 0 || 
-		m_h_wav == NULL || iThread < 0 || iThread >= m_nfftwthreads) {
+		m_h_wav == NULL || iThread < 0 || iThread >= m_ncputhreads) {
 		nerr = 1; goto _Exit;
 	}
 	// float ftmp1 = 0.f, ftmp2 = 0.f;
@@ -2553,7 +2557,8 @@ _Exit:
 int CJMultiSlice::CPUMultislice(int islc0, int accmode, float weight, int iThread)
 {
 	int nerr = 0;
-	CJFFTWcore *jco = NULL;
+	//CJFFTWcore *jco = NULL;
+	CJFFTMKLcore *jco = NULL;
 	fcmplx *wav = NULL;
 	fcmplx *pgr = NULL;
 	fcmplx *pro = NULL;
@@ -2566,7 +2571,7 @@ int CJMultiSlice::CPUMultislice(int islc0, int accmode, float weight, int iThrea
 	if (nitems != npgitems) {
 		bsubframe = true;
 	}
-	if (iThread<0 || iThread>=m_nfftwthreads || NULL== m_jcpuco || NULL==m_h_wav || nitems <= 0 ) {
+	if (iThread<0 || iThread>= m_ncputhreads || NULL== m_jcpuco || NULL==m_h_wav || nitems <= 0 ) {
 		//cout << "iThread :" << iThread << ", core: " << m_jcpuco << ", wav: " << m_h_wav << ", << n: " << nitems << endl;
 		nerr = 1;
 		goto _Exit;

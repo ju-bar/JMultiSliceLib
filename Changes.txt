@@ -1,5 +1,21 @@
 List of changes to JMultiSliceLib
 
+2019-10-02: 0.30 JB
+- Added CJFFTMKLcore for CPU FFT calculations. This code links to
+  the Intel Math Kernel Library
+  (mkl_intel_lp64.lib;mkl_sequential.lib;mkl_core.lib)
+  Make sure to add the MKL include path and the 64-bit library
+  path to the directory lists of  the JMultislice Project and the
+  include path to the calling project.
+  The library object code will get very large (~600MB), the final
+  binary if the calling code will increase by about 30 MB.
+  Speed gain can be significant for CPU calculations on smaller
+  scales (<1k pixel) while not very significant on larger problems.
+
+2019-09-16: 0.25 JB
+- Modified the aperture functions to consistency with MSA and
+  internally between different aperture function models.
+
 2019-05-24: 0.24 JB
 - Fixed a minor scaling issue in the sensitivity profile.
 

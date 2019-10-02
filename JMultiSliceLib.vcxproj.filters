@@ -22,6 +22,9 @@
     <ClCompile Include="src\wekoscat.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\JFFTMKLcore.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\cu\ArrayOps.cuh">
@@ -58,6 +61,9 @@
       <Filter>Include Files</Filter>
     </ClInclude>
     <ClInclude Include="src\wekoscat.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\JFFTMKLcore.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -116,6 +122,7 @@
     <Text Include="LICENSE" />
     <Text Include="ReadMe.txt" />
     <Text Include="ToDo.txt" />
+    <Text Include="Lib.txt" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Header Files">
