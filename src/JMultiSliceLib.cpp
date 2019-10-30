@@ -101,6 +101,11 @@ void __stdcall DiffractionDescan(bool bActivate)
 	JMS.DiffractionDescan(bActivate);
 }
 
+void __stdcall SetPlasmonMC(bool bActivate, float fq_e, float fq_c, float fmfp, UINT nexmax)
+{
+	JMS.SetPlasmonMC(bActivate, fq_e, fq_c, fmfp, nexmax);
+}
+
 void __stdcall SetDiffractionDescanN(int whichcode, int ndescanx, int ndescany, int iThread)
 {
 	JMS.SetDiffractionDescanN(whichcode, ndescanx, ndescany, iThread);
@@ -170,9 +175,9 @@ int __stdcall Cleanup(void)
 	return JMS.Cleanup();
 }
 
-void __stdcall CleanFFTW(void)
+void __stdcall FreeLibMem(void)
 {
-	JMS.CleanFFTW();
+	JMS.FreeLibMem();
 	return;
 }
 

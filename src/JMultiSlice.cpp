@@ -291,6 +291,7 @@ CJMultiSlice::CJMultiSlice()
 	m_h_fnx = NULL;
 	m_h_fny = NULL;
 	m_dif_descan_flg = 0;
+	m_plasmonmc_flg = 0;
 	m_d_knx = NULL;
 	m_d_kny = NULL;
 	m_h_wav = NULL;
@@ -321,6 +322,7 @@ CJMultiSlice::CJMultiSlice()
 	m_d_det_tmpwav = NULL;
 	m_d_dif_ndescanx = 0;
 	m_d_dif_ndescany = 0;
+	m_d_pgr_src = 0;
 	m_jcpuco = NULL;
 	
 }
@@ -483,7 +485,19 @@ int CJMultiSlice::PhaseGratingSetup(int whichcode, int nx, int ny, int nslc, int
 	// GPU code - phase grating setup -> Memory prepared but no data set.
 	if (whichcode&_JMS_CODE_GPU) {
 		if (memoffset > 0) { // make sure to allocate only if data is expected.
-			if (0<AllocMem_d((void**)&m_d_pgr, sizeof(cuComplex)*memoffset, "PhaseGratingSetup", "phase gratings", true)) { nerr = 104; goto _Exit; }
+			if (0<AllocMem_d((void**)&m_d_pgr, sizeof(cuComplex)*memoffset, "PhaseGratingSetup", "phase gratings", true)) {
+				if (0 < AllocMem_d((void**)&m_d_pgr, sizeof(cuComplex)*nitems, "PhaseGratingSetup", "single phase grating", true)) {
+					nerr = 104; goto _Exit;
+				}
+				if (NULL == m_h_pgr) { // single phase grating mode needs phase grating pointers on host
+					// allocate host pointer list // allocate this list here, make sure to check setup in SetPhaseGratingData
+					if (0 < AllocMem_h((void**)&m_h_pgr, sizeof(fcmplx*)*m_nscslc, "PhaseGratingSetup", "phase grating addresses", true)) { nerr = 105; goto _Exit; }
+				}
+				m_d_pgr_src = 1; // set pgr source to host
+			}
+			else {
+				m_d_pgr_src = 0; // set pgr source to device
+			}
 		}
 	}
 
@@ -688,6 +702,16 @@ float CJMultiSlice::GetSliceThickness(int islc)
 		return m_slcthick[islc];
 	}
 	return 0.0f;
+}
+
+void CJMultiSlice::SetPlasmonMC(bool use, float q_e, float q_c, float mfp, UINT nexmax)
+{
+	m_plasmonmc_flg = 0;
+	if (use) m_plasmonmc_flg = 1;
+	m_jplmc.m_q_e = abs(q_e);
+	m_jplmc.m_q_c = abs(q_c);
+	m_jplmc.m_meanfreepath = abs(mfp);
+	m_jplmc.m_sca_num_max = nexmax;
 }
 
 int CJMultiSlice::CalculateProbeWaveFourier(CJProbeParams* prm, fcmplx *wav)
@@ -1154,11 +1178,11 @@ int CJMultiSlice::SetPhaseGratingData(int whichcode, int islc, int nvar, fcmplx*
 		}
 		nbytes = sizeof(fcmplx)*(size_t)nlvar*nitems;
 		if (nbytes == 0) { nerr = 1; goto _Exit; } // something is wrong with the setup
-		if (whichcode&_JMS_CODE_CPU) {
+		if (whichcode&_JMS_CODE_CPU || m_d_pgr_src==1) { // CPU code or phase-grating host sourceing is used
 			if (NULL == m_h_pgr) { nerr = 2; goto _Exit; } // cannot link, pgr array not ready
 			m_h_pgr[islc] = pgr; // just link the pointer to host address, the rest is handled by lib parameters
 		}
-		if (whichcode&_JMS_CODE_GPU) {
+		if (whichcode&_JMS_CODE_GPU && m_d_pgr_src==0) { // copy from host to device only on default pre-copy mode
 			if (NULL == m_d_pgr || NULL == m_slcoffset) { nerr = 101; goto _Exit; } // cannot copy, pgr array not ready
 			pgrdst = m_d_pgr + m_slcoffset[islc];
 			cuerr = cudaMemcpy(pgrdst, pgr, nbytes, cudaMemcpyHostToDevice); // copy to device
@@ -2107,10 +2131,11 @@ int CJMultiSlice::Cleanup(void)
 }
 
 
-void CJMultiSlice::CleanFFTW(void)
+void CJMultiSlice::FreeLibMem(void)
 {
 	//CJFFTWcore ctmp;
-	//ctmp.CleanupFFTW();
+	CJFFTMKLcore ctmp;
+	ctmp.FreeLibMem();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2559,12 +2584,15 @@ int CJMultiSlice::CPUMultislice(int islc0, int accmode, float weight, int iThrea
 	int nerr = 0;
 	//CJFFTWcore *jco = NULL;
 	CJFFTMKLcore *jco = NULL;
+	CJPlasmonMC jpl(m_jplmc); // copy plasmon parameters from template to thread instance
 	fcmplx *wav = NULL;
 	fcmplx *pgr = NULL;
 	fcmplx *pro = NULL;
 	int *var = NULL;
 	int islc = islc0;
 	int jslc = 0;
+	int ish0 = 0, ish1 = 0; // shift indices used with plasmon scattering
+	float fthick = 0.f; // slice thickness used with plasmon scattering
 	int nitems = m_nscx*m_nscy;
 	int npgitems = m_npgx*m_npgy;
 	bool bsubframe = false;
@@ -2603,6 +2631,10 @@ int CJMultiSlice::CPUMultislice(int islc0, int accmode, float weight, int iThrea
 		// prepare new random variant sequence
 		var = (int*)malloc(sizeof(int)*m_nobjslc);
 		GetRandomVariantSequence(var);
+		if (m_plasmonmc_flg == 1) { // plasmon scattering
+			jpl.Init();
+			jpl.ResetMC();
+		}
 		// Default case, the current wave function is not the exit-plane wave function
 		// Do the multislice
 		for (jslc = islc; jslc < m_nobjslc; jslc++) {
@@ -2629,6 +2661,15 @@ int CJMultiSlice::CPUMultislice(int islc0, int accmode, float weight, int iThrea
 			// 3) propagation (fourier space)
 			nerr = jco->FT(); // forward FFT
 			if (nerr > 0) { nerr += 500; goto _CancelMS; }
+			// 3.1) plasmon scattering
+			if (m_plasmonmc_flg == 1) {
+				fthick = GetSliceThickness(m_objslc[jslc]);
+				if (0 < jpl.ScatGridMC(fthick, m_a0[0], m_a0[1], &ish0, &ish1)) { // scattering happened
+					if (ish0 != 0 || ish1 != 0) { // wave function needs shift
+						jco->CShift2d(ish0, ish1);
+					}
+				}
+			}
 			pro = GetPropagator_h(jslc);
 			nerr = jco->MultiplyC(pro);
 			if (nerr > 0) { nerr += 600; goto _CancelMS; }
@@ -2956,7 +2997,19 @@ cuComplex* CJMultiSlice::GetPhaseGrating_d(int iSlice, int* pVarID)
 	else { // take variant ID from prepared list
 		jvar = pVarID[iSlice];
 	}
-	pgr = m_d_pgr + m_slcoffset[jslc] + (int64_t)jvar*nitems; // pointer to first item of slice variant # jvar
+	if (m_d_pgr_src == 0) { // default: phase gratings have been copied to device before
+		pgr = m_d_pgr + m_slcoffset[jslc] + (int64_t)jvar*nitems; // pointer to first item of slice variant # jvar
+	}
+	else if (m_d_pgr_src == 1) { // v.0.15: low-GPU memory mode: phase gratings are on host and need to be copied now
+		cudaError cuerr;
+		fcmplx* pgrsrc = GetPhaseGrating_h(iSlice, pVarID); // get phase-grating address on host
+		size_t nbytes = sizeof(fcmplx)*(size_t)nitems;
+		cuerr = cudaMemcpy(m_d_pgr, pgrsrc, nbytes, cudaMemcpyHostToDevice); // copy to device
+		if (cuerr != cudaSuccess) { // handle device error
+			PostCUDAError("(SetPhaseGratingData): Failed to copy phase grating data to GPU devices", cuerr);
+		}
+		pgr = m_d_pgr; // only one phase-grating buffer on device
+	}
 	/*if (m_dbg >= 5) {
 		cout << "debug(GetPhaseGrating_d): iSlice " << iSlice << endl;
 		cout << "debug(GetPhaseGrating_d): jslc " << jslc << endl;
@@ -3210,14 +3263,17 @@ int CJMultiSlice::GPUMultislice(int islc0, int accmode, float weight)
 {
 	int nerr = 0;
 	CJFFTCUDAcore *jco = &m_jgpuco;
+	CJPlasmonMC jpl(m_jplmc);
 	cuComplex *wav = NULL;
 	cuComplex *pgr = NULL;
 	cuComplex *pro = NULL;
 	int *var = NULL;
 	int islc = islc0;
 	int jslc = 0;
+	int ish0 = 0, ish1 = 0;
 	int nitems = m_nscx*m_nscy;
 	int npgitems = m_npgx*m_npgy;
+	float fthick = 0.f;
 	bool bsubframe = false;
 	if (nitems != npgitems) { // calculation grid and phase gratings are on different sizes
 		bsubframe = true;
@@ -3261,7 +3317,10 @@ int CJMultiSlice::GPUMultislice(int islc0, int accmode, float weight)
 		// prepare new random variant sequence
 		var = (int*)malloc(sizeof(int)*m_nobjslc);
 		GetRandomVariantSequence(var);
-		
+		if (m_plasmonmc_flg == 1) {
+			jpl.Init();
+			jpl.ResetMC();
+		}
 		/*if (m_dbg >= 5) {
 			cout << "debug(GPUMultislice): RandomVariantSequence" << endl;
 			for (jslc = islc; jslc < m_nobjslc; jslc++) {
@@ -3301,6 +3360,15 @@ int CJMultiSlice::GPUMultislice(int islc0, int accmode, float weight)
 			// 3) propagation (fourier space)
 			nerr = jco->FT(); // forward FFT
 			if (0 < nerr) { nerr += 500; goto _CancelMS; }
+			// 3.1) plasmon scattering
+			if (m_plasmonmc_flg == 1) {
+				fthick = GetSliceThickness(m_objslc[jslc]);
+				if (0 < jpl.ScatGridMC(fthick, m_a0[0], m_a0[1], &ish0, &ish1)) { // scattering happened
+					if (ish0 != 0 || ish1 != 0) { // wave function needs shift
+						jco->CShift2d(ish0, ish1);
+					}
+				}
+			}
 			pro = GetPropagator_d(jslc);
 			nerr = jco->MultiplyC_d(pro);
 			if (0 < nerr) { nerr += 600; goto _CancelMS; }

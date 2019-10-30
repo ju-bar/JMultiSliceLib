@@ -49,13 +49,14 @@
  */
 //
 //
-// SETUP-CHAIN (minimum, without physics)
-// 1) JMS_SetGridSize
+// SETUP-CHAIN (minimum, without much physics)
+// 1) JMS_SetGridSize, JMS_SetHighTension, JMS_SetSupercellSize
 // 2) 2.1) JMS_PhaseGratingSetup,
 //    2.2) JMS_ObjectSliceSetup,
 //    2.3) JMS_PropagatorSetup,
 //    2.4) JMS_DetectorSetup (to be called after JMS_ObjectSliceSetup)
-// 3) JMS_SetPhaseGratingData (for each slices)
+// 3) 3.1) JMS_SetPhaseGratingData (for each slices)
+//    3.2) JMS_SetSliceThickness (for each slices) (required for plasmon scattering)
 // 4) JMS_SetPropagatorData (for each propagators)
 // 5) JMS_SetDetectorData (for each detectors)
 // 6) JMS_InitCore (once)
@@ -132,6 +133,9 @@ extern "C" __declspec(dllexport) void __stdcall SetSliceThickness(int islc, floa
 
 // Turns the diffraction de-scan on or off
 extern "C" __declspec(dllexport) void __stdcall DiffractionDescan(bool bActivate);
+
+// Sets parameterd for the plasmon scattering Monte-Carlo
+extern "C" __declspec(dllexport) void __stdcall SetPlasmonMC(bool bActivate, float fq_e, float fq_c, float fmfp, UINT nexmax);
 
 // Set the diffraction descan values for a specific calculation thread.
 // Use the same beam tilts as in the probe tilt, the routine inverts it.
@@ -321,10 +325,10 @@ extern "C" __declspec(dllexport) int __stdcall ClearDetMem_d(void);
 // - resets the setup status to NONE
 extern "C" __declspec(dllexport) int __stdcall Cleanup(void);
 
-// Cleans the FFTW module
-// - call this only if all FFTW routines are halted and no longer used.
-// - FFTW needs to be reinitialized afterwards.
-extern "C" __declspec(dllexport) void __stdcall CleanFFTW(void);
+// Cleans the FFTW/MKL module
+// - call this only if all FFTW/MKL routines are halted and no longer used.
+// - FFTW/MKL needs to be reinitialized afterwards.
+extern "C" __declspec(dllexport) void __stdcall FreeLibMem(void);
 
 
 #endif

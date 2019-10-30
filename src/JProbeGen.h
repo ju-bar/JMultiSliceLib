@@ -203,6 +203,9 @@ public:
 	// ----------------------------------------------------------------------------
 	// member functions
 
+	// cleans memory used to calculate FFTs (use with utmost care)
+	void FreeLibMem(void);
+
 	// returns the sum of the first n values in pdata
 	float GetTotalIntensity(size_t n, float* pdata);
 

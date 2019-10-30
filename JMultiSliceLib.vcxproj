@@ -136,7 +136,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <PrecompiledHeader>Use</PrecompiledHeader>
-      <Optimization>MaxSpeed</Optimization>
+      <Optimization>Full</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -144,6 +144,7 @@
       <AdditionalIncludeDirectories>$(ProjectDir)src\fftw\include;%(AdditionalIncludeDirectories);$(CudaToolkitIncludeDir);C:\Program Files (x86)\IntelSWTools\parallel_studio_xe_2018\compilers_and_libraries_2018\windows\mkl\include</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <FloatingPointModel>Fast</FloatingPointModel>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -175,6 +176,7 @@
     <ClInclude Include="src\JFFTWcore.h" />
     <ClInclude Include="src\JMultiSlice.h" />
     <ClInclude Include="src\JMultiSliceLib.h" />
+    <ClInclude Include="src\JPlasmonMC.h" />
     <ClInclude Include="src\JProbeGen.h" />
     <ClInclude Include="src\NatureConstants.h" />
     <ClInclude Include="src\stdafx.h" />
@@ -187,6 +189,7 @@
     <ClCompile Include="src\JFFTWcore.cpp" />
     <ClCompile Include="src\JMultiSlice.cpp" />
     <ClCompile Include="src\JMultiSliceLib.cpp" />
+    <ClCompile Include="src\JPlasmonMC.cpp" />
     <ClCompile Include="src\JProbeGen.cpp" />
     <ClCompile Include="src\stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>

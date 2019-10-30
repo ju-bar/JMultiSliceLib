@@ -45,6 +45,7 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 #pragma once
 //
 #include "fcomplex.h"
+#include "mkl.h"
 #include "mkl_dfti.h"
 //
 #ifndef JFFTMKLCORE_H
@@ -67,6 +68,7 @@ protected:
 public:
 	// Initialization interface:
 	void Deinit(void); // de-initializes the object
+	void FreeLibMem(void); // cleans the MKL module (use with care)
 	int Init(int ndim, int * pdims); // initialize the plan and internal array
 	// Transformation operation interface:
 	int FT(void); // does a forward FFT with the current plan and data in the core
@@ -76,6 +78,7 @@ public:
 	int Zero(void); // sets the core data values to zero
 	int Conjugate(void); // applies complex conjugate to the data
 	int Scale(float sca); // scales the data
+	int CShift2d(int nsh0, int nsh1); // applies cyclic shifts along both array dimensions
 	int MultiplyReal(float * src); // multiply with a list of real values of the same size
 	int MultiplyC(float * src); // multiply complex values given as re,im aligned list
 	int MultiplyC(fcmplx * src); // multiply complex values

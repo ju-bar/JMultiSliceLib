@@ -31,6 +31,12 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 //
 using namespace std;
 //
+inline int imod(int a, int b) {
+	int ret = a % b;
+	if (ret < 0)
+		ret += b;
+	return ret;
+}
 
 CJFFTMKLcore::CJFFTMKLcore()
 {
@@ -66,6 +72,11 @@ void CJFFTMKLcore::Deinit(void)
 	m_pcw = NULL;
 	m_nstatus = 0;
 	m_ndim = 0;
+}
+
+void CJFFTMKLcore::FreeLibMem(void)
+{
+	mkl_free_buffers();
 }
 
 int CJFFTMKLcore::Init(int ndim, int * pdims)
@@ -260,6 +271,48 @@ int CJFFTMKLcore::Scale(float sca)
 		//m_pcw[i][0] *= sca;
 		//m_pcw[i][1] *= sca;
 	}
+	return 0;
+}
+
+int CJFFTMKLcore::CShift2d(int nsh0, int nsh1)
+{
+	int nerr = 0;
+	if (nsh0 == 0 && nsh1 == 0) return 0;
+	if (m_nstatus < 1) {
+		cerr << "Error(JFFTMKLcore): Cannot shift data, not initialized." << endl;
+		return 1;
+	}
+	if (m_ndim != 2) {
+		cerr << "Error(JFFTMKLcore): cyclic 2d shift not supported on other dimensions than 2." << endl;
+		return 2;
+	}
+	int jsh = imod(nsh1, m_pdims[0]);
+	int ish = imod(nsh0, m_pdims[1]);
+	int j0 = 0, j1 = 0, i0 = 0, i1 = 0, jdx0 = 0, jdx1 = 0;
+	size_t b_x = (size_t)m_pdims[1] * sizeof(fcmplx);
+	size_t b_n = b_x * (size_t)m_pdims[0];
+	size_t b_right = (size_t)ish * sizeof(fcmplx); // number of bytes hanging over on the right end
+	size_t b_left = b_x - b_right; // number of bytes remaining inside horizontally
+	fcmplx* tmp = (fcmplx*)malloc(b_n); // prepare a temporary buffer for the working data
+	if (NULL == tmp) {
+		cerr << "Error(JFFTMKLcore): memory allocation failed." << endl;
+		return 3;
+	}
+	//
+	nerr = memcpy_s((void*)tmp, b_n, (void*)m_pcw, b_n); // get a copy of the data
+	//
+	for (j0 = 0; j0 < m_pdims[0]; j0++) { // loop over source row indices 
+		j1 = imod(j0 + jsh, m_pdims[0]); // destination row index
+		jdx0 = j0 * m_pdims[1]; // index of first row item in source
+		jdx1 = j1 * m_pdims[1]; // index of first row item in destination
+		// copy left part (left b_left bytes of source to ish shifted position in destination) 
+		nerr = memcpy_s(&m_pcw[jdx1 + ish], b_left, &tmp[jdx0], b_left);
+		if (b_right > 0) { // ... if there is a shift
+			// copy right part (right b_right bytes of source to first position of destination)
+			nerr = memcpy_s(&m_pcw[jdx1], b_right, &tmp[jdx0 + m_pdims[1] - ish], b_right);
+		}
+	}
+	free(tmp);
 	return 0;
 }
 
@@ -623,16 +676,17 @@ int CJFFTMKLcore::GetDataPow(float * dst)
 
 float CJFFTMKLcore::GetDataTotalPow(void)
 {
-	/*       Performs a Kahan sum on the absolute square of the data              */
-	/*       https://en.wikipedia.org/wiki/Kahan_summation_algorithm              */
 	double dsum = 0.0;
+	size_t len = GetDataSize();
+	double re = 0.0;
+	double im = 0.0;
 	double dabs = 0.0;
+	/*       Perform a Kahan sum on the absolute square of the data              */
+	/*       https://en.wikipedia.org/wiki/Kahan_summation_algorithm             */
+	/*
 	double dc = 0.0;
 	double dy = 0.0;
 	double dt = 0.0;
-	double re = 0.0;
-	double im = 0.0;
-	size_t len = GetDataSize();
 	if (len > 0 && m_pcw != NULL && m_nstatus > 0 ) {
 		for (size_t i = 0; i < len; i++) {
 			re = (double)m_pcw[i].real();
@@ -644,20 +698,32 @@ float CJFFTMKLcore::GetDataTotalPow(void)
 			dsum = dt; // update result
 		}
 	}
+	*/
+	/*       Perform a sum on the absolute square of the data                     */
+	/*       using a double precision accumulator                                 */
+	if (len > 0 && m_pcw != NULL && m_nstatus > 0) {
+		for (size_t i = 0; i < len; i++) {
+			re = (double)m_pcw[i].real();
+			im = (double)m_pcw[i].imag();
+			dabs = re * re + im * im;
+			dsum += dabs;
+		}
+	}
 	return (float)dsum;
 }
 
 
 float CJFFTMKLcore::GetDataTotalRe(void)
 {
+	double dsum = 0.0;
+	size_t len = GetDataSize();
 	/*       Performs a Kahan sum on the data real part                           */
 	/*       https://en.wikipedia.org/wiki/Kahan_summation_algorithm              */
-	double dsum = 0.0;
+	/*
+	double re = 0.0;
 	double dc = 0.0;
 	double dy = 0.0;
 	double dt = 0.0;
-	double re = 0.0;
-	size_t len = GetDataSize();
 	if (len > 0 && m_pcw != NULL && m_nstatus > 0) {
 		for (size_t i = 0; i < len; i++) {
 			re = (double)m_pcw[i].real();
@@ -667,19 +733,28 @@ float CJFFTMKLcore::GetDataTotalRe(void)
 			dsum = dt; // update result
 		}
 	}
+	*/
+	/*       Performs a sum on the data real part                                 */
+	/*       using a double precision accumulator                                 */
+	if (len > 0 && m_pcw != NULL && m_nstatus > 0) {
+		for (size_t i = 0; i < len; i++) {
+			dsum += (double)m_pcw[i].real();
+		}
+	}
 	return (float)dsum;
 }
 
 float CJFFTMKLcore::GetDataTotalIm(void)
 {
+	double dsum = 0.0;
+	size_t len = GetDataSize();
 	/*       Performs a Kahan sum on the data imaginary part                      */
 	/*       https://en.wikipedia.org/wiki/Kahan_summation_algorithm              */
-	double dsum = 0.0;
+	/*
 	double dc = 0.0;
 	double dy = 0.0;
 	double dt = 0.0;
 	double im = 0.0;
-	size_t len = GetDataSize();
 	if (len > 0 && m_pcw != NULL && m_nstatus > 0) {
 		for (size_t i = 0; i < len; i++) {
 			im = (double)m_pcw[i].imag();
@@ -687,6 +762,14 @@ float CJFFTMKLcore::GetDataTotalIm(void)
 			dt = dsum + dy; // intermediate new sum value
 			dc = (dt - dsum) - dy; // new correction
 			dsum = dt; // update result
+		}
+	}
+	*/
+	/*       Performs a sum on the data imaginary part                            */
+	/*       using a double precision accumulator                                 */
+	if (len > 0 && m_pcw != NULL && m_nstatus > 0) {
+		for (size_t i = 0; i < len; i++) {
+			dsum += (double)m_pcw[i].imag();
 		}
 	}
 	return (float)dsum;

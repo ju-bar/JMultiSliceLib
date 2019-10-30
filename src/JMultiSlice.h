@@ -6,7 +6,7 @@
 // Copyright (C) 2018, 2019 - Juri Barthel (juribarthel@gmail.com)
 // Copyright (C) 2018, 2019 - Forschungszentrum Juelich GmbH, 52425 Juelich, Germany
 //
-// Verions of JMultiSlice: 0.30b (2019 - Oct - 02)
+// Verions of JMultiSlice: 0.32b (2019 - Oct - 18)
 //
 /*
 This program is free software : you can redistribute it and/or modify
@@ -80,7 +80,8 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 //    2.2) JMS_ObjectSliceSetup,
 //    2.3) JMS_PropagatorSetup,
 //    2.4) JMS_DetectorSetup (to be called after JMS_ObjectSliceSetup)
-// 3) JMS_SetPhaseGratingData (for each slices)
+// 3) 3.1) JMS_SetPhaseGratingData (for each slices)
+//    3.2) JMS_SetSliceThickness (for each slices) (required for plasmon scattering)
 // 4) JMS_SetPropagatorData (for each propagators)
 // 5) JMS_SetDetectorData (for each detectors)
 // 6) JMS_InitCore (once)
@@ -111,14 +112,15 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 #include "JFFTMKLcore.h"
 #include "JFFTCUDAcore.h"
 #include "JProbeGen.h"
+#include "JPlasmonMC.h"
 //
 #ifndef __JMS__
 #define __JMS__
 // VERSION NUMBERS
 #define __JMS_VERSION__			0
 #define __JMS_VERSION_SUB__		3
-#define __JMS_VERSION_SUB_SUB__	0
-#define __JMS_VERSION_BUILD__	20191002
+#define __JMS_VERSION_SUB_SUB__	3
+#define __JMS_VERSION_BUILD__	20191030
 // CODE IDs
 #define _JMS_CODE_CPU			1
 #define _JMS_CODE_GPU			2
@@ -243,6 +245,8 @@ protected:
 	int m_status_setup_GPU;
 	// global diffraction de-scan flag (0: off, 1: on)
 	int m_dif_descan_flg;
+	// plasmon scattering Monte-Carlo flag (0: off, 1: on)
+	int m_plasmonmc_flg;
 public:
 	// default message string for output (not initialized)
 	char m_msg[_JPG_MESSAGE_LEN];
@@ -338,10 +342,14 @@ protected:
 	int m_d_dif_ndescanx;
 	// device diffraction de-scan in y-direction pixels
 	int m_d_dif_ndescany;
+	// GPU phasegrating source flag (0: device memory, 1: host memory -> copy-on-demand)
+	int m_d_pgr_src;
 
 // ----------------------------------------------------------------------------
 // multislice objects doing calculations
 
+	// Plasmon scattering Monte-Carlo handler template
+	CJPlasmonMC m_jplmc;
 	// Probe function calculations
 	CJProbeGen m_jpg;
 	// CPU core objects for FFTs and array ops on host
@@ -376,9 +384,9 @@ public:
 	int Cleanup(void);
 
 	// Cleans the FFTW module
-	// - call this only if all FFTW routines are halted and no longer used.
-	// - FFTW needs to be reinitialized afterwards.
-	void CleanFFTW(void);
+	// - call this only if all FFTW/MKL routines are halted and no longer used.
+	// - FFTW/MKL needs to be reinitialized afterwards.
+	void FreeLibMem(void);
 
 // ----------------------------------------------------------------------------
 // multislice setup functions
@@ -401,6 +409,15 @@ public:
 	// - islc: a slice index valid in the current phase grating setup
 	// - fthickness: the thickness of slice islc in nm
 	void SetSliceThickness(int islc, float fthickness);
+
+	// Set plasmon scattering Monte-Carlo parameters and switch
+	// - use: flag the function on and off
+	// - q_e: characteristic scattering vector [1/nm]
+	// - q_c: critical scattering vector [1/nm]
+	// - mfp: mean free path for single scattering [nm]
+	// - nexmax: max. number of excitations per probing electron
+	void SetPlasmonMC(bool use, float q_e, float q_c, float mfp, UINT nexmax);
+
 
 	// Turns the diffraction de-scan on or off
 	void DiffractionDescan(bool bActivate);

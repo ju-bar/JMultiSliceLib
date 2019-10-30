@@ -1,5 +1,18 @@
 List of changes to JMultiSliceLib
 
+2019-10-30: 0.33 JB
+- Added memory cleanup calls for MKL closing leaks.
+- Fixed issues with the plasmon scattering code.
+
+2019-10-18: 0.32 JB
+- Added plasmon scattering Monte-Carlo to CPU & GPU multislice.
+
+2019-10-15: 0.31 JB
+- Added automatism to copy phase grating data from host memory
+  on demand in case of insufficient memory on device for holding
+  all phase gratings. This can affect the GPU multislice, leading
+  to increased computation time by approximately a factor of 2.
+
 2019-10-02: 0.30 JB
 - Added CJFFTMKLcore for CPU FFT calculations. This code links to
   the Intel Math Kernel Library

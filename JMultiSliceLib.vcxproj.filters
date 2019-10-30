@@ -25,6 +25,9 @@
     <ClCompile Include="src\JFFTMKLcore.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\JPlasmonMC.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\cu\ArrayOps.cuh">
@@ -64,6 +67,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\JFFTMKLcore.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\JPlasmonMC.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -107,6 +107,8 @@ public:
 	int MultiplyC(fcmplx * src); 
 	// multiply float values on device
 	int MultiplyF(float * src);
+	// cyclic shift pixels
+	int CShift2d(int nsh0, int nsh1);
 	
 	// Data transfer interface:
 	

@@ -31,7 +31,12 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 //
 using namespace std;
 //
-
+inline int imod(int a, int b) {
+	int ret = a % b;
+	if (ret < 0)
+		ret += b;
+	return ret;
+}
 
 CJFFTCUDAcore::CJFFTCUDAcore()
 {
@@ -414,6 +419,47 @@ int CJFFTCUDAcore::MultiplyC(fcmplx * src)
 	m_cuerrLast = ArrayOpMul(m_pcw, pcsrcdev, m_pcw, m_aos1dMult);
 	// destroy source helper on device
 	m_cuerrLast = cudaFree(pcsrcdev);
+	if (m_cuerrLast != cudaSuccess) {
+		PostCUDAError("(JFFTCUDAcore): Failed to destroy helper array on device", m_cuerrLast);
+		return 6;
+	}
+	return 0;
+}
+
+int CJFFTCUDAcore::CShift2d(int nsh0, int nsh1)
+{
+	if (0 == nsh0 && 0 == nsh1) { // catch no shift
+		return 0;
+	}
+	if (m_nstatus < 1) {
+		cerr << "Error(JFFTCUDAcore): Cannot multiply data, not initialized." << endl;
+		return 1;
+	}
+	if (m_ndim != 2) {
+		cerr << "Error(JFFTCUDAcore): cyclic 2d shift not supported on other dimensions than 2." << endl;
+		return 2;
+	}
+	unsigned int jsh = (unsigned int)imod(nsh1, m_pdims[0]); // clip shifts to positive values
+	unsigned int ish = (unsigned int)imod(nsh0, m_pdims[1]);
+	size_t nd = GetDataSize();
+	size_t nbytes = nd * sizeof(cufftComplex);
+	// prepare a buffer on the device
+	cufftComplex * d_tmp = NULL;
+	m_cuerrLast = cudaMalloc((void**)&d_tmp, nbytes);
+	if (m_cuerrLast != cudaSuccess) {
+		PostCUDAError("(JFFTCUDAcore): Failed to allocate on device", m_cuerrLast);
+		return 3;
+	}
+	m_cuerrLast = cudaMemcpy(d_tmp, m_pcw, nbytes, ::cudaMemcpyDeviceToDevice);
+	if (m_cuerrLast != cudaSuccess) {
+		PostCUDAError("(JFFTCUDAcore): Failed to copy data on device", m_cuerrLast);
+		return 4;
+	}
+
+	// call out-of-place 2d shifter
+	m_cuerrLast = ArrayOpCShift2d(m_pcw, d_tmp, ish, jsh, (unsigned int)m_pdims[1], (unsigned int)m_pdims[0], m_aos1dMult);
+
+	m_cuerrLast = cudaFree(d_tmp);
 	if (m_cuerrLast != cudaSuccess) {
 		PostCUDAError("(JFFTCUDAcore): Failed to destroy helper array on device", m_cuerrLast);
 		return 6;

@@ -299,6 +299,13 @@ CJProbeGen::~CJProbeGen()
 	m_pfunc_name.clear();
 }
 
+void CJProbeGen::FreeLibMem(void)
+{
+	//CJFFTWcore ctmp;
+	CJFFTMKLcore ctmp;
+	ctmp.FreeLibMem();
+}
+
 
 int CJProbeGen::GetMaxAberrationOrder(void)
 {

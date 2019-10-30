@@ -323,6 +323,20 @@ __global__ void CPowScaKernel(float *out_1, cuComplex *in_1, float sca, unsigned
 	}
 }
 
+// copies from in_1 to out_1 using a cyclic 2d shift of sh0 and sh1 positive along dimensions n0 and n1
+__global__ void CShift2dKernel(cuComplex *out_1, cuComplex *in_1, unsigned int sh0, unsigned int sh1, unsigned int n0, unsigned int n1) {
+	unsigned int idx = threadIdx.x + blockIdx.x * blockDim.x; // source index from thread id
+	unsigned int size = n0 * n1;
+	unsigned int i0 = idx % n0;
+	unsigned int j0 = (idx - i0) / n0;
+	unsigned int i1 = (i0 + sh0) % n0;
+	unsigned int j1 = (j0 + sh1) % n1;
+	unsigned int idx1 = i1 + n0 * j1;
+	if (idx < size && idx1 < size) {
+		out_1[idx1] = in_1[idx];
+	}
+}
+
 // applies a shift offset to a wave-function: out_1[i] = in_[1]*Exp{ -I *2*Pi * [ dx*in_2[i] + dy*in_3[i]) ] }
 // - in_1 -> input wave function (Fourier space)
 // - in_2 -> kx field [1/nm]
@@ -1572,6 +1586,35 @@ cudaError_t ArrayOpCPowSca(float *out_1, cuComplex *in_1, float sca, ArrayOpStat
 		goto Error;
 	}
 
+Error:
+	return cudaStatus;
+}
+
+// calculate out_1[(j+sh1)%n1][(i+sh0)%n0] = in_1[j][i] on device
+cudaError_t ArrayOpCShift2d(cuComplex *out_1, cuComplex *in_1, unsigned int sh0, unsigned int sh1, unsigned int n0, unsigned int n1, ArrayOpStats1 stats)
+{
+	cudaError_t cudaStatus;
+//	unsigned int size = stats.uSize;	// input size
+	int blockSize = stats.nBlockSize;	// block size 
+	int gridSize = stats.nGridSize;		// grid size needed, based on input size
+
+	// Launch the parallel kernel operation
+	CShift2dKernel<<<gridSize, blockSize>>>(out_1, in_1, sh0, sh1, n0, n1);
+
+	// Check for any errors launching the kernel
+	cudaStatus = cudaGetLastError();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "CShift2dKernel launch failed: %s\n", cudaGetErrorString(cudaStatus));
+		fprintf(stderr, "  - gridSize: %i, blockSize: %i\n", gridSize, blockSize);
+		goto Error;
+	}
+
+	// synchronize threads and wait for all to be finished
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaDeviceSynchronize failed after launching CShift2dKernel: %s\n", cudaGetErrorString(cudaStatus));
+		goto Error;
+	}
 Error:
 	return cudaStatus;
 }

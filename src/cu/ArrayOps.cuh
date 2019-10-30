@@ -146,6 +146,13 @@ __global__ void CPowKernel(float *out_1, cuComplex *in_1, unsigned int size);
 // - use this to calculate probability distributions from wave
 __global__ void CPowScaKernel(float *out_1, cuComplex *in_1, float sca, unsigned int size);
 
+// copies from in_1 to out_1 using a cyclic 2d shift of sh0 and sh1 positive along dimensions n0 and n1
+// - out_1 -> shifted output data
+// - in_1 -> input data
+// - sh0, sh1 -> positive (right) shift values of dimension 0 and 1
+// - n0, n1 -> grid size on dimensions 0 and 1
+__global__ void CShift2dKernel(cuComplex *out_1, cuComplex *in_1, unsigned int sh0, unsigned int sh1, unsigned int n0, unsigned int n1);
+
 // applies a shift and defocus offset to a wave-function: out_1[i] = in_[1]*Exp{ -I *2*Pi * [ dx*in_2[i] + dy*in_3[i] ] }
 // - in_1 -> input wave function (Fourier space)
 // - in_2 -> kx field [1/nm]
@@ -256,6 +263,10 @@ cudaError_t ArrayOpCPow(float *out_1, cuComplex *in_1, ArrayOpStats1 stats);
 // calculates out_1[i] = in_1[i] * conjg(in_1[i]) * sca  on device 
 cudaError_t ArrayOpCPowSca(float *out_1, cuComplex *in_1, float sca, ArrayOpStats1 stats);
 
+// calculates out_1[(j+sh1)%n1][(i+sh0)%n0] = in_1[j][i] on device
+cudaError_t ArrayOpCShift2d(cuComplex *out_1, cuComplex *in_1, unsigned int sh0, unsigned int sh1, unsigned int n0, unsigned int n1, ArrayOpStats1 stats);
+
+
 // multiplies a shift phase plate to a complex array
 // - out_1 is the modified wave function
 // - in_1 is the input wave function
@@ -299,5 +310,4 @@ cudaError_t ArrayOpCPowSum(float &out_1, cuComplex *in_1, float sca, ArrayOpStat
 // calculates out_1 = SUM( in_1[i]*conjg( in_1[i] ) * in_2[i] ) * sca on device
 // - CPU_threshold determines from which number of items on CPU summation will be carried out, set 0 to do all on GPU
 cudaError_t ArrayOpCPowSumFMul(float &out_1, cuComplex *in_1, float *in_2, float sca, ArrayOpStats1 stats, int CPU_threshold = 0);
-
 
