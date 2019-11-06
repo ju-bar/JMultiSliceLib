@@ -122,6 +122,7 @@
       <Filter>Library Files\x64\Release</Filter>
     </None>
     <None Include="src\fftw\lib\x64\Static-Release\libfftwf-3.3.lib" />
+    <None Include="Intel-Simplified-Software-License.pdf" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="Changes.txt" />

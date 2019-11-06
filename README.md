@@ -143,7 +143,7 @@ made with the class interface CJMultiSlice in the
 Current speed tests show, that on a small calculation scale (grids < 500 pixels per side of
 the diffraction plane), the CPU code provides faster detector readout, winning over the GPU
 code if detectors are placed in many planes when calculating a thickness series of images.
-With incresing size of the wave function, the CPU code scales with the area of the simulation
+With increasing size of the wave function, the CPU code scales with the area of the simulation
 box, while the GPU code scales with the square root of the area, i.e. with the box length.
 In particular, there is almost no increase of detector readout times in the GPU code.
 CPU and GPU code can be used in parallel.
@@ -151,7 +151,7 @@ CPU and GPU code can be used in parallel.
 
 ## Further development
 
-Current version: 0.30
+Current version: 0.33
 
 See [Changes.txt](https://github.com/ju-bar/JMultiSliceLib/blob/master/Changes.txt) for reading on recent modifications.
 

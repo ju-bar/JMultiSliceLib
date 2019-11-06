@@ -6,7 +6,7 @@
 	Copyright (C) 2018, 2019 - Forschungszentrum Juelich GmbH, Germany
 	Email: juribarthel@gmail.com
 
-	Last Version: 0.24 - 2019-05-04
+	Last Version: 0.33 - 2019-10-30
 
 ========================================================================
 
@@ -55,7 +55,14 @@ The code of JMultiSliceLib links to
   FFTW are available from 
   http://www.fftw.org/ (accessed April 2018)
 
-* cudart_static.lib and cufft.lib (see CUDA statement of license X.2)
+* mkl_intel_lp64.lib, mkl_sequential.lib, and mkl_core.lib
+  (see MKL statement of license X.2)
+  JMultiSliceLib uses data output by the FFT code of the Intel Math
+  Kernel Library (MKL) and is in no form based on work represented by
+  the Intel MKL. Intel MKL binary code is available from 
+  https://software.intel.com/en-us/mkl (accessed Nov 2019)
+
+* cudart_static.lib and cufft.lib (see CUDA statement of license X.3)
   JMultiSliceLib uses data output and functionality probided by these
   two libraries from the CUDA Toolkit 9.0 as redistributable software.
   The CUDA Toolkit is available from
@@ -124,7 +131,16 @@ X.1) FFTW statement of license
 	A version of the GPL license is added as "gpl-3.0.txt" to the
 	source tree of JMultiSliceLib.
 	
-X.2) CUDA statement of license
+X.2) Intel MKL statement of license
+
+    Source: https://software.intel.com/en-us/mkl/license-faq
+
+	The Intel MKL is used according to the Intel Simplified Software
+	License. A copy of the license from April 2018 is made available
+	with the distribution of JMultiSliceLib as
+	"Intel-Simplified-Software-License.pdf".
+
+X.3) CUDA statement of license
 
 	Source: https://docs.nvidia.com/cuda/eula/index.html 
 
