@@ -1,11 +1,20 @@
 List of changes to JMultiSliceLib
 
+2019-11-19: 0.34 JB
+- Added utility functions for pre-calculation settings
+  SetGPUPgrLoading: set phase grating loading scheme to switch
+    between pre-loading and on-demand loading
+  GetDetetionSliceNum: returns number of readout planes
+- Modified InitCore to be more predictable in memory usage.
+
 2019-10-30: 0.33 JB
 - Added memory cleanup calls for MKL closing leaks.
+  FreeLibMem: call this before closing the calling process.
 - Fixed issues with the plasmon scattering code.
 
 2019-10-18: 0.32 JB
 - Added plasmon scattering Monte-Carlo to CPU & GPU multislice.
+  SetPlasmonMC: call to trigger and setup plasmon scattering
 
 2019-10-15: 0.31 JB
 - Added automatism to copy phase grating data from host memory

@@ -8,6 +8,5 @@ List of next steps and wishes for JMultiSliceLib
 - Calculating plane and vortex wave functions
 - Calculating object transmission functions from structure files, including structure data I/O
 - Calculation of transition potentials for inelastic scattering
-- Investigate using stored FFTW wisdoms and whether this could enable a better
-  performance in combination with FFTW_PATIENT for very large grid sizes.
-  This might require rewriting the initialization code of CJFFTWcore.
+- Add a test folder with test programs
+- Find cause for irreproducible crashes occurring from time to time.

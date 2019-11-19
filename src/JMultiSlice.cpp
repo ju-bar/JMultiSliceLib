@@ -485,18 +485,19 @@ int CJMultiSlice::PhaseGratingSetup(int whichcode, int nx, int ny, int nslc, int
 	// GPU code - phase grating setup -> Memory prepared but no data set.
 	if (whichcode&_JMS_CODE_GPU) {
 		if (memoffset > 0) { // make sure to allocate only if data is expected.
-			if (0<AllocMem_d((void**)&m_d_pgr, sizeof(cuComplex)*memoffset, "PhaseGratingSetup", "phase gratings", true)) {
+			if (0 == m_d_pgr_src) { // try allocation for pre-loading of all phase gratings to device
+				if (0 < AllocMem_d((void**)&m_d_pgr, sizeof(cuComplex)*memoffset, "PhaseGratingSetup", "phase gratings", true)) {
+					m_d_pgr_src = 1; // continue trying to use load-on-demand
+				}
+			}
+			if (1 == m_d_pgr_src) { // setup load-on-demand to device
 				if (0 < AllocMem_d((void**)&m_d_pgr, sizeof(cuComplex)*nitems, "PhaseGratingSetup", "single phase grating", true)) {
-					nerr = 104; goto _Exit;
+					nerr = 104; goto _Exit; // cannot use GPU
 				}
 				if (NULL == m_h_pgr) { // single phase grating mode needs phase grating pointers on host
 					// allocate host pointer list // allocate this list here, make sure to check setup in SetPhaseGratingData
 					if (0 < AllocMem_h((void**)&m_h_pgr, sizeof(fcmplx*)*m_nscslc, "PhaseGratingSetup", "phase grating addresses", true)) { nerr = 105; goto _Exit; }
 				}
-				m_d_pgr_src = 1; // set pgr source to host
-			}
-			else {
-				m_d_pgr_src = 0; // set pgr source to device
 			}
 		}
 	}
@@ -568,6 +569,51 @@ _Exit:
 }
 
 
+int CJMultiSlice::SetDetectionPlanes(int ndetper, int nobjslc, int * det_objslc)
+{
+	int islc = 0;
+	int ndetslc = 0;
+	int noslc = max(0, nobjslc);
+	// detection plane flagging logics:
+	// - ndetper == 0 -> only last slice, no entrance plane
+	//            > 0 -> at least entrance plane and exit plane
+	//                   plus planes corresponding to multiples of ndetper
+	// - nobjslc == 0 -> only this plane, regardless of ndetper
+	//            > 0 -> always last plane, other planes possible depending on ndetper
+	if (ndetper > 0) { // handle intermediate detections
+		if (noslc > 0) {
+			for (islc = 0; islc < noslc; islc++) {
+				if (0 == islc % ndetper) { // readout at intermetiate periodic planes
+					if (det_objslc) {
+						det_objslc[islc] = ndetslc;
+					}
+					ndetslc++;
+				}
+			}
+			if (0 != (noslc+1)%ndetper) { // add out-of-period exit-plane
+				if (det_objslc) {
+					det_objslc[noslc] = ndetslc;
+				}
+				ndetslc++;
+			}
+		}
+		else { // readout at entrance plane only
+			if (det_objslc) {
+				det_objslc[0] = 0;
+			}
+			ndetslc = 1;
+		}
+	}
+	else { // readout at exit plane only
+		if (det_objslc) {
+			det_objslc[noslc] = 0;
+		}
+		ndetslc = 1;
+	}
+	return ndetslc;
+}
+
+
 int CJMultiSlice::DetectorSetup(int whichcode, int ndetper, int ndetint, int imagedet, int nthreads_CPU)
 {
 	// Assumes prior object slice setup done and successful via ObjectSliceSetup
@@ -603,24 +649,12 @@ int CJMultiSlice::DetectorSetup(int whichcode, int ndetper, int ndetint, int ima
 	for (islc = 0; islc <= m_nobjslc; islc++) { // preset for no detection
 		m_det_objslc[islc] = -1;
 	}
-	if (ndetper > 0) { // handle intermediate detections
-		m_ndetper = ndetper;
-		for (islc = 0; islc < m_nobjslc; islc++) {
-			if (0 == islc%ndetper) { // intermediate slice detection
-				m_det_objslc[islc] = m_ndetslc;
-				m_ndetslc++;
-			}
-		}
-	}
-	m_det_objslc[m_nobjslc] = m_ndetslc; // hash to exit-plane detector arrays
-	m_ndetslc++; // count with exit plane
-
+	m_ndetper = max(0, ndetper);
+	m_ndetslc = SetDetectionPlanes(m_ndetper, m_nobjslc, m_det_objslc);
 	if (ndetint > 0) { // use integrating diffraction plane detectors
 		m_ndet = ndetint; // set number of detectors
 		if (0 < AllocMem_h((void**)&m_detmask_len, sizeof(int)*m_ndet, "DetectorSetup", "detector mask lengths", true)) { nerr = 7; goto _Exit; }
 	}
-
-
 
 	// CPU code - detector setup -> Memory prepared but no data set.
 	if (whichcode&_JMS_CODE_CPU) {
@@ -1492,7 +1526,7 @@ int CJMultiSlice::InitCore(int whichcode, int nCPUthreads)
 		if (0 < AllocMem_d((void**)&m_d_det_tmpwav, nbytes, "InitCore", "temp wave readout", true)) { nerr = 111; goto _Exit; }
 		nbytes = sizeof(float)*(size_t)nitems;
 		if (0 < AllocMem_d((void**)&m_d_det_tmp, nbytes, "InitCore", "temp readout", true)) { nerr = 106; goto _Exit; }
-				if (0 < AllocMem_d((void**)&m_d_knx, nbytes, "InitCore", "kx field", true)) { nerr = 107; goto _Exit; }
+		if (0 < AllocMem_d((void**)&m_d_knx, nbytes, "InitCore", "kx field", true)) { nerr = 107; goto _Exit; }
 		if (0 < AllocMem_d((void**)&m_d_kny, nbytes, "InitCore", "ky field", true)) { nerr = 108; goto _Exit; }
 		ftmpx = (float*)malloc(nbytes);
 		ftmpy = (float*)malloc(nbytes);
@@ -2596,6 +2630,7 @@ int CJMultiSlice::CPUMultislice(int islc0, int accmode, float weight, int iThrea
 	int nitems = m_nscx*m_nscy;
 	int npgitems = m_npgx*m_npgy;
 	bool bsubframe = false;
+	bool bdetect = false;
 	if (nitems != npgitems) {
 		bsubframe = true;
 	}
@@ -2638,15 +2673,16 @@ int CJMultiSlice::CPUMultislice(int islc0, int accmode, float weight, int iThrea
 		// Default case, the current wave function is not the exit-plane wave function
 		// Do the multislice
 		for (jslc = islc; jslc < m_nobjslc; jslc++) {
+			bdetect = (m_det_objslc[jslc] >= 0);
 			// 1) readout (Fourier space)
-			if (m_det_objslc[jslc] >= 0) {
+			if (bdetect) {
 				nerr = ReadoutDifDet_h(jslc, iThread, weight);
 				if (nerr > 0) { nerr += 100; goto _CancelMS; }
 			}
 			// 2) scattering (real space)
 			nerr = jco->IFT(); // inverse FFT
 			if (nerr > 0) { nerr += 200; goto _CancelMS; }
-			if ((m_det_objslc[jslc] >= 0) && ((m_imagedet&_JMS_DETECT_IMAGE)|| (m_imagedet&_JMS_DETECT_WAVEREAL))) {  // non-default real-space readout
+			if (bdetect && ((m_imagedet&_JMS_DETECT_IMAGE)|| (m_imagedet&_JMS_DETECT_WAVEREAL))) {  // non-default real-space readout
 				nerr = ReadoutImgDet_h(jslc, iThread, weight);
 				if (nerr > 0) { nerr += 300; goto _CancelMS; }
 			}
@@ -2835,6 +2871,19 @@ int CJMultiSlice::GetGPUMemInfo(size_t &memtotal, size_t &memfree)
 	if (cuerr != cudaSuccess) {
 		PostCUDAError("(GetGPUMemInfo): Failed to retrieve memory state of device", cuerr);
 		return 1;
+	}
+	return 0;
+}
+
+
+int CJMultiSlice::SetGPUPgrLoading(int npgrload)
+{
+	if (m_status_setup_GPU & _JMS_STATUS_PGR) { // phase-gratings have been allocated already
+		return 1; // return with error
+	}
+	m_d_pgr_src = 0;
+	if (npgrload == 1) {
+		m_d_pgr_src = 1;
 	}
 	return 0;
 }
@@ -3275,6 +3324,7 @@ int CJMultiSlice::GPUMultislice(int islc0, int accmode, float weight)
 	int npgitems = m_npgx*m_npgy;
 	float fthick = 0.f;
 	bool bsubframe = false;
+	bool bdetect = false;
 	if (nitems != npgitems) { // calculation grid and phase gratings are on different sizes
 		bsubframe = true;
 	}
@@ -3330,16 +3380,17 @@ int CJMultiSlice::GPUMultislice(int islc0, int accmode, float weight)
 		// Default case, the current wave function is not the exit-plane wave function
 		// Do the multislice
 		for (jslc = islc; jslc < m_nobjslc; jslc++) {
+			bdetect = (m_det_objslc[jslc] >= 0);
 			// 1) readout (Fourier space)
 			//if (1 == m_objslc_det[jslc]) {
-			if (m_det_objslc[jslc] >= 0) {
+			if (bdetect) {
 				nerr = ReadoutDifDet_d(jslc, weight);
 				if (0 < nerr) {	nerr += 100; goto _CancelMS; }
 			}
 			// 2) scattering (real space)
 			nerr = jco->IFT(); // inverse FFT
 			if (0 < nerr) { nerr += 200; goto _CancelMS; }
-			if ((m_det_objslc[jslc] >= 0) && ((m_imagedet&_JMS_DETECT_IMAGE)||(m_imagedet&_JMS_DETECT_WAVEREAL))) {  // non-default real-space readout
+			if (bdetect && ((m_imagedet&_JMS_DETECT_IMAGE)||(m_imagedet&_JMS_DETECT_WAVEREAL))) {  // non-default real-space readout
 				nerr = ReadoutImgDet_d(jslc, weight);
 				if (0 < nerr) { nerr += 300; goto _CancelMS; }
 			}

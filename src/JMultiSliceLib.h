@@ -236,6 +236,10 @@ extern "C" __declspec(dllexport) int __stdcall SetPropagatorData(int whichcode, 
 // set the detector function for a detector index
 extern "C" __declspec(dllexport) int __stdcall SetDetectorData(int whichcode, int idet, float* det, int msklen=0, int* msk=NULL);
 
+// Sets GPU phase grating loading scheme
+// - npgrload: 0 = pre-load all to device (default),
+//             1 = each phase-grating is loaded to device on demand
+extern "C" __declspec(dllexport) int __stdcall SetGPUPgrLoading(int npgrload = 0);
 
 
 // *** Calculation Interface ***

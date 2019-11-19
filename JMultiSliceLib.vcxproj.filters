@@ -123,6 +123,27 @@
     </None>
     <None Include="src\fftw\lib\x64\Static-Release\libfftwf-3.3.lib" />
     <None Include="Intel-Simplified-Software-License.pdf" />
+    <None Include="backup\JMSLib_BIN_Backup_191119.zip">
+      <Filter>Backup</Filter>
+    </None>
+    <None Include="backup\JMSLib_PRJ_Backup_191119.zip">
+      <Filter>Backup</Filter>
+    </None>
+    <None Include="backup\JMSLib_SRC_Backup_191119.zip">
+      <Filter>Backup</Filter>
+    </None>
+    <None Include="backup\JMSLib_SRC_Backup_191015.zip">
+      <Filter>Backup</Filter>
+    </None>
+    <None Include="backup\JMSLib_SRC_Backup_190504.zip">
+      <Filter>Backup</Filter>
+    </None>
+    <None Include="backup\JMSLib_PRJ_Backup_190504.zip">
+      <Filter>Backup</Filter>
+    </None>
+    <None Include="backup\JMSLib_BIN_Backup_190504.zip">
+      <Filter>Backup</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Text Include="Changes.txt" />

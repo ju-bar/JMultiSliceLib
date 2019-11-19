@@ -156,6 +156,11 @@ int __stdcall SetDetectorData(int whichcode, int idet, float* det, int msklen, i
 	return JMS.SetDetectorData(whichcode, idet, det, msklen, msk);
 }
 
+int __stdcall SetGPUPgrLoading(int npgrload)
+{
+	return JMS.SetGPUPgrLoading(npgrload);
+}
+
 int __stdcall InitCore(int whichcode, int nCPUthreads)
 {
 	return JMS.InitCore(whichcode, nCPUthreads);

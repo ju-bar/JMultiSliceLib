@@ -6,7 +6,7 @@
 // Copyright (C) 2018, 2019 - Juri Barthel (juribarthel@gmail.com)
 // Copyright (C) 2018, 2019 - Forschungszentrum Juelich GmbH, 52425 Juelich, Germany
 //
-// Verions of JMultiSlice: 0.32b (2019 - Oct - 18)
+// Verions of JMultiSlice: 0.34b (2019 - Nov - 19)
 //
 /*
 This program is free software : you can redistribute it and/or modify
@@ -119,8 +119,8 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 // VERSION NUMBERS
 #define __JMS_VERSION__			0
 #define __JMS_VERSION_SUB__		3
-#define __JMS_VERSION_SUB_SUB__	3
-#define __JMS_VERSION_BUILD__	20191030
+#define __JMS_VERSION_SUB_SUB__	4
+#define __JMS_VERSION_BUILD__	20191119
 // CODE IDs
 #define _JMS_CODE_CPU			1
 #define _JMS_CODE_GPU			2
@@ -410,6 +410,12 @@ public:
 	// - fthickness: the thickness of slice islc in nm
 	void SetSliceThickness(int islc, float fthickness);
 
+	// Sets the detection planes
+	// - ndetper: detection slice period
+	// - nobjslc: number of slices in the object
+	// - det_objslc: detection hash list, calling with NULL will avoid access
+	int SetDetectionPlanes(int ndetper, int nobjslc, int * det_objslc=NULL);
+
 	// Set plasmon scattering Monte-Carlo parameters and switch
 	// - use: flag the function on and off
 	// - q_e: characteristic scattering vector [1/nm]
@@ -624,6 +630,10 @@ public:
 	int GetGPUCores(int idev, int &nMultiProcs, int &nCores, int& nMaxThreadPerProc);
 	// Returns memory info on current GPU device
 	int GetGPUMemInfo(size_t &memtotal, size_t &memfree);
+	// Sets GPU phase grating loading scheme
+	// - npgrload: 0 = pre-load all to device (default),
+	//             1 = each phase-grating is loaded to device on demand
+	int SetGPUPgrLoading(int npgrload = 0);
 
 
 // ----------------------------------------------------------------------------
