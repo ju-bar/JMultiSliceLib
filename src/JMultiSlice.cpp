@@ -738,7 +738,7 @@ float CJMultiSlice::GetSliceThickness(int islc)
 	return 0.0f;
 }
 
-void CJMultiSlice::SetPlasmonMC(bool use, float q_e, float q_c, float mfp, UINT nexmax)
+void CJMultiSlice::SetPlasmonMC(bool use, float q_e, float q_c, float mfp, unsigned int nexmax)
 {
 	m_plasmonmc_flg = 0;
 	if (use) m_plasmonmc_flg = 1;
@@ -1611,12 +1611,12 @@ _Exit:
 }
 
 
-int CJMultiSlice::GetUnscrambleHash(UINT* phash)
+int CJMultiSlice::GetUnscrambleHash(unsigned int* phash)
 {
 	int nerr = 0;
 	int nx2 = 0, ny2 = 0;
 	int i = 0, j = 0, idy = 0, i1 = 0, j1 = 0, idy1 = 0;
-	UINT idx = 0, idx1 = 0;
+	unsigned int idx = 0, idx1 = 0;
 	if (NULL == phash) { // I/O buffer needs to be allocated
 		nerr = 1; goto _exit_point;
 	}
@@ -3357,7 +3357,7 @@ int CJMultiSlice::GPUMultislice(int islc0, int accmode, float weight)
 
 	// Readout will be at slice indices flagged in m_objslc_det only,
 	// but always at the exit plane.
-	// Readout will will always happen after the propagation to the next slice.
+	// Readout will always happen after the propagation to the next slice.
 	//
 	// Call DetectorSetup to generate a coherent setup for the multislice.
 	// The same setup will be used by all threads.

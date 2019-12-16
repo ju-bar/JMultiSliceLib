@@ -180,7 +180,6 @@
     <ClInclude Include="src\JProbeGen.h" />
     <ClInclude Include="src\NatureConstants.h" />
     <ClInclude Include="src\stdafx.h" />
-    <ClInclude Include="src\targetver.h" />
     <ClInclude Include="src\wekoscat.h" />
   </ItemGroup>
   <ItemGroup>
@@ -213,6 +212,7 @@
     <None Include="backup\JMSLib_PRJ_Backup_181221.zip" />
     <None Include="backup\JMSLib_PRJ_Backup_190504.zip" />
     <None Include="backup\JMSLib_PRJ_Backup_191119.zip" />
+    <None Include="backup\JMSLib_PRJ_Backup_191216.zip" />
     <None Include="backup\JMSLib_SRC_Backup_181005.zip" />
     <None Include="backup\JMSLib_SRC_Backup_181112.zip" />
     <None Include="backup\JMSLib_SRC_Backup_181207.zip" />
@@ -220,6 +220,7 @@
     <None Include="backup\JMSLib_SRC_Backup_190504.zip" />
     <None Include="backup\JMSLib_SRC_Backup_191015.zip" />
     <None Include="backup\JMSLib_SRC_Backup_191119.zip" />
+    <None Include="backup\JMSLib_SRC_Backup_191216.zip" />
     <None Include="CUDA EULA.pdf" />
     <None Include="Intel-Simplified-Software-License.pdf" />
     <None Include="README.md" />

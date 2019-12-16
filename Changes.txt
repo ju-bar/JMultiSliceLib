@@ -1,5 +1,8 @@
 List of changes to JMultiSliceLib
 
+2019-12-16: 0.35 JB
+- Removed a few MS Windows specfic includes and declarations.
+
 2019-11-19: 0.34 JB
 - Added utility functions for pre-calculation settings
   SetGPUPgrLoading: set phase grating loading scheme to switch

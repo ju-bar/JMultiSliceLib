@@ -135,7 +135,7 @@ extern "C" __declspec(dllexport) void __stdcall SetSliceThickness(int islc, floa
 extern "C" __declspec(dllexport) void __stdcall DiffractionDescan(bool bActivate);
 
 // Sets parameterd for the plasmon scattering Monte-Carlo
-extern "C" __declspec(dllexport) void __stdcall SetPlasmonMC(bool bActivate, float fq_e, float fq_c, float fmfp, UINT nexmax);
+extern "C" __declspec(dllexport) void __stdcall SetPlasmonMC(bool bActivate, float fq_e, float fq_c, float fmfp, unsigned int nexmax);
 
 // Set the diffraction descan values for a specific calculation thread.
 // Use the same beam tilts as in the probe tilt, the routine inverts it.
@@ -203,7 +203,7 @@ extern "C" __declspec(dllexport) int __stdcall GetGPUCores(int idev, int &nMulti
 // Use this hash like this: a_unscrambled[idx] = a_scrambled[phash[idx]];
 // - phash: unsigned int list of indices in the order of their occurrance in
 //          an unscrambled array (preallocated by the calling code)
-extern "C" __declspec(dllexport) int __stdcall GetUnscrambleHash(UINT* phash);
+extern "C" __declspec(dllexport) int __stdcall GetUnscrambleHash(unsigned int* phash);
 
 
 

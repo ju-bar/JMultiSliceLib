@@ -101,7 +101,7 @@ void __stdcall DiffractionDescan(bool bActivate)
 	JMS.DiffractionDescan(bActivate);
 }
 
-void __stdcall SetPlasmonMC(bool bActivate, float fq_e, float fq_c, float fmfp, UINT nexmax)
+void __stdcall SetPlasmonMC(bool bActivate, float fq_e, float fq_c, float fmfp, unsigned int nexmax)
 {
 	JMS.SetPlasmonMC(bActivate, fq_e, fq_c, fmfp, nexmax);
 }
@@ -171,7 +171,7 @@ int __stdcall SetIncidentWave(int whichcode, fcmplx* wav)
 	return JMS.SetIncidentWave(whichcode, wav);
 }
 
-int __stdcall GetUnscrambleHash(UINT* phash)
+int __stdcall GetUnscrambleHash(unsigned int* phash)
 {
 	return JMS.GetUnscrambleHash(phash);
 }

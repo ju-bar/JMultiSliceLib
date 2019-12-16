@@ -57,9 +57,6 @@
     <ClInclude Include="src\stdafx.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\targetver.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\fftw\include\fftw3.h">
       <Filter>Include Files</Filter>
     </ClInclude>
@@ -142,6 +139,12 @@
       <Filter>Backup</Filter>
     </None>
     <None Include="backup\JMSLib_BIN_Backup_190504.zip">
+      <Filter>Backup</Filter>
+    </None>
+    <None Include="backup\JMSLib_PRJ_Backup_191216.zip">
+      <Filter>Backup</Filter>
+    </None>
+    <None Include="backup\JMSLib_SRC_Backup_191216.zip">
       <Filter>Backup</Filter>
     </None>
   </ItemGroup>

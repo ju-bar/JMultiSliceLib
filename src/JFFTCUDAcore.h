@@ -49,7 +49,7 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 #include <cuda_runtime.h>
 #include <cufft.h>
 #include "cu\ArrayOps.cuh"
-#include <windows.h>
+//#include <windows.h>
 //
 #ifndef JFFTCUDACORE_H
 #define JFFTCUDACORE_H

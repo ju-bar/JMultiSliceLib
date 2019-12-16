@@ -114,7 +114,7 @@ public:
 	// - num_sca: number of excitation occurring in the slice, output
 	// - sca_qx: scattering vector, x-component, output
 	// - sca_qy: scattering vector, y-component, output
-	void ScatteringMC(float dt, UINT num_sca_max, UINT & num_sca, float & sca_qx, float & sca_qy);
+	void ScatteringMC(float dt, unsigned int num_sca_max, unsigned int & num_sca, float & sca_qx, float & sca_qy);
 
 	// tests for scattering and returns pixel shifts to be applied,
 	// returns number of excitations occurring in the slice,
@@ -130,6 +130,6 @@ protected:
 	// returns uniform random variates between 0 and 1
 	float UniRand(void);
 	// returns Poissonian random variates of mean value m
-	UINT PoissonRand(float m);
+	unsigned int PoissonRand(float m);
 };
 //

@@ -6,7 +6,7 @@
 	Copyright (C) 2018, 2019 - Forschungszentrum Juelich GmbH, Germany
 	Email: juribarthel@gmail.com
 
-	Last Version: 0.34 - 2019-11-19
+	Last Version: 0.35 - 2019-12-16
 
 ========================================================================
 

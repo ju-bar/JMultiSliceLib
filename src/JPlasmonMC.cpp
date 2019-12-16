@@ -101,11 +101,11 @@ float CJPlasmonMC::UniRand(void)
 	return rnd;
 }
 
-UINT CJPlasmonMC::PoissonRand(float m)
+unsigned int CJPlasmonMC::PoissonRand(float m)
 {
-	UINT u = 0;
+	unsigned int u = 0;
 	double dm, dl, dp;
-	UINT k = 0;
+	unsigned int k = 0;
 	dm = (double)abs(m);
 	// D. Knuth's algorithm is fast for small mean values < 30
 	dl = exp(-dm);
@@ -135,7 +135,7 @@ void CJPlasmonMC::ResetMC()
 	m_sca_tot_qy = 0.f;
 }
 
-void CJPlasmonMC::ScatteringMC(float dt, UINT num_sca_max, UINT & num_sca, float & sca_qx, float & sca_qy)
+void CJPlasmonMC::ScatteringMC(float dt, unsigned int num_sca_max, unsigned int & num_sca, float & sca_qx, float & sca_qy)
 {
 	num_sca = 0;
 	sca_qx = 0.f;
@@ -147,7 +147,7 @@ void CJPlasmonMC::ScatteringMC(float dt, UINT num_sca_max, UINT & num_sca, float
 		float pmc = 0.f;
 		float qmc = 0.f;
 		float emc = 0.f;
-		for (UINT i = 0; i < num_sca; i++) {
+		for (unsigned int i = 0; i < num_sca; i++) {
 			pmc = (float)(_TPI *UniRand());
 			emc = UniRand();
 			qmc = sqrt(m_q_e2 * pow(m_q_c2 / m_q_e2 + 1.f, emc) - m_q_e2);
@@ -160,9 +160,9 @@ void CJPlasmonMC::ScatteringMC(float dt, UINT num_sca_max, UINT & num_sca, float
 int CJPlasmonMC::ScatGridMC(float dt, float a_x, float a_y, int *di, int *dj)
 {
 	float dqx = 0.f, dqy = 0.f;
-	UINT nexmax = m_sca_num_max;
-	UINT nex = m_sca_num;
-	UINT nexadd = 0;
+	unsigned int nexmax = m_sca_num_max;
+	unsigned int nex = m_sca_num;
+	unsigned int nexadd = 0;
 	*di = 0;
 	*dj = 0;
 	// get new scattering angle due to additional excitations

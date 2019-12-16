@@ -6,7 +6,7 @@
 // Copyright (C) 2018, 2019 - Juri Barthel (juribarthel@gmail.com)
 // Copyright (C) 2018, 2019 - Forschungszentrum Juelich GmbH, 52425 Juelich, Germany
 //
-// Verions of JMultiSlice: 0.34b (2019 - Nov - 19)
+// Verions of JMultiSlice: 0.35b (2019 - Dec - 16)
 //
 /*
 This program is free software : you can redistribute it and/or modify
@@ -119,8 +119,8 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 // VERSION NUMBERS
 #define __JMS_VERSION__			0
 #define __JMS_VERSION_SUB__		3
-#define __JMS_VERSION_SUB_SUB__	4
-#define __JMS_VERSION_BUILD__	20191119
+#define __JMS_VERSION_SUB_SUB__	5
+#define __JMS_VERSION_BUILD__	20191216
 // CODE IDs
 #define _JMS_CODE_CPU			1
 #define _JMS_CODE_GPU			2
@@ -422,7 +422,7 @@ public:
 	// - q_c: critical scattering vector [1/nm]
 	// - mfp: mean free path for single scattering [nm]
 	// - nexmax: max. number of excitations per probing electron
-	void SetPlasmonMC(bool use, float q_e, float q_c, float mfp, UINT nexmax);
+	void SetPlasmonMC(bool use, float q_e, float q_c, float mfp, unsigned int nexmax);
 
 
 	// Turns the diffraction de-scan on or off
@@ -577,7 +577,7 @@ public:
 	// Use this hash like this: a_unscrambled[idx] = a_scrambled[phash[idx]];
 	// - phash: unsigned int list of indices in the order of their occurrance in
 	//          an unscrambled array (preallocated by the calling code)
-	int GetUnscrambleHash(UINT* phash);
+	int GetUnscrambleHash(unsigned int* phash);
 
 
 // ----------------------------------------------------------------------------
