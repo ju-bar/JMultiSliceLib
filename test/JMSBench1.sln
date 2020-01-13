@@ -1,0 +1,34 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.28307.271
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "JMSBench1", "JMSBench1\JMSBench1.vcxproj", "{BC9E0420-8819-4492-8DD8-0106F0FBAF51}"
+	ProjectSection(ProjectDependencies) = postProject
+		{976AB6F8-558B-438F-9EA2-3F79BDD4D086} = {976AB6F8-558B-438F-9EA2-3F79BDD4D086}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "JMultiSliceLib", "..\JMultiSliceLib.vcxproj", "{976AB6F8-558B-438F-9EA2-3F79BDD4D086}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{BC9E0420-8819-4492-8DD8-0106F0FBAF51}.Debug|x64.ActiveCfg = Debug|x64
+		{BC9E0420-8819-4492-8DD8-0106F0FBAF51}.Debug|x64.Build.0 = Debug|x64
+		{BC9E0420-8819-4492-8DD8-0106F0FBAF51}.Release|x64.ActiveCfg = Release|x64
+		{BC9E0420-8819-4492-8DD8-0106F0FBAF51}.Release|x64.Build.0 = Release|x64
+		{976AB6F8-558B-438F-9EA2-3F79BDD4D086}.Debug|x64.ActiveCfg = Debug|x64
+		{976AB6F8-558B-438F-9EA2-3F79BDD4D086}.Debug|x64.Build.0 = Debug|x64
+		{976AB6F8-558B-438F-9EA2-3F79BDD4D086}.Release|x64.ActiveCfg = Release|x64
+		{976AB6F8-558B-438F-9EA2-3F79BDD4D086}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {82856F91-799F-4185-BF1F-577ACB89DF19}
+	EndGlobalSection
+EndGlobal

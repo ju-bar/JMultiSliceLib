@@ -36,9 +36,11 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 #pragma once
 //
 //#include "JFFTWcore.h"
+//#include <random>
 #include "JFFTMKLcore.h"
 #include "JFFTCUDAcore.h"
-using namespace std;
+#include "rng.h"
+//
 //
 #ifndef __JPLASMC__
 #define __JPLASMC__
@@ -89,6 +91,11 @@ public:
 	// processing member variables
 	// These members are not shared in copy constructors or operators
 protected:
+
+	// random number generator
+	CRng m_lrng;
+	CRng *m_prng;
+
 	// default message string for output (not initialized)
 	char m_msg[_JPL_MESSAGE_LEN];
 	
@@ -102,11 +109,26 @@ public:
 	bool operator == (const CJPlasmonMC &src) const;
 	
 	// Member functions
+	
 	// initialized the MC parameters
 	// - requires members m_meanfreepath, m_q_e, and m_q_c to be set before calling
 	void Init(void);
+	
 	// reset scattering run
 	void ResetMC(void);
+
+	// Set the current random number generator
+	// Calling with NULL pointer will reset m_prng to the local CRng object m_lrng
+	// Use this, if you want to control the random number generation
+	void SetRng(CRng *prng = NULL);
+
+	// Returns a pointer to the current random number generator object
+	CRng* GetRng(void);
+
+	// Seed the current random number generator m_prng
+	// Seeding with 0 will cause a seed depending on current system time
+	void SeedRngEx(int nseed = 0);
+
 	// tests for scattering and returns current total scattering angle,
 	// doesn't modify any of the class members
 	// - dt: slice thickness in [nm], input
@@ -128,8 +150,8 @@ public:
 
 protected:
 	// returns uniform random variates between 0 and 1
-	float UniRand(void);
+	double UniRand(void);
 	// returns Poissonian random variates of mean value m
-	unsigned int PoissonRand(float m);
+	int PoissonRand(float m);
 };
 //

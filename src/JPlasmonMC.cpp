@@ -23,10 +23,13 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 */
 //
 
-#include "stdafx.h"
+//#include "stdafx.h"
 #include "JPlasmonMC.h"
 #include "NatureConstants.h"
 #include <math.h>
+#include <time.h>
+
+/*
 #ifdef _WIN32
 #include <windows.h>
 #elif MACOS
@@ -37,7 +40,7 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 #endif
 
 using namespace std;
-
+*/
 
 // ****************************************************************************
 //
@@ -53,6 +56,7 @@ CJPlasmonMC::CJPlasmonMC()
 	m_sca_num = 0;
 	m_sca_tot_qx = 0.f;
 	m_sca_tot_qy = 0.f;
+	m_prng = &m_lrng;
 }
 
 CJPlasmonMC::CJPlasmonMC(const CJPlasmonMC & src)
@@ -95,29 +99,55 @@ bool CJPlasmonMC::operator==(const CJPlasmonMC &src) const
 	return bResult;
 }
 
-float CJPlasmonMC::UniRand(void)
+void CJPlasmonMC::SetRng(CRng *prng)
 {
-	float rnd = (float)rand() / (float)(RAND_MAX + 1);
-	return rnd;
+	if (prng) {
+		m_prng = prng;
+	}
+	else {
+		m_prng = &m_lrng;
+	}
 }
 
-unsigned int CJPlasmonMC::PoissonRand(float m)
+CRng* CJPlasmonMC::GetRng()
 {
-	unsigned int u = 0;
-	double dm, dl, dp;
-	unsigned int k = 0;
-	dm = (double)abs(m);
-	// D. Knuth's algorithm is fast for small mean values < 30
-	dl = exp(-dm);
-	dp = 1.;
-	while (dp > dl) {
-		k++;
-		dp = dp * (double)UniRand();
+	return m_prng;
+}
+
+void CJPlasmonMC::SeedRngEx(int nseed)
+{
+	if (m_prng) {
+		m_prng->seed(nseed);
 	}
-	if (k > 0) {
-		u = k - 1;
+	else {
+		m_lrng.seed(nseed);
 	}
-	return u;
+}
+
+double CJPlasmonMC::UniRand(void)
+{
+	return m_prng->unirand();
+}
+
+int CJPlasmonMC::PoissonRand(float m)
+{
+	return m_prng->poisrand((double)m);
+
+	//unsigned int u = 0;
+	//double dm, dl, dp;
+	//unsigned int k = 0;
+	//dm = (double)abs(m);
+	//// D. Knuth's algorithm is fast for small mean values < 30
+	//dl = exp(-dm);
+	//dp = 1.;
+	//while (dp > dl) {
+	//	k++;
+	//	dp = dp * UniRand();
+	//}
+	//if (k > 0) {
+	//	u = k - 1;
+	//}
+	//return u;
 }
 
 void CJPlasmonMC::Init(void)
@@ -142,14 +172,14 @@ void CJPlasmonMC::ScatteringMC(float dt, unsigned int num_sca_max, unsigned int 
 	sca_qy = 0.f;
 	if (m_meanfreepath <= 0.f || m_q_e <= 0.f || m_q_c < m_q_e) return;
 	// calculate a poissonian random number(limited to max.allowed excitation level)
-	num_sca = min(PoissonRand(dt / m_meanfreepath), num_sca_max);
+	num_sca = __min((unsigned int)PoissonRand(dt / m_meanfreepath), num_sca_max);
 	if (num_sca > 0) {
 		float pmc = 0.f;
 		float qmc = 0.f;
 		float emc = 0.f;
 		for (unsigned int i = 0; i < num_sca; i++) {
 			pmc = (float)(_TPI *UniRand());
-			emc = UniRand();
+			emc = (float)UniRand();
 			qmc = sqrt(m_q_e2 * pow(m_q_c2 / m_q_e2 + 1.f, emc) - m_q_e2);
 			sca_qx += (qmc * cos(pmc));
 			sca_qy += (qmc * sin(pmc));

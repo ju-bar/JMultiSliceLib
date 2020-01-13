@@ -29,11 +29,11 @@
 //
 // ---------------------------------------------------------------------
 
-#include "stdafx.h"
+//#include "stdafx.h"
 #include "wekoscat.h"
 #include <stdlib.h>
 #include <malloc.h>
-#include <memory.h>
+#include <memory>
 #include <math.h>
 
 CWEKOScat::CWEKOScat() :

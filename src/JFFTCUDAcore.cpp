@@ -26,7 +26,7 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 // The code is supposed to handle one type of Fourier transform only
 // for single precision (float) complex data.
 //
-#include "stdafx.h"
+//#include "stdafx.h"
 #include "JFFTCUDAcore.h"
 //
 using namespace std;

@@ -1,0 +1,58 @@
+List of input commands to be set in the control file
+
+Commands are given by a keyword followed by lines of
+keyword specific input data.
+
+
+set_gpu_id
+<int>
+
+	Set the ID of the GPU device to be used.
+
+
+set_cpu_num
+<int>
+
+	Set the number of CPU threads to be used.
+
+
+set_sample_input_form
+<int>
+	
+	Set the type of sample data input:
+	<1> structure file (CIF, CEL) *not supported yet*
+	<2> slice file (SLI)
+
+
+set_slc_file_name
+<string>
+
+	Set the prefix of slice file names. Full file names
+	will be created by adding "_###.sli", where ### represents
+	a 3 digit number of file series indices.
+
+
+set_sample_thickness_max
+<int>
+
+	Set the maximum sample thickness of the calculation in number
+	of structure slices.
+
+
+set_sample_thickness_step
+<int>
+
+	Set the period for detector readout, to produce a thickness
+	series of images.
+
+
+set_probe_ekv
+<float>
+
+	Set the energy of the electron probe in keV.
+
+
+set_probe_convergence
+<float>
+
+	Set the convergence semi-angle of the electron probe in mrad.

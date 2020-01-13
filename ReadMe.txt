@@ -2,11 +2,11 @@
 	STATIC LIBRARY : JMultiSliceLib Project Overview
 ========================================================================
 
-	Copyright (C) 2018, 2019 - Juri Barthel
-	Copyright (C) 2018, 2019 - Forschungszentrum Juelich GmbH, Germany
+	Copyright (C) 2018 - 2020 - Juri Barthel
+	Copyright (C) 2018 - 2020 - Forschungszentrum Juelich GmbH, Germany
 	Email: juribarthel@gmail.com
 
-	Last Version: 0.35 - 2019-12-16
+	Last Version: 0.38 - 2020-01-13
 
 ========================================================================
 
@@ -64,8 +64,8 @@ The code of JMultiSliceLib links to
 
 * cudart_static.lib and cufft.lib (see CUDA statement of license X.3)
   JMultiSliceLib uses data output and functionality probided by these
-  two libraries from the CUDA Toolkit 9.0 as redistributable software.
-  The CUDA Toolkit is available from
+  two libraries from the CUDA Toolkit (9.0 or higher) as redistributable
+  software. The CUDA Toolkit is available from
   https://developer.nvidia.com/cuda-toolkit (accessed April 2018)
   In order to be able to use the GPU routnines of JMultiSliceLib, keep
   your CUDA device drivers updated.

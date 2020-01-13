@@ -23,13 +23,15 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 */
 //
 
-#include "stdafx.h"
+//#include "stdafx.h"
 #include "JProbeGen.h"
 #include "NatureConstants.h"
 #include <time.h>
 #include <math.h>
+//#include <random>
 //#include <stdlib.h>
 //#include <fstream>
+/*
 #ifdef _WIN32
 #include <windows.h>
 #elif MACOS
@@ -40,7 +42,7 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 #endif
 
 using namespace std;
-
+*/
 
 // ****************************************************************************
 //
@@ -103,7 +105,7 @@ CJProbeParams::CJProbeParams(const CJProbeParams & src)
 	m_fspread_kernel_width = src.m_fspread_kernel_width;
 	m_fspread_kernel_samples = src.m_fspread_kernel_samples;
 	int nacsrc = 2*(const_cast <CJProbeParams*>(&src)->GetAberrationNum());
-	int naccpy = min(nacsrc, nac);
+	int naccpy = __min(nacsrc, nac);
 	memcpy(m_abrr_coeff, src.m_abrr_coeff, sizeof(float)*naccpy);
 }
 
@@ -118,7 +120,7 @@ void CJProbeParams::operator=(const CJProbeParams &other)
 {
 	int nac = 2 * m_abrr_num; // number of supported aberration coefficients
 	int nacsrc = 2 * (const_cast <CJProbeParams*>(&other)->GetAberrationNum()); // number of supported coefficients of the other object
-	int naccpy = min(nacsrc, nac); // number of coefficients to copy
+	int naccpy = __min(nacsrc, nac); // number of coefficients to copy
 	m_wl = other.m_wl;
 	m_alpha = other.m_alpha;
 	m_alpha_rs = other.m_alpha_rs;
@@ -161,6 +163,12 @@ bool CJProbeParams::operator==(const CJProbeParams &other) const
 		bResult &= (0 == memcmp(m_abrr_coeff, other.m_abrr_coeff, sizeof(float)*nac));
 	}
 	return bResult;
+}
+
+float CJProbeParams::SetProbeEkV(float ekv)
+{
+	m_wl = (float)(_WLELKEV / sqrt(ekv*(ekv + 2.*_EEL0KEV)));
+	return m_wl;
 }
 
 int CJProbeParams::GetAberrationNum()
@@ -322,7 +330,7 @@ int CJProbeGen::GetMaxProbeFunction(void)
 	return (int)_JPG_PROBEFUNC_NUM;
 }
 
-int CJProbeGen::GetAberrationName(int idx, string * abrr_name)
+int CJProbeGen::GetAberrationName(int idx, std::string * abrr_name)
 {
 	if (NULL == abrr_name) { // invalid parameter reference <abrr_name>
 		return 1;
@@ -340,7 +348,7 @@ int CJProbeGen::GetAberrationName(int idx, string * abrr_name)
 	return 0;
 }
 
-int CJProbeGen::GetAberrationSymbol(int idx, string * abrr_symbol)
+int CJProbeGen::GetAberrationSymbol(int idx, std::string * abrr_symbol)
 {
 	if (NULL == abrr_symbol) { // invalid parameter reference <abrr_symbol>
 		return 1;
@@ -352,7 +360,7 @@ int CJProbeGen::GetAberrationSymbol(int idx, string * abrr_symbol)
 	return 0;
 }
 
-int CJProbeGen::GetProbeFunctionName(int idx, string * func_name)
+int CJProbeGen::GetProbeFunctionName(int idx, std::string * func_name)
 {
 	if (NULL == func_name) { // invalid parameter reference <func_name>
 		return 1;
@@ -479,7 +487,7 @@ float CJProbeGen::AberrationFunction(float qx, float qy, float wl, int nabrr, fl
 	int i = 0, j = 0, k = 0, k2 = 0, l = 0, n = 0, m = 0;
 	int nol = (int)(_JPG_ABERRATION_ORDER_MAX)+1;
 	int nol2 = (int)(_JPG_ABERRATION_ORDER_MAX) * 2 + 1;
-	int nab = min(nabrr, m_abrr_num); // limit applied list length to what is supported
+	int nab = __min(nabrr, m_abrr_num); // limit applied list length to what is supported
 	float* wfield = NULL;
 	float* wabs = NULL;
 	float sgnprm[4] = { 1.f,0.f,-1.f,0.f };
@@ -842,7 +850,7 @@ int CJProbeGen::CalculateProbeIntensityPSC(CJProbeParams* prm, int ndim, float s
 	if (fabs(srcw) < 0.001f) { // extremely small or invalid source size
 		lprm.m_source_shape = 0; // turn the source convolution off
 	}
-	int srct = max(0, min(_JPG_SOURCE_TYPE_MAX, lprm.m_source_shape)); // source type, limited to supported range
+	int srct = __max(0, __min(_JPG_SOURCE_TYPE_MAX, lprm.m_source_shape)); // source type, limited to supported range
 	float btx = lprm.m_btx * 0.001f / lprm.m_wl; // beam tilt X: mrad -> 1/nm
 	float bty = lprm.m_bty * 0.001f / lprm.m_wl; // beam tilt Y: mrad -> 1/nm
 	float qlim = lprm.m_alpha * 0.001f / lprm.m_wl; // aperture size: mrad -> 1/nm
@@ -947,7 +955,7 @@ int CJProbeGen::CalculateProbeIntensityPTC(CJProbeParams* prm, int ndim, float s
 	if (fabs(fsw) < 0.01f) { // extremely small or invalid focus spread
 		lprm.m_fspread_kernel_samples = 1; // turn the focus spread convolution off
 	}
-	int fsnum = max(1, lprm.m_fspread_kernel_samples);
+	int fsnum = __max(1, lprm.m_fspread_kernel_samples);
 	float fsrw = fabs(lprm.m_fspread_kernel_width); // relative width of the focus spread kernel
 	float btx = lprm.m_btx * 0.001f / lprm.m_wl; // beam tilt X: mrad -> 1/nm
 	float bty = lprm.m_bty * 0.001f / lprm.m_wl; // beam tilt Y: mrad -> 1/nm
@@ -1070,12 +1078,12 @@ int CJProbeGen::CalculateProbeIntensity(CJProbeParams *prm, int ndim, float s, f
 	if (fabs(srcw) < 0.001f) { // extremely small or invalid source size
 		lprm.m_source_shape = 0; // turn the source convolution off
 	}
-	int srct = max(0, min(_JPG_SOURCE_TYPE_MAX, lprm.m_source_shape)); // source type, limited to supported range
+	int srct = __max(0, __min(_JPG_SOURCE_TYPE_MAX, lprm.m_source_shape)); // source type, limited to supported range
 	float fsw = lprm.m_fspread_width;
 	if (fabs(fsw) < 0.01f) { // extremely small or invalid focus spread
 		lprm.m_fspread_kernel_samples = 1; // turn the focus spread convolution off
 	}
-	int fsnum = max(1, lprm.m_fspread_kernel_samples);
+	int fsnum = __max(1, lprm.m_fspread_kernel_samples);
 	float fsrw = fabs(lprm.m_fspread_kernel_width); // relative width of the focus spread kernel
 	float btx = lprm.m_btx * 0.001f / lprm.m_wl; // beam tilt X: mrad -> 1/nm
 	float bty = lprm.m_bty * 0.001f / lprm.m_wl; // beam tilt Y: mrad -> 1/nm
@@ -1489,7 +1497,8 @@ int CJProbeGen::SetAmorph(int ndim, float s, bool bForce)
 		float* rndpha = (float*)malloc(sizeof(float)*nitems);
 		if (NULL == rndpha) return 2;
 		for (ls = 0; ls < nitems; ls++) {
-			rand_s(&urnd); // get random number
+			//rand_s(&urnd); // get random number
+			urnd = rand();
 			rndpha[ls] = (float)(_TPI * (double)urnd / (double)(UINT_MAX-1) ); // set random phase values from 0 to 2*Pi
 		}
 		// 3) transform random phase to Fourier-space
@@ -1560,7 +1569,7 @@ int CJProbeGen::CalculateRonchigram(CJProbeParams* prm, int ndim, float s, float
 	if (fabs(fsw) < 0.01f) { // extremely small or invalid focus spread
 		lprm.m_fspread_kernel_samples = 1; // turn the focus spread convolution off
 	}
-	int fsnum = max(1, lprm.m_fspread_kernel_samples);
+	int fsnum = __max(1, lprm.m_fspread_kernel_samples);
 	float fsrw = fabs(lprm.m_fspread_kernel_width); // relative width of the focus spread kernel
 	float btx = lprm.m_btx * 0.001f / lprm.m_wl; // beam tilt X: mrad -> 1/nm
 	float bty = lprm.m_bty * 0.001f / lprm.m_wl; // beam tilt Y: mrad -> 1/nm

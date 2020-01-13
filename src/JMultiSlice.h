@@ -3,10 +3,10 @@
 // declaration for library JMultislice.lib (implementation see JMultislice.cpp)
 //
 //
-// Copyright (C) 2018, 2019 - Juri Barthel (juribarthel@gmail.com)
-// Copyright (C) 2018, 2019 - Forschungszentrum Juelich GmbH, 52425 Juelich, Germany
+// Copyright (C) 2018 - 2020 - Juri Barthel (juribarthel@gmail.com)
+// Copyright (C) 2018 - 2020 - Forschungszentrum Juelich GmbH, 52425 Juelich, Germany
 //
-// Verions of JMultiSlice: 0.35b (2019 - Dec - 16)
+// Verions of JMultiSlice: 0.38b (2020 - Jan - 13)
 //
 /*
 This program is free software : you can redistribute it and/or modify
@@ -113,14 +113,15 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 #include "JFFTCUDAcore.h"
 #include "JProbeGen.h"
 #include "JPlasmonMC.h"
+#include "rng.h"
 //
 #ifndef __JMS__
 #define __JMS__
 // VERSION NUMBERS
 #define __JMS_VERSION__			0
 #define __JMS_VERSION_SUB__		3
-#define __JMS_VERSION_SUB_SUB__	5
-#define __JMS_VERSION_BUILD__	20191216
+#define __JMS_VERSION_SUB_SUB__	8
+#define __JMS_VERSION_BUILD__	20200113
 // CODE IDs
 #define _JMS_CODE_CPU			1
 #define _JMS_CODE_GPU			2
@@ -136,11 +137,12 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 // DETECTION AND ACCUMULATION FLAGS
 #define _JMS_ACCMODE_NONE		0
 #define _JMS_ACCMODE_INTEGRATE	1
-#define _JMS_DETECT_INTEGRATED	0
-#define _JMS_DETECT_IMAGE		1
-#define _JMS_DETECT_DIFFRACTION	2
-#define _JMS_DETECT_WAVEREAL	4
-#define _JMS_DETECT_WAVEFOURIER	8
+#define _JMS_DETECT_NONE		0
+#define _JMS_DETECT_INTEGRATED	1
+#define _JMS_DETECT_IMAGE		2
+#define _JMS_DETECT_DIFFRACTION	4
+#define _JMS_DETECT_WAVEREAL	8
+#define _JMS_DETECT_WAVEFOURIER	16
 // OTHER PARAMETERS
 #define _JMS_MESSAGE_LEN		2048 // max. length of message strings
 #define _JMS_RELAPERTURE		(2./3.) // relative size of band-width limit
@@ -197,10 +199,9 @@ protected:
 
 	// debug level
 	int m_dbg;
-	// external rng seed on JMS_InitCore() (0 = time based)
-	int m_rngseed_ex;
-	// last random number used
-	int m_rnd_last;
+	// random number generator object
+	CRng m_lrng;
+	CRng *m_prng;
 
 // ----------------------------------------------------------------------------
 // major multislice parameters
@@ -371,9 +372,6 @@ public:
 	// Set debug level
 	int SetDebugLevel(int dbg);
 
-	// Set random number generator seed used on JMS_InitCore() (0 = time based)
-	int SetRNGSeedEx(int seed = 0);
-
 // ----------------------------------------------------------------------------
 // cleanup functions
 
@@ -414,6 +412,7 @@ public:
 	// - ndetper: detection slice period
 	// - nobjslc: number of slices in the object
 	// - det_objslc: detection hash list, calling with NULL will avoid access
+	//               if provided, det_objslc should point to an array of length nobjslc+1
 	int SetDetectionPlanes(int ndetper, int nobjslc, int * det_objslc=NULL);
 
 	// Set plasmon scattering Monte-Carlo parameters and switch
@@ -639,14 +638,15 @@ public:
 // ----------------------------------------------------------------------------
 // multislice utility functions (usually not exposed to extern)
 
-	// Returns the last random number used by one of the routines
-	int GetLastRand(void);
+	// Sets the active random number generator object
+	// Calling with NULL pointer resets to the local CRng member m_lrng.
+	void SetRng(CRng *prng=NULL);
 
-	// Re-Initializes the local random number generator (thread dependent!)
+	// Returns a pointer to the current random number generator object
+	CRng* GetRng(void);
+
+	// Re-Initializes the local random number generator
 	void SeedRngEx(int nseed = 0);
-
-	// Returns a new random number with the local RNG
-	int GetRand(void);
 
 protected:
 	// Returns a random sequence of variant numbers for a given sequence of

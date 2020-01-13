@@ -1,5 +1,17 @@
 List of changes to JMultiSliceLib
 
+2020-01-13: 0.38 JB
+- Resolved a memory management bug in the results handling.
+- Moved the CUDA code compilation to CUDA Toolkit v.10.2.
+  The package should be shipped with 'cufft64_10.dll' or the
+  library must be made available on the target machine by installing
+  the respective CUDA Toolkit version.
+
+2019-12-19: 0.36 JB
+- Removed all remaining MS Windows specfic includes and declarations.
+- Changed random number generator calls to <random> functions.
+- Started test project JMSBench1 for benchmarking JMultiSlice.
+
 2019-12-16: 0.35 JB
 - Removed a few MS Windows specfic includes and declarations.
 

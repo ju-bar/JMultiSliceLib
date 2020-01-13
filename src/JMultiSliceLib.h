@@ -4,8 +4,8 @@
 // (Implementation see JMultisliceLib.cpp)
 //
 //
-// Copyright (C) 2018, 2019 - Juri Barthel (juribarthel@gmail.com)
-// Copyright (C) 2018, 2019 - Forschungszentrum Jülich GmbH, 52425 Jülich, Germany
+// Copyright (C) 2018 - 2020 - Juri Barthel (juribarthel@gmail.com)
+// Copyright (C) 2018 - 2020 - Forschungszentrum Jülich GmbH, 52425 Jülich, Germany
 //
 //
 //
@@ -80,11 +80,12 @@
 #define JMS_CODE_CPU			1
 #define JMS_CODE_GPU			2
 
-#define JMS_DETECT_INTEGRATED	0
-#define JMS_DETECT_IMAGE		1
-#define JMS_DETECT_DIFFRACTION	2
-#define JMS_DETECT_WAVEREAL		4
-#define JMS_DETECT_WAVEFOURIER	8
+#define JMS_DETECT_NONE			0
+#define JMS_DETECT_INTEGRATED	1
+#define JMS_DETECT_IMAGE		2
+#define JMS_DETECT_DIFFRACTION	4
+#define JMS_DETECT_WAVEREAL		8
+#define JMS_DETECT_WAVEFOURIER	16
 
 #define JMS_ACCMODE_NONE		0
 #define JMS_ACCMODE_INTEGRATE	1
@@ -105,8 +106,14 @@ extern "C" __declspec(dllexport) float __stdcall GetJMSVersion(void);
 // set code debug level
 extern "C" __declspec(dllexport) int __stdcall SetJMSDebugLevel(int debuglevel);
 
-// set random number generator seed used on JMS_InitCore() (0 = time based)
-extern "C" __declspec(dllexport) int __stdcall SetJMSRNGSeed(int rngseed = 0);
+// set the random number generator
+extern "C" __declspec(dllexport) void __stdcall SetRng(CRng *prng = NULL);
+
+// get the random number generator
+extern "C" __declspec(dllexport) CRng* __stdcall GetRng(void);
+
+// seed the random number generator (0 = time based)
+extern "C" __declspec(dllexport) void __stdcall SeedRngEx(int rngseed = 0);
 
 
 // *** Physics Interface ***

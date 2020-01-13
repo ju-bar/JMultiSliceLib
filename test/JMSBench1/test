@@ -1,0 +1,24 @@
+set_gpu_id
+0
+set_cpu_num
+0
+set_sample_input_form
+2
+set_slc_num
+2
+set_slc_file_name
+'STO_test'
+set_sample_thickness_max
+128
+set_sample_thickness_step
+4
+set_probe_ekv
+200.000000
+set_probe_convergence
+25.000000
+set_det_annular
+80 200 0.0 0.0 HAADF
+set_det_annular
+12 24 0.0 0.0 ABF
+set_det_annular
+0 10 0.0 0.0 BF

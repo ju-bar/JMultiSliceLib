@@ -25,7 +25,7 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 //
 
 
-#include "stdafx.h"
+//#include "stdafx.h"
 #include <stdexcept>
 #include "JMultiSliceLib.h"
 
@@ -42,9 +42,19 @@ int __stdcall SetJMSDebugLevel(int debuglevel)
 	return JMS.SetDebugLevel(debuglevel);
 }
 
-int __stdcall SetJMSRNGSeed(int rngseed)
+void __stdcall SetRng(CRng *prng)
 {
-	return JMS.SetRNGSeedEx(rngseed);
+	JMS.SetRng(prng);
+}
+
+CRng* __stdcall GetRng()
+{
+	return JMS.GetRng();
+}
+
+void __stdcall SeedRngEx(int rngseed)
+{
+	JMS.SeedRngEx(rngseed);
 }
 
 float __stdcall SetHighTension(float ht)

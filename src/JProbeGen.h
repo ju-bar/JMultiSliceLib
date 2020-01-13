@@ -45,7 +45,6 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 #include <chrono>
 //#include "JFFTWcore.h"
 #include "JFFTMKLcore.h"
-using namespace std;
 //
 #ifndef __JPROBEGEN__
 #define __JPROBEGEN__
@@ -135,6 +134,9 @@ public:
 	// returns number of supported aberrations
 	int GetAberrationNum(void);
 
+	// sets the probe electron energy in keV -> m_wl
+	float SetProbeEkV(float ekv);
+
 };
 //
 //
@@ -177,13 +179,13 @@ protected:
 	int* m_abrr_binom;
 	
 	// list of aberration names
-	vector<string> m_abrr_name;
+	std::vector<std::string> m_abrr_name;
 	
 	// list of aberration symbols
-	vector<string> m_abrr_symbol;
+	std::vector<std::string> m_abrr_symbol;
 	
 	// list of function name
-	vector<string> m_pfunc_name;
+	std::vector<std::string> m_pfunc_name;
 	
 	// dimension of amorphous backup data for ronchigram simulation
 	int m_amorph_dim;
@@ -195,7 +197,7 @@ protected:
 	fcmplx* m_amorph_pgr;
 	
 	// clock object with nanoseconds resolution (does this work on Linux or Mac?)
-	chrono::high_resolution_clock m_clock;
+	std::chrono::high_resolution_clock m_clock;
 
 public:
 
@@ -345,7 +347,7 @@ public:
 	int CalculateRonchigram(CJProbeParams* prm, int ndim, float s, float* pdata);
 
 	// returns the name of the probe function of index idx in func_name
-	int GetProbeFunctionName(int idx, string * func_name);
+	int GetProbeFunctionName(int idx, std::string * func_name);
 
 	// calculates a probe function of type idx with square size
 	// - idx: function index
