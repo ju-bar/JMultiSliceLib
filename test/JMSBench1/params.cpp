@@ -27,7 +27,6 @@
 #include "params.h"
 #include <sstream>
 #include <algorithm>
-#include "string_format.h"
 
 params::params()
 {
@@ -39,10 +38,34 @@ params::params()
 	str_ctrl_file = "control";
 }
 
+params::params(const params &prm)
+{
+	/*btalk = prm.btalk;
+	binteractive = prm.binteractive;
+	bstore = prm.bstore;
+	in_byte_swap = prm.in_byte_swap;
+	ndebug = prm.ndebug;
+	str_ctrl_file = prm.str_ctrl_file;
+	clock = prm.clock;
+	v_str_ctrl = prm.v_str_ctrl;*/
+	set_ctrl(prm);
+}
 
 params::~params()
 {
 	v_str_ctrl.clear();
+}
+
+void params::set_ctrl(const params &ctrl)
+{
+	btalk = ctrl.btalk;
+	binteractive = ctrl.binteractive;
+	bstore = ctrl.bstore;
+	in_byte_swap = ctrl.in_byte_swap;
+	ndebug = ctrl.ndebug;
+	str_ctrl_file = ctrl.str_ctrl_file;
+	clock = ctrl.clock;
+	v_str_ctrl = ctrl.v_str_ctrl;
 }
 
 bool params::file_exists(std::string sfile)

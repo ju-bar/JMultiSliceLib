@@ -28,6 +28,7 @@
 
 #pragma once
 #include "params.h"
+#include "prm_slice.h"
 
 // sample input form option range
 #define SAMPLE_INF_MIN	2
@@ -41,40 +42,46 @@ class prm_sample :
 	public params
 {
 public:
+	
+	// standard constructor
 	prm_sample();
+
+	// destructor
 	~prm_sample();
 
-	unsigned int input_form;
+	// member data
+
+	unsigned int input_form; // switch input form of object data (structure files, phase grating files)
 	std::string str_slc_file_pre; // file name prefix for slice transmission functions
 	std::string str_slc_file_suf; // file name suffix for slice transmission functions
+	unsigned int slc_det_per; // slice detection period (thickness steps)
 	unsigned int grid_nx; // potential samples along x
 	unsigned int grid_ny; // potential samples along y
 	float grid_a0; // potential grid size along x (nm)
 	float grid_a1; // potential grid size along y (nm)
 	float grid_ekv; // electron energy from sample data (keV)
+	float tilt_x; // sample tilt along x (mrad)
+	float tilt_y; // sample tilt along y (mrad)
 
-protected:
-	unsigned int slc_num; // number of slice transmission functions
-	unsigned int slc_num_obj; // number of object slices
-	unsigned int slc_det_per; // slice detection periodicity
-	unsigned int* slc_obj; // slice stacking in object (length = slc_num_obj)
-	int* slc_det; // detection slice flags (length = slc_num_obj)
-	unsigned int slc_num_det; // number of detection slices
-	float* slc_dz; // slice thickness in nm (length = slc_num)
-	unsigned int* slc_var_num; // number of variants per slice (length = slc_num)
-	unsigned __int64* slc_pgr_offset; // slice file data offset (bytes, length = slc_num)
+	std::vector<unsigned int> v_slc_obj; // list of object slice indices stacked to max. thickness
+	std::vector<int> v_slc_det; // list of object slice detection plane indices; 0: before object, 1: after first slice, ... to slice at max. thickness
+	std::vector<prm_slice> v_slc; // list of slice data
 
-public:
+	// member functions
+
+	// copies data from psrc to this object
+	void copy_data_from(prm_sample *psrc);
+
+	// copies setup data from psrc to this object
+	// - excludes phase gratings and propagators
+	void copy_setup_from(prm_sample *psrc);
 
 	// setup the sample input form
 	unsigned int setup_input_form(void);
 
-	// get number of slices of the periodic unit
-	unsigned int get_num_slc(void);
+	// returns the number of *.sli files found with the given file name prefix
+	unsigned int get_sli_file_num(std::string sfile_name_prefix);
 
-	// get number of slices of the sample
-	unsigned int get_num_slc_obj(void);
-	
 	// try to find slice files using current slice file name
 	unsigned int find_sli_files(void);
 
@@ -84,14 +91,28 @@ public:
 	// setup the sample thickness / slice sequence
 	unsigned int setup_thickness(void);
 
+	// setup sample tilt
+	unsigned int setup_tilt(void);
+
 	// get number of registered detection planes
 	unsigned int get_num_slc_det(void);
 
-	// get object slice array
-	unsigned int* get_slc_obj(void);
+	// returns the thickness of slice with index idx in the object slice stack
+	float get_slc_obj_thickness(unsigned int idx);
 
-	// get detection slice array
-	int* get_slc_det(void);
+	// return the maximum number of variants over all slices
+	int get_variant_num_max(void);
+
+	// prepare propagator functions from current sample setup
+	// The function requires previous setup of parameters in the JMultiSlice object addressed in the interface.
+	// Propagator grid size is taken from JMS grid parameters due to possible periodic extension compared to sample data grids.
+	int prepare_pro(CJMultiSlice *pjms, int whichcode);
+
+	// setup the object slice sequence in JMS
+	int setup_object_slice_seq_jms(CJMultiSlice *pjms);
+
+	// setup phase gratings in JMS
+	int setup_pgr_jms(CJMultiSlice *pjms, int whichcode);
 
 };
 

@@ -24,17 +24,14 @@
 ----------------------------------------------------------------------- */
 
 #include "prm_main.h"
-#include "string_format.h"
 #include <thread>
-#include "JMultiSliceLib.h"
-
 
 prm_main::prm_main()
 {
 	gpu_id = -1;
 	cpu_num = 0;
 	cpu_num_max = 0;
-	str_out_file = "output";
+	str_out_file = "";
 }
 
 
@@ -173,8 +170,7 @@ int prm_main::setup_cpu(void)
 			std::cin >> ncpu;
 			// insert control command
 			v_str_ctrl.push_back("set_cpu_num");
-			std::stringstream ss; ss << ncpu;
-			v_str_ctrl.push_back(ss.str());
+			v_str_ctrl.push_back(format("%i", ncpu));
 		}
 		else {
 			i = ctrl_find_param("set_cpu_num", &stmp);
@@ -206,16 +202,38 @@ int prm_main::setup_cpu(void)
 }
 
 
+int prm_main::setup_file_output(void)
+{
+	int ierr = 0, i = 0;
+	std::string stmp = "", sprm = "";
+	
+	if (binteractive && str_out_file.length() == 0) { // interactive & no file name set yet
+		std::cout << std::endl;
+		std::cout << "  Enter the output file name prefix: ";
+		std::cin >> str_out_file;
+	}
+	if (binteractive) { // store output file name command whether from current input or previous input (command line option -o)
+		v_str_ctrl.push_back("set_output_file");
+		v_str_ctrl.push_back("'" + str_out_file + "'");
+	}
+	else { // read from control file
+		i = ctrl_find_param("set_output_file", &stmp);
+		if (i >= 0) {
+			read_param(0, &stmp, &sprm);
+			str_out_file = to_string(sprm);
+		}
+	}
+
+	return ierr;
+}
+
+
 int prm_main::setup_sample(void)
 {
 	int nerr = 0, ierr = 0;
 
-	sample.btalk = btalk;
-	sample.binteractive = binteractive;
-	sample.ndebug = ndebug;
-
-	sample.v_str_ctrl = v_str_ctrl;
-
+	sample.set_ctrl(*this);
+	
 	if (btalk || binteractive) {
 		std::cout << std::endl;
 		std::cout << "  Sample parameter setup ..." << std::endl;
@@ -232,8 +250,7 @@ int prm_main::setup_sample(void)
 	{
 	case (SAMPLE_INF_SLI):
 		// get number of slice files -> number of slices
-		sample.find_sli_files();
-		if (sample.get_num_slc() == 0) {
+		if (0 == sample.find_sli_files()) {
 			nerr = SAMPLE_INF_SLI * 10 + 1;
 			goto exit;
 		}
@@ -256,6 +273,13 @@ int prm_main::setup_sample(void)
 		goto exit;
 	}
 
+	// set sample tilt
+	ierr = sample.setup_tilt();
+	if (0 < ierr) {
+		nerr = 200 + ierr;
+		goto exit;
+	}
+
 exit:
 	if (nerr == 0 && binteractive && sample.v_str_ctrl.size()>0) { // append sample input control to main control
 		v_str_ctrl = sample.v_str_ctrl;
@@ -271,11 +295,7 @@ int prm_main::setup_probe(void)
 {
 	int ierr = 0, nerr = 0;
 
-	probe.btalk = btalk;
-	probe.binteractive = binteractive;
-	probe.ndebug = ndebug;
-
-	probe.v_str_ctrl = v_str_ctrl;
+	probe.set_ctrl(*this);
 
 	if (btalk || binteractive) {
 		std::cout << std::endl;
@@ -316,11 +336,7 @@ int prm_main::setup_detector(void)
 {
 	int ierr = 0, nerr = 0;
 
-	detector.btalk = btalk;
-	detector.binteractive = binteractive;
-	detector.ndebug = ndebug;
-
-	detector.v_str_ctrl = v_str_ctrl;
+	detector.set_ctrl(*this);
 
 	if (btalk || binteractive) {
 		std::cout << std::endl;
@@ -342,5 +358,150 @@ exit:
 	if (!binteractive) { // erase control input copy
 		detector.v_str_ctrl.clear();
 	}
+	return nerr;
+}
+
+
+int prm_main::setup_scan(void)
+{
+	int ierr = 0, nerr = 0;
+	int ichk = 0;
+	prm_scan scan_tmp;
+
+	scan.set_ctrl(*this);
+	
+
+	if (btalk || binteractive) {
+		std::cout << std::endl;
+		std::cout << "  Scanning setup ..." << std::endl;
+	}
+
+_repeat_input:
+	
+	scan_tmp = scan; // work on a temporary scan object
+	
+	ierr = scan_tmp.setup_beam_position();
+	if (0 < ierr) {
+		nerr = 100 + ierr;
+		goto _exit;
+	}
+	ierr = scan_tmp.setup_frame_size();
+	if (0 < ierr) {
+		nerr = 200 + ierr;
+		goto _exit;
+	}
+	ierr = scan_tmp.setup_frame_rotation();
+	if (0 < ierr) {
+		nerr = 300 + ierr;
+		goto _exit;
+	}
+	ierr = scan_tmp.setup_sampling();
+	if (0 < ierr) {
+		nerr = 400 + ierr;
+		goto _exit;
+	}
+	ierr = scan_tmp.setup_repeats();
+	if (0 < ierr) {
+		nerr = 500 + ierr;
+		goto _exit;
+	}
+
+	if (btalk) {
+		scan_tmp.print_setup();
+	}
+
+	if (binteractive) {
+		std::cout << std::endl;
+		std::cout << "  <0> Accept  <1> Change  the current scan setup ? ";
+		std::cin >> ichk;
+		if (ichk == 1) goto _repeat_input;
+	}
+
+	scan = scan_tmp; // transfer data of accepted scan setup to parameters
+
+_exit:
+	if (nerr == 0 && binteractive && scan.v_str_ctrl.size() > 0) { // append scan input control to main control
+		v_str_ctrl = scan.v_str_ctrl;
+	}
+	if (!binteractive) { // erase control input copy
+		scan.v_str_ctrl.clear();
+	}
+	return nerr;
+}
+
+
+int prm_main::prepare_sample_pgr(void)
+{
+	int nerr = 0, ierr = 0;
+
+	if (btalk || binteractive) {
+		std::cout << std::endl;
+		std::cout << "  Preparing object transmission functions ..." << std::endl;
+	}
+
+	// Create or load phase gratings from information in member variable sample
+	switch (sample.input_form) {
+	case SAMPLE_INF_CEL:
+		// TODO: implement atomic structure input options
+		nerr = 2;
+		std::cerr << "Error: (prepare_sample_pgr) atomic structure input currently not supported." << std::endl;
+		goto _exit;
+		break;
+	case SAMPLE_INF_SLI:
+		ierr = sample.load_sli_file_data();
+		if (0 < ierr) {
+			nerr = 10;
+			std::cerr << "Error: (prepare_sample_pgr) failed to load phase gratings from files (" << ierr << ")." << std::endl;
+		}
+		break;
+	default:
+		nerr = 1;
+		std::cerr << "Error: (prepare_sample_pgr) invalid input option for phase gratings (" << sample.input_form << ")." << std::endl;
+		goto _exit;
+	}
+
+_exit:
+	return nerr;
+}
+
+
+
+int prm_main::prepare_result_params()
+{
+	int nerr = 0, ierr = 0;
+	unsigned int num_ann = (unsigned int)detector.v_annular.size();
+	unsigned int num_det_pln = sample.get_num_slc_det();
+
+	if (detector.b_annular && num_ann > 0 && num_det_pln > 0) {
+		stem_images.set_ctrl(*this);
+		stem_images.data_type = (unsigned int)_RESULT_DATA_TYPE_FLOAT;
+		stem_images.det_type = (unsigned int)_JMS_DETECT_INTEGRATED;
+		stem_images.v_dim.push_back((int)scan.nx); // length of scan rows
+		stem_images.v_dim.push_back((int)scan.ny); // number of scan rows
+		stem_images.v_dim.push_back((int)num_det_pln); // number of thickness samples
+		stem_images.v_dim.push_back((int)num_ann); // number of detectors
+		stem_images.probe.copy_data_from(&probe); // copy probe parameters
+		stem_images.sample.copy_setup_from(&sample); // copy sample setup (not all data)
+		stem_images.detector.copy_setup_from(&detector); // copy detector parameters
+		stem_images.scan = scan; // copy scan setup
+		stem_images.str_out_file = str_out_file;
+		if (NULL != stem_images.pdata) {
+			free(stem_images.pdata);
+			stem_images.sz_data = 0;
+		}
+		stem_images.sz_data = (size_t)scan.nx*scan.ny*num_det_pln*num_ann;
+		if (stem_images.sz_data > 0) {
+			stem_images.pdata = (float*)malloc(stem_images.sz_data);
+			if (NULL == stem_images.pdata) {
+				stem_images.sz_data = 0;
+				nerr = 1;
+				std::cerr << "Error: (prepare_result_params) failed to allocate scan image buffer." << std::endl;
+				goto _exit;
+			}
+			memset(stem_images.pdata, 0, stem_images.sz_data);
+		}
+	}
+
+_exit:
 	return nerr;
 }

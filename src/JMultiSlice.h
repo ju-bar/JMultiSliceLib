@@ -408,12 +408,19 @@ public:
 	// - fthickness: the thickness of slice islc in nm
 	void SetSliceThickness(int islc, float fthickness);
 
-	// Sets the detection planes
+	// Sets the detection planes (overload 1)
 	// - ndetper: detection slice period
 	// - nobjslc: number of slices in the object
 	// - det_objslc: detection hash list, calling with NULL will avoid access
 	//               if provided, det_objslc should point to an array of length nobjslc+1
 	int SetDetectionPlanes(int ndetper, int nobjslc, int * det_objslc=NULL);
+
+	// Sets the detection planes (overload 2)
+	// - slc_det: detection slices listed as std::vector<int>
+	// - nobjslc: number of slices in the object
+	// - det_objslc: detection hash list, calling with NULL will avoid access
+	//               if provided, det_objslc should point to an array of length nobjslc+1
+	int SetDetectionPlanes(std::vector<int> slc_det, int nobjslc, int * det_objslc = NULL);
 
 	// Set plasmon scattering Monte-Carlo parameters and switch
 	// - use: flag the function on and off
@@ -519,7 +526,7 @@ public:
 	// - proidx: list of propagator indices handling the access to a propagator function for each structure slice, length _JMS_nscslc
 	int PropagatorSetup(int whichcode, int npro, int *proidx);
 
-	// Prepare detector setup
+	// Prepare detector setup (overload 1)
 	// This function is common for both codes, CPU and GPU.
 	// Which code is prepared is triggered by parameter whichcode.
 	// All arrays are allocated relevant to detection data and access to it.
@@ -529,6 +536,17 @@ public:
 	// - imagedet: image detection switches (_JMS_DETECT_IMAGE | _JMS_DETECT_DIFFRACTION )
 	// - nthreads_CPU: number of CPU output threads to initialize
 	int DetectorSetup(int whichcode, int ndetper, int ndetint, int imagedet, int nthreads_CPU = 1);
+
+	// Prepare detector setup (overload 2)
+	// This function is common for both codes, CPU and GPU.
+	// Which code is prepared is triggered by parameter whichcode.
+	// All arrays are allocated relevant to detection data and access to it.
+	// - whichcode: flag signaling which code to prepare (_JMS_CODE_CPU | _JMS_CODE_GPU)
+	// - ndetper: detector readout periodicity in slices (0 = exit plane only, >0 many planes + final plane)
+	// - ndetint: number of integrating diffraction plane detectors
+	// - imagedet: image detection switches (_JMS_DETECT_IMAGE | _JMS_DETECT_DIFFRACTION )
+	// - nthreads_CPU: number of CPU output threads to initialize
+	int DetectorSetup(int whichcode, std::vector<int> slc_det, int ndetint, int imagedet, int nthreads_CPU = 1);
 
 	// Sets phase grating data from external source.
 	// Call for each slice separately!

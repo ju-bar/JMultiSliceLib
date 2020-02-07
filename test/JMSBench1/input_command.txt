@@ -16,6 +16,11 @@ set_cpu_num
 	Set the number of CPU threads to be used.
 
 
+set_output_file
+
+	Set the prefix of the output file names.
+
+
 set_sample_input_form
 <int>
 	
@@ -56,3 +61,49 @@ set_probe_convergence
 <float>
 
 	Set the convergence semi-angle of the electron probe in mrad.
+
+
+set_det_annular
+<float> <float> <float> <float> <string>
+
+	Add an annular detector integrating signal in the diffraction
+	plane.
+
+
+set_scan_sampling
+<int> <int>
+
+	Set number of scan steps along fast (x) and slow (y) scan direction.
+
+
+set_scan_frame_size
+<float> <float>
+
+	Set the size of the scan frame along x and y direction in nm.
+
+
+set_scan_frame_rot
+<float>
+
+	Set the scan frame rotation in degrees with respect to the x-axis
+	of the sample box.
+
+
+set_scan_beam_pos
+<float> <float>
+
+	Set the position of the beam (scan frame offset) relative to the
+	origin of the calculation frame (sample bounding box) in nm.
+
+
+set_num_repeat
+<int>
+
+	Set number of calculation repeats per scan position.
+	This parameter can be used to control the amount of averaging over
+	frozen-lattice varations for improving the simulation of thermal
+	diffuse scattering.	Normal STEM image simulations achieve high
+	quality with 10 repeats	per scan position. Diffraction and probe
+	image simulations require a much larger amount of averaging with
+	a few hundred or even thousand repetitions.
+

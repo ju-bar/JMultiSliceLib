@@ -1,25 +1,39 @@
 #include "prm_slice.h"
-
+#include "NatureConstants.h"
 
 
 prm_slice::prm_slice()
 {
-	ekv = 0.f;
-	sx = 0.f;
-	sy = 0.f;
-	sz = 0.f;
-	grid_x = 0;
-	grid_y = 0;
-	data_type = 0;
-	var_num = 0;
-	data_offset = 0;
-	structure_offset = 0;
-	sz_slc = 0;
-	sz_all = 0;
-	memset(s_slc_name, 0, (size_t)SLICENAME_MAX);
-	pdata = NULL; // pointer to the memory block holding all slice data (variants in sequence)
+	pro_nx = 0;
+	pro_ny = 0;
+	sz_pgr = 0;
+	sz_pro = 0;
+	pgr = NULL; // pointer to the memory block holding phase grating data (variants in sequence)
+	pro = NULL; // pointer to the memory block holding propagator data
 }
 
+prm_slice::prm_slice(const prm_slice &src)
+{
+	pro_nx = 0;
+	pro_ny = 0;
+	sz_pgr = 0;
+	sz_pro = 0;
+	pgr = NULL;
+	pro = NULL;
+
+	prm_slice *psrc = const_cast <prm_slice*>(&src);
+	header = src.header;
+	if (NULL != psrc->get_pgr()) {
+		alloc_pgr();
+		memcpy((void*)pgr, (void*)psrc->get_pgr(), sz_pgr);
+	}
+	if (NULL != psrc->get_pro()) {
+		size_t nx = 0, ny = 0;
+		psrc->get_pro_dim(nx, ny);
+		alloc_pro(nx, ny);
+		memcpy((void*)pro, (void*)psrc->get_pro(), sz_pro);
+	}
+}
 
 prm_slice::~prm_slice()
 {
@@ -28,126 +42,206 @@ prm_slice::~prm_slice()
 
 void prm_slice::clear()
 {
-	if (NULL != pdata) free(pdata); pdata = NULL;
-	in_byte_swap = false;
-	ekv = 0.f;
-	sx = 0.f;
-	sy = 0.f;
-	sz = 0.f;
-	data_type = 0;
-	grid_x = 0;
-	grid_y = 0;
-	var_num = 0;
-	data_offset = 0;
-	structure_offset = 0;
-	sz_slc = 0;
-	sz_all = 0;
-	memset(s_slc_name, 0, (size_t)SLICENAME_MAX);
+	if (NULL != pro) {
+		free(pro);
+		pro = NULL;
+		sz_pro = 0;
+	}
+	if (NULL != pgr) {
+		free(pgr);
+		pgr = NULL;
+		sz_pgr = 0;
+	}
 }
 
 int prm_slice::load_ems_header(std::string sfile)
 {
+	return header.load_ems_header(sfile);
+}
+
+int prm_slice::load_ems_data(std::string sfile)
+{
 	int ierr = 0;
-	unsigned int ext_hdr_ver = 0;
-	unsigned int data_type = 0;
-	unsigned int utmp = 0;
-	data_offset = (unsigned long long)EMS_POS_DATA;
-	structure_offset = (unsigned long long)EMS_POS_ITAB;
 	std::ifstream fs;
-	if (!file_exists(sfile)) {
-		std::cerr << "Failed to load ems header, file " << sfile << " not found." << std::endl;
+	size_t num_floats = (size_t)(2 * header.grid_x * header.grid_y * header.num_var);
+	if (num_floats == 0 || header.data_offset < (unsigned long long)EMS_POS_DATA) {
+		std::cerr << "Failed to load ems data due to invalid header presets." << std::endl;
 		ierr = 1;
 		goto exit;
 	}
-	fs.open(sfile);
-	if (fs.is_open()) {
-		in_byte_swap = check_ems_endian(&fs);
-		fs.seekg(EMS_POS_DATASIZE_X); file_read_buf(&fs, (char*)&grid_x, sizeof(unsigned int), 1);
-		fs.seekg(EMS_POS_DATASIZE_Y); file_read_buf(&fs, (char*)&grid_y, sizeof(unsigned int), 1);
-		fs.seekg(EMS_POS_CONTENT_TYPE); file_read_buf(&fs, (char*)&data_type, sizeof(unsigned int), 1);
-		fs.seekg(EMS_POS_EXTHEADER_VER); file_read_buf(&fs, (char*)&ext_hdr_ver, sizeof(unsigned int), 1);
-		switch (ext_hdr_ver) {
-		case 2010112301:
-			// load number of variants
-			fs.seekg(EMS_POS_VARIANT_NUM); file_read_buf(&fs, (char*)&var_num, sizeof(unsigned int), 1);
-			break;
-		case 2012071101: //  added: nothing, just the version was increased
-			// load number of variants
-			fs.seekg(EMS_POS_VARIANT_NUM); file_read_buf(&fs, (char*)&var_num, sizeof(unsigned int), 1);
-			// load alternative data offset in file
-			fs.seekg(EMS_POS_ALT_OFFSET); file_read_buf(&fs, (char*)&utmp, sizeof(unsigned int), 1);
-			data_offset = (unsigned long long)utmp;
-			// load alternative table offset in file
-			fs.seekg(EMS_POS_ITAB_OFFSET); file_read_buf(&fs, (char*)&utmp, sizeof(unsigned int), 1);
-			structure_offset = (unsigned long long)utmp;
-			// load the atom table
-			// structure.load(&fs, structure_offset);
-			break;
-		default:
-			// set default values for the extended header data in cases
-			// where no version number match is given
-			var_num = 1;
-		}
-		fs.seekg(EMS_POS_THICKNESS); file_read_buf(&fs, (char*)&sz, sizeof(float), 1);
-		// structure.v_cell.z = sz;
-		fs.seekg(EMS_POS_HIGHTENSION); file_read_buf(&fs, (char*)&ekv, sizeof(float), 1);
-		fs.seekg(EMS_POS_PHYSSIZE_X); file_read_buf(&fs, (char*)&sx, sizeof(float), 1);
-		// structure.v_cell.x = sx;
-		fs.seekg(EMS_POS_PHYSSIZE_Y); file_read_buf(&fs, (char*)&sy, sizeof(float), 1);
-		// structure.v_cell.y = sy;
-	}
-	else {
-		std::cerr << "Failed to load ems header, file " << sfile << " could not be accessed." << std::endl;
+	if (!file_exists(sfile)) {
+		std::cerr << "Failed to load ems data, file " << sfile << " not found." << std::endl;
 		ierr = 2;
 		goto exit;
 	}
-	fs.close();
+	// allocate destination buffer
+	if (0 == alloc_pgr()) {
+		ierr = 3;
+		goto exit;
+	}
+	// open the file
+	fs.open(sfile);
+	if (fs.is_open()) {
+		// goto data offset
+		fs.seekg((std::streampos)header.data_offset);
+		// load data from file
+		if (!file_read_buf(&fs, (char*)pgr, sizeof(float), num_floats)) {
+			std::cerr << "Failed to load ems data, file " << sfile << " not found." << std::endl;
+			ierr = 5;
+			goto exit;
+		}
+	}
+	else {
+		std::cerr << "Failed to open file " << sfile << "." << std::endl;
+		ierr = 4;
+		goto exit;
+	}
 exit:
+	if (fs.is_open()) fs.close(); // close file
 	return ierr;
 }
 
-bool prm_slice::check_ems_endian(std::ifstream* pfs)
+size_t prm_slice::alloc_pgr()
 {
-	bool swap = false;
-	__int32 ichk = 0;
-	if (pfs) {
-		pfs->seekg(0);
-		pfs->read((char*)&ichk, sizeof(__int32));
-		if (ichk < 0 || ichk > 16384) swap = true;
+	sz_pgr = sizeof(fcmplx) * header.grid_x * header.grid_y * header.num_var;
+	if (NULL != pgr) {
+		free(pgr);
+		pgr = NULL;
 	}
-	return swap;
+	if (sz_pgr > 0) {
+		pgr = (float*)malloc(sz_pgr);
+		if (NULL == pgr) {
+			std::cerr << "Error: failed to allocate phase gratings memory." << std::endl;
+			std::cerr << "- requested size [MB]: " << sz_pgr / 1048576 << std::endl;
+			sz_pgr = 0;
+			goto _exit;
+		}
+		memset(pgr, 0, sz_pgr); // preset with 0
+	}
+_exit:
+	return sz_pgr;
+}
+
+size_t prm_slice::alloc_pro(size_t nx, size_t ny)
+{
+	if (NULL != pro) {
+		free(pro);
+		pro = NULL;
+		sz_pro = 0;
+		pro_nx = 0;
+		pro_ny = 0;
+	}
+	sz_pro = sizeof(fcmplx) * nx * ny;
+	if (sz_pro > 0) {
+		pro = (float*)malloc(sz_pro);
+		if (NULL == pro) {
+			std::cerr << "Error: failed to allocate propagator memory." << std::endl;
+			std::cerr << "- requested size [MB]: " << sz_pro / 1048576 << std::endl;
+			sz_pro = 0;
+			goto _exit;
+		}
+		memset(pro, 0, sz_pro); // preset with 0
+		pro_nx = nx;
+		pro_ny = ny;
+	}
+_exit:
+	return sz_pro;
+}
+
+void prm_slice::get_pro_dim(size_t &nx, size_t &ny)
+{
+	nx = pro_nx;
+	ny = pro_ny;
+}
+
+fcmplx* prm_slice::get_pgr(size_t var)
+{
+	size_t npixvar = (size_t)(header.grid_x * header.grid_y);
+	return &(((fcmplx*)pgr)[var * npixvar]);
+}
+
+int prm_slice::calculate_propagator(CJMultiSlice *pjms, float tilt_x, float tilt_y, int type)
+{
+	int nerr = 0, ierr = 0;
+	int nx = 0, ny = 0;
+	float ttf = (float)_R2D * 0.001f; // scales from mrad to degrees
+	float otx = ttf * tilt_x, oty = ttf * tilt_y; // tilts in degree
+
+	if (NULL == pjms) {
+		nerr = 1;
+		std::cerr << "Error: (calculate_propagator) called with invalid interface to JMS." << std::endl;
+		goto _exit;
+	}
+
+	pjms->GetGridSize(nx, ny);
+	alloc_pro((size_t)nx, (size_t)ny);
+	if (sz_pro == 0) {
+		nerr = 3;
+		std::cerr << "Error: (calculate_propagator) failed to allocate memory." << std::endl;
+		goto _exit;
+	}
+
+	ierr = pjms->CalculatePropagator(header.sz, otx, oty, (fcmplx*)pro, type);
+	if (0 < ierr) {
+		nerr = 4;
+		std::cerr << "Error: (calculate_propagator) failed to calculate propagator." << std::endl;
+		goto _exit;
+	}
+
+_exit:
+	return nerr;
+}
+
+fcmplx* prm_slice::get_pro(void)
+{
+	return (fcmplx*)pro;
+}
+
+fcmplx prm_slice::get_pgr_at(size_t pos, size_t var)
+{
+	size_t npixvar = (size_t)(header.grid_x * header.grid_y);
+	return ((fcmplx*)pgr)[pos + var * npixvar];
+}
+
+fcmplx prm_slice::get_pro_at(size_t pos)
+{
+	return ((fcmplx*)pro)[pos];
 }
 
 void prm_slice::get_grid_dim(unsigned int* dim_x, unsigned int* dim_y)
 {
-	*dim_x = grid_x;
-	*dim_y = grid_y;
+	*dim_x = header.grid_x;
+	*dim_y = header.grid_y;
 }
 
 void prm_slice::get_grid_size(float* size_x, float* size_y)
 {
-	*size_x = sx;
-	*size_y = sy;
+	*size_x = header.sx;
+	*size_y = header.sy;
 }
 
 
 float prm_slice::get_energy_kev(void)
 {
-	return ekv;
+	return header.ekv;
 }
-
 
 float prm_slice::get_thickness(void)
 {
-	return sz;
+	return header.sz;
 }
 
 unsigned int prm_slice::get_variant_num(void)
 {
-	return var_num;
+	return header.num_var;
 }
 
 unsigned long long prm_slice::get_file_data_offset(void)
 {
-	return data_offset;
+	return header.data_offset;
+}
+
+unsigned long long prm_slice::get_file_structure_offset(void)
+{
+	return header.structure_offset;
 }

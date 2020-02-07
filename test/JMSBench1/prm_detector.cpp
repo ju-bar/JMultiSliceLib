@@ -27,7 +27,7 @@
 ----------------------------------------------------------------------- */
 
 #include "prm_detector.h"
-#include "string_format.h"
+#include "JMultiSlice.h"
 
 /******************** --- prm_annular --- *******************************/
 
@@ -39,10 +39,78 @@ prm_annular::prm_annular()
 	type = (unsigned int)ANNULAR_RING;
 	phi_begin = 0.f;
 	phi_end = 0.f;
+	grid_nx = 0;
+	grid_ny = 0;
+	msklen = 0;
+	msk = NULL;
+	det = NULL;
 }
+
+prm_annular::prm_annular(const prm_annular &src)
+{
+	name = src.name;
+	beta_inner = src.beta_inner;
+	beta_outer = src.beta_outer;
+	type = src.type;
+	phi_begin = src.phi_begin;
+	phi_end = src.phi_end;
+	grid_nx = 0;
+	grid_ny = 0;
+	msklen = 0;
+	msk = NULL;
+	det = NULL;
+	if (src.grid_nx > 0 && src.grid_ny > 0 && src.det != NULL) {
+		size_t sz_det = sizeof(float) * src.grid_nx * src.grid_ny;
+		det = (float*)malloc(sz_det);
+		memcpy(det, src.det, sz_det);
+		grid_nx = src.grid_nx;
+		grid_ny = src.grid_ny;
+		if (msk != NULL) {
+			sz_det = sizeof(int) * src.grid_nx * src.grid_ny;
+			msk = (int*)malloc(sz_det);
+			memcpy(msk, src.msk, sz_det);
+			msklen = src.msklen;
+		}
+	}
+}
+
 
 prm_annular::~prm_annular()
 {
+	if (NULL != msk) { free(msk); }
+	if (NULL != det) { free(det); }
+}
+
+
+prm_annular& prm_annular::operator= (const prm_annular &src)
+{
+	if (this != &src) {
+		name = src.name;
+		beta_inner = src.beta_inner;
+		beta_outer = src.beta_outer;
+		type = src.type;
+		phi_begin = src.phi_begin;
+		phi_end = src.phi_end;
+		grid_nx = 0;
+		grid_ny = 0;
+		msklen = 0;
+		msk = NULL;
+		det = NULL;
+		if (src.grid_nx > 0 && src.grid_ny > 0 && src.det != NULL) {
+			size_t sz_det = sizeof(float) * src.grid_nx * src.grid_ny;
+			det = (float*)malloc(sz_det);
+			memcpy(det, src.det, sz_det);
+			grid_nx = src.grid_nx;
+			grid_ny = src.grid_ny;
+			if (msk != NULL) {
+				sz_det = sizeof(int) * src.grid_nx * src.grid_ny;
+				msk = (int*)malloc(sz_det);
+				memcpy(msk, src.msk, sz_det);
+				msklen = src.msklen;
+			}
+		}
+	}
+	return *this;
 }
 
 void prm_annular::reset()
@@ -53,6 +121,25 @@ void prm_annular::reset()
 	type = (unsigned int)ANNULAR_RING;
 	phi_begin = 0.f;
 	phi_end = 0.f;
+	grid_nx = 0;
+	grid_ny = 0;
+	msklen = 0;
+	if (NULL != msk) { free(msk); msk = NULL; }
+	if (NULL != det) { free(det); det = NULL; }
+}
+
+
+void prm_annular::copy_setup_from(prm_annular *psrc)
+{
+	if (NULL != psrc) {
+		reset();
+		name = psrc->name;
+		beta_inner = psrc->beta_inner;
+		beta_outer = psrc->beta_outer;
+		type = psrc->type;
+		phi_begin = psrc->phi_begin;
+		phi_end = psrc->phi_end;
+	}
 }
 
 std::string prm_annular::get_str_info(bool header)
@@ -143,6 +230,83 @@ int prm_annular::setup_data(std::string str_ctrl)
 	return 0;
 }
 
+int prm_annular::calculate_func_jms(CJMultiSlice *pjms, bool b_create_mask)
+{
+	int nerr = 0;
+	int nx = 0, ny = 0;
+	size_t nitems = 0;
+
+	if (NULL == pjms) {
+		nerr = 1;
+		std::cerr << "Error: (calculate_func_jms) invalid pointer to CJMultiSlice object." << std::endl;
+		goto _exit;
+	}
+
+	pjms->GetGridSize(nx, ny);
+	nitems = (size_t)nx * ny;
+
+	if (nitems > 0) {
+
+		if (NULL != msk) { free(msk); msk = NULL; }
+		if (NULL != det) { free(det); det = NULL; }
+		msklen = 0;
+
+		det = (float*)malloc(sizeof(float) * nitems);
+
+		if (det == NULL) {
+			nerr = 2;
+			std::cerr << "Error: (calculate_func_jms) failed to allocate memory for detector function." << std::endl;
+			goto _exit;
+		}
+
+		grid_nx = nx;
+		grid_ny = ny;
+
+		if (b_create_mask) {
+			msk = (int*)malloc(sizeof(int) * nitems);
+			if (msk == NULL) {
+				nerr = 3;
+				std::cerr << "Error: (calculate_func_jms) failed to allocate memory for detector access mask." << std::endl;
+				goto _exit;
+			}
+			msklen = 0;
+		}
+		nerr = pjms->CalculateRingDetector(beta_inner, beta_outer, phi_begin, phi_end, 0.f, 0.f, sens_profile_file, det, msklen, msk);
+	}
+
+_exit:
+	return nerr;
+}
+
+
+int prm_annular::set_func_jms(CJMultiSlice *pjms, int whichcode, int idx)
+{
+	int nerr = 0;
+
+	if (NULL == pjms) {
+		nerr = 1;
+		std::cerr << "Error: (set_func_jms) invalid pointer to CJMultiSlice object." << std::endl;
+		goto _exit;
+	}
+
+	if (idx < 0 || idx >= pjms->GetDetNum()) {
+		nerr = 2;
+		std::cerr << "Error: (set_func_jms) called with invalid detector index." << std::endl;
+		goto _exit;
+	}
+	
+	if (NULL == det) {
+		nerr = 3;
+		std::cerr << "Error: (set_func_jms) invalid pointer to detector function array." << std::endl;
+		goto _exit;
+	}
+
+	nerr = pjms->SetDetectorData(whichcode, idx, det, msklen, msk);
+
+_exit:
+	return nerr;
+}
+
 
 
 
@@ -165,10 +329,42 @@ prm_detector::~prm_detector()
 	v_annular.clear();
 }
 
-unsigned int prm_detector::get_num_det_annular()
+void prm_detector::copy_data_from(prm_detector *psrc)
 {
-	num_det_annular = (unsigned int)v_annular.size();
-	return num_det_annular;
+	if (psrc) {
+		b_annular = psrc->b_annular;
+		b_difpat = psrc->b_difpat;
+		b_difpat_avg = psrc->b_difpat_avg;
+		b_image = psrc->b_image;
+		b_wave = psrc->b_wave;
+		b_waveft = psrc->b_waveft;
+		b_wave_avg = psrc->b_wave_avg;
+		b_waveft_avg = psrc->b_waveft_avg;
+		v_annular = psrc->v_annular;
+	}
+}
+
+void prm_detector::copy_setup_from(prm_detector *psrc)
+{
+	if (psrc) {
+		b_annular = psrc->b_annular;
+		b_difpat = psrc->b_difpat;
+		b_difpat_avg = psrc->b_difpat_avg;
+		b_image = psrc->b_image;
+		b_wave = psrc->b_wave;
+		b_waveft = psrc->b_waveft;
+		b_wave_avg = psrc->b_wave_avg;
+		b_waveft_avg = psrc->b_waveft_avg;
+		size_t num_ann = psrc->v_annular.size();
+		v_annular.clear();
+		if (num_ann > 0) {
+			prm_annular ann_tmp;
+			for (int i = 0; i < (int)num_ann; i++) {
+				ann_tmp.copy_setup_from(&psrc->v_annular[i]);
+				v_annular.push_back(ann_tmp);
+			}
+		}
+	}
 }
 
 void prm_detector::print_setup_annular(std::vector<prm_annular> *pv_ad)
@@ -199,9 +395,7 @@ int prm_detector::setup_annular()
 	int ndet = 0;
 
 	// initialize local control interface
-	adtmp.btalk = btalk;
-	adtmp.binteractive = binteractive;
-	adtmp.ndebug = ndebug;
+	adtmp.set_ctrl(*this);
 	v_ad_tmp = v_annular;
 
 	if (binteractive) {
@@ -244,8 +438,7 @@ int prm_detector::setup_annular()
 		}
 		// store setup in the object member
 		v_annular = v_ad_tmp;
-		num_det_annular = (unsigned int)v_annular.size();
-		ndet = (int)num_det_annular;
+		ndet = (int)v_annular.size();
 		if (ndet > 0) { // write the setup to the list of control lines
 			for (i = 0; i < ndet; i++) {
 				v_str_ctrl.push_back("set_det_annular");
@@ -268,5 +461,21 @@ int prm_detector::setup_annular()
 		print_setup_annular(); // print the current temporary setup
 	}
 
+	if (v_annular.size() > 0) {
+		b_annular = true;
+	}
+
 	return ierr;
+}
+
+
+int prm_detector::get_jms_flags()
+{
+	int ndetflg = (int)_JMS_DETECT_NONE;
+	if (b_annular) ndetflg += (int)_JMS_DETECT_INTEGRATED;
+	if (b_difpat || b_difpat_avg) ndetflg += (int)_JMS_DETECT_DIFFRACTION;
+	if (b_image) ndetflg += (int)_JMS_DETECT_IMAGE;
+	if (b_wave || b_waveft_avg) ndetflg += (int)_JMS_DETECT_WAVEREAL;
+	if (b_waveft || b_waveft_avg) ndetflg += (int)_JMS_DETECT_WAVEFOURIER;
+	return ndetflg;
 }

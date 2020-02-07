@@ -28,6 +28,7 @@
 ----------------------------------------------------------------------- */
 
 #include "prm_main.h"
+#include "multislice.h"
 #include "JMultiSliceLib.h"
 
 
@@ -199,6 +200,14 @@ int setup(prm_main *pprm)
 		}
 	}
 
+	// - Output file name
+	ierr = pprm->setup_file_output();
+	if (0 < ierr) {
+		nerr = 1500 + ierr;
+		std::cerr << "Failed to setup output file name. Falling back to default 'output'." << std::endl;
+		pprm->str_out_file = "output";
+	}
+
 	// - Sample
 	ierr = pprm->setup_sample();
 	if (0 < ierr) {
@@ -217,16 +226,46 @@ int setup(prm_main *pprm)
 		goto exit;
 	}
 
-	// - Scanning
-	
-	// - Multislice
-
 	// - Detectors
 	ierr = pprm->setup_detector();
 	if (0 < ierr) {
 		nerr = 4000 + ierr;
 		std::cerr << "Failed to setup detectors. Unable to calculate." << std::endl;
 		goto exit;
+	}
+
+	// - Scanning
+	ierr = pprm->setup_scan();
+	if (0 < ierr) {
+		nerr = 5000 + ierr;
+		std::cerr << "Failed to setup scan. Unable to calculate." << std::endl;
+		goto exit;
+	}
+	
+exit:
+	return nerr;
+}
+
+
+int calculate(prm_main *pprm)
+{
+	int nerr = 0;
+
+	if (NULL == pprm) {
+		nerr = 1;
+		std::cerr << "Error: parameter interface missing in (calculate)" << std::endl;
+		goto exit;
+	}
+
+	// determine calculation scheme
+	if ((pprm->gpu_id >= 0 && pprm->cpu_num == 0) ||
+		(pprm->gpu_id < 0 && pprm->cpu_num == 1)) {
+		// pure gpu calculation (no multi-threading)
+		nerr = singlethread_run(pprm);
+	}
+	else {
+		// multi-threading calculation
+		nerr = multithread_run(pprm);
 	}
 
 exit:
@@ -283,8 +322,6 @@ int main(int argc, char* argv[])
 		nerr = ierr;
 		goto exit;
 	}
-
-	// run parameter consistency checks
 
 	// run calculations
 

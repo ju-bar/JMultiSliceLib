@@ -32,6 +32,7 @@
 #pragma once
 
 #include "params.h"
+#include "JMultiSlice.h"
 
 #ifndef _ANNULAR_TYPES
 #define _ANNULAR_TYPES
@@ -47,6 +48,9 @@ public:
 	// standard constructor
 	prm_annular();
 
+	// copy constructor
+	prm_annular(const prm_annular &src);
+
 	// destructor
 	~prm_annular();
 
@@ -58,8 +62,25 @@ public:
 	float phi_begin; // segement azimuth begin (deg) with ANNULAR_SEGMENTED
 	float phi_end; // segement azimuth end (deg) with ANNULAR_SEGMENTED
 
+	std::string sens_profile_file; // name of a sensitivity profile
+
+protected:
+	int msklen; // length of the detector mask
+	int *msk; // detector function access array (length given by msklen)
+	int grid_nx; // detector grid dimension along x (reflects 0th dim of how det and msk are allocated)
+	int grid_ny; // detector grid dimension along y (reflects 1st dim of how det and msk are allocated)
+	float *det; // detector function with response values for each reciprocal grid pixel
+
+public:
+	// copy operator
+	prm_annular& operator= (const prm_annular &src);
+
 	// resets the data to default
 	void reset(void);
+
+	// copies setup parameters from psrc
+	// - doesn't copy contents of buffers det and msk
+	void copy_setup_from(prm_annular *psrc);
 
 	// returns a formatted string with annular detector information
 	// call with argument true to get a table header string
@@ -72,6 +93,12 @@ public:
 	// user input and setup of annular detector data
 	// returns an error code (0: success)
 	int setup_data(std::string str_ctrl = "");
+
+	// calculate the annular detector function for JMS
+	int calculate_func_jms(CJMultiSlice *pjms, bool b_create_mask = true);
+
+	// transfer the annular detector function to JMS
+	int set_func_jms(CJMultiSlice *pjms, int whichcode, int idx);
 };
 
 
@@ -99,14 +126,15 @@ public:
 
 	std::vector<prm_annular> v_annular; // list of registered annular detectors
 
-protected:
-
-	unsigned int num_det_annular; // number of registered annular detectors
 
 public:
 
-	// Returns number of registered annular detectors.
-	unsigned int get_num_det_annular(void);
+	// copies all data from psrc to this object
+	void copy_data_from(prm_detector *psrc);
+
+	// copies setup data from psrc to this object
+	// - doesn't copy detector functions and masks
+	void copy_setup_from(prm_detector *psrc);
 
 	// Prints an annular detector setup.
 	// The setup may be provided as pointer to a std::vector<prm_annular> object
@@ -115,6 +143,9 @@ public:
 
 	// user input and setup of annular detectors
 	int setup_annular(void);
+
+	// returns an int detection flag set for CJMultiSlice
+	int get_jms_flags(void);
 
 };
 

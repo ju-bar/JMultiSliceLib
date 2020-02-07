@@ -25,9 +25,8 @@
 
 #pragma once
 #include "params.h"
-#include "prm_sample.h"
-#include "prm_probe.h"
-#include "prm_detector.h"
+#include "prm_result.h"
+#include "JMultiSliceLib.h"
 
 class prm_main :
 	public params
@@ -45,6 +44,9 @@ public:
 	prm_sample sample; // sample data
 	prm_probe probe; // TEM probe data
 	prm_detector detector; // detector data
+	prm_scan scan; // scan data
+
+	prm_result stem_images; // STEM imaging results
 
 	// Methods
 
@@ -57,6 +59,9 @@ public:
 	// user input and setup of multiple CPU threads
 	int setup_cpu(void);
 
+	// user input and setup of output file name
+	int setup_file_output(void);
+
 	// user input and setup of sample data
 	int setup_sample(void);
 
@@ -65,5 +70,14 @@ public:
 
 	// user input and setup of detector data
 	int setup_detector(void);
+
+	// user input and setup of probe scanning
+	int setup_scan(void);
+
+	// prepare transmission functions (phase gratings) from current sample setup
+	int prepare_sample_pgr(void);
+
+	// prepare result parameter members to recieve data and store backups of the calculation setup
+	int prepare_result_params(void);
 };
 

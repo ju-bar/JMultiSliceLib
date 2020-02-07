@@ -575,6 +575,11 @@ int CJMultiSlice::SetDetectionPlanes(int ndetper, int nobjslc, int * det_objslc)
 	int islc = 0;
 	int ndetslc = 0;
 	int noslc = __max(0, nobjslc);
+	if (det_objslc && nobjslc > 0) {
+		for (islc = 0; islc <= nobjslc; islc++) { // preset all slices for no detection
+			det_objslc[islc] = -1;
+		}
+	}
 	// detection plane flagging logics:
 	// - ndetper == 0 -> only last slice, no entrance plane
 	//            > 0 -> at least entrance plane and exit plane
@@ -608,6 +613,45 @@ int CJMultiSlice::SetDetectionPlanes(int ndetper, int nobjslc, int * det_objslc)
 	else { // readout at exit plane only
 		if (det_objslc) {
 			det_objslc[noslc] = 0;
+		}
+		ndetslc = 1;
+	}
+	return ndetslc;
+}
+
+
+int CJMultiSlice::SetDetectionPlanes(std::vector<int> slc_det, int nobjslc, int * det_objslc)
+{
+	int islc = 0;
+	int ndetslc = 0;
+	int ndetlist = (int)slc_det.size();
+	int noslc = __min(__max(0, nobjslc), ndetlist);
+	if (det_objslc && nobjslc > 0) {
+		for (islc = 0; islc <= nobjslc; islc++) { // preset all slices for no detection
+			det_objslc[islc] = -1;
+		}
+	}
+	if (ndetlist > 0) { // handle intermediate detections
+		if (noslc > 0) { // object slices are present
+			for (islc = 0; islc <= noslc; islc++) { // loop from entrance plane to exit plane
+				if (0 <= slc_det[islc]) { // readout at intermetiate periodic planes
+					if (det_objslc) {
+						det_objslc[islc] = slc_det[islc];
+					}
+					ndetslc++;
+				}
+			}
+		}
+		else { // readout at entrance plane only
+			if (det_objslc) {
+				det_objslc[0] = 0;
+			}
+			ndetslc = 1;
+		}
+	}
+	else { // readout at exit plane only
+		if (det_objslc) {
+			det_objslc[nobjslc] = 0;
 		}
 		ndetslc = 1;
 	}
@@ -722,6 +766,115 @@ _Exit:
 	}
 	return nerr;
 }
+
+
+int CJMultiSlice::DetectorSetup(int whichcode, std::vector<int> slc_det, int ndetint, int imagedet, int nthreads_CPU)
+{
+	// Assumes prior object slice setup done and successful via ObjectSliceSetup
+	int nerr = 0;
+	int islc = 0;
+	int64_t ndetitems = 0;
+	size_t nitems = (size_t)m_nscx*m_nscy;
+	int nthreads = __max(1, nthreads_CPU);
+	size_t nbytes = 0;
+	// clean previous setup (should usually not be necessary)
+	m_ndet = 0;
+	m_ndetper = 0;
+	m_imagedet = (int)_JMS_DETECT_INTEGRATED;
+	m_ndetslc = 0;
+	m_threads_CPU_out = 0;
+
+	// check for prerequisites
+	if (((whichcode & (int)_JMS_CODE_CPU) > 0) && ((m_status_setup_CPU&_JMS_STATUS_OBJ) == 0)) {
+		std::cerr << "Error: (DetectorSetup): no previous object slice setup for CPU code." << std::endl;
+		nerr = 1;
+	}
+	if (((whichcode & (int)_JMS_CODE_GPU) > 0) && ((m_status_setup_GPU&_JMS_STATUS_OBJ) == 0)) {
+		std::cerr << "Error: (DetectorSetup): no previous object slice setup for GPU code." << std::endl;
+		nerr = 101;
+	}
+	if (nerr > 0) goto _Exit;
+
+	// Preparations common to both codes
+	m_imagedet = imagedet;
+	// - determine the number of slices with detection and set detection hash table
+	nbytes = sizeof(int)*(m_nobjslc + 1);
+	if (0 < AllocMem_h((void**)&m_det_objslc, nbytes, "DetectorSetup", "slice -> detector hash")) { nerr = 2; goto _Exit; }
+	for (islc = 0; islc <= m_nobjslc; islc++) { // preset for no detection
+		m_det_objslc[islc] = -1;
+	}
+	m_ndetslc = SetDetectionPlanes(slc_det, m_nobjslc, m_det_objslc);
+	if (ndetint > 0) { // use integrating diffraction plane detectors
+		m_ndet = ndetint; // set number of detectors
+		if (0 < AllocMem_h((void**)&m_detmask_len, sizeof(int)*m_ndet, "DetectorSetup", "detector mask lengths", true)) { nerr = 7; goto _Exit; }
+	}
+
+	// CPU code - detector setup -> Memory prepared but no data set.
+	if ((whichcode & (int)_JMS_CODE_CPU) && (m_imagedet > (int)_JMS_DETECT_NONE)) {
+		m_threads_CPU_out = nthreads;
+		if ((m_ndet > 0) && (m_imagedet & (int)_JMS_DETECT_INTEGRATED)) { // Prepare integrating detector arrays
+			nbytes = sizeof(float*)*(size_t)m_ndet;
+			if (0 < AllocMem_h((void**)&m_h_det, nbytes, "DetectorSetup", "detector function addresses", true)) { nerr = 3; goto _Exit; }
+			nbytes = sizeof(int*)*(size_t)m_ndet;
+			if (0 < AllocMem_h((void**)&m_h_detmask, nbytes, "DetectorSetup", "detector mask addresses", true)) { nerr = 8; goto _Exit; }
+			nbytes = sizeof(float)*(size_t)m_ndet*m_ndetslc*m_threads_CPU_out;
+			if (0 < AllocMem_h((void**)&m_h_det_int, nbytes, "DetectorSetup", "integrated detector channels", true)) { nerr = 4; goto _Exit; }
+		}
+		if (m_imagedet&_JMS_DETECT_IMAGE) { // prepare image plane readout arrays
+			nbytes = sizeof(float)*nitems*m_ndetslc*m_threads_CPU_out;
+			if (0 < AllocMem_h((void**)&m_h_det_img, nbytes, "DetectorSetup", "image planes", true)) { nerr = 5; goto _Exit; }
+		}
+		if (m_imagedet&_JMS_DETECT_DIFFRACTION) { // prepare diffraction plane readout arrays
+			nbytes = sizeof(float)*nitems*m_ndetslc*m_threads_CPU_out;
+			if (0 < AllocMem_h((void**)&m_h_det_dif, nbytes, "DetectorSetup", "diffraction planes", true)) { nerr = 6; goto _Exit; }
+		}
+		if (m_imagedet&_JMS_DETECT_WAVEREAL) { // prepare psi(r) readout arrays
+			nbytes = sizeof(fcmplx)*nitems*m_ndetslc*m_threads_CPU_out;
+			if (0 < AllocMem_h((void**)&m_h_det_wfr, nbytes, "DetectorSetup", "real-space wavefunction", true)) { nerr = 7; goto _Exit; }
+		}
+		if (m_imagedet&_JMS_DETECT_WAVEFOURIER) { // prepare psi(k) readout arrays
+			nbytes = sizeof(fcmplx)*nitems*m_ndetslc*m_threads_CPU_out;
+			if (0 < AllocMem_h((void**)&m_h_det_wff, nbytes, "DetectorSetup", "Fourier-space wavefunction", true)) { nerr = 9; goto _Exit; }
+		}
+	}
+
+	// GPU code - detector setup -> Memory prepared but no data set.
+	if ((whichcode & (int)_JMS_CODE_GPU) && (m_imagedet > (int)_JMS_DETECT_NONE)) {
+		ndetitems = (int64_t)m_ndet*nitems;
+		if ((ndetitems > 0) && (m_imagedet & (int)_JMS_DETECT_INTEGRATED)) { // make sure to allocate integrated detectors only if data is expected.
+			nbytes = sizeof(float)*(size_t)ndetitems;
+			if (0 < AllocMem_d((void**)&m_d_det, nbytes, "DetectorSetup", "detector functions", true)) { nerr = 103; goto _Exit; }
+			nbytes = sizeof(int)*(size_t)ndetitems;
+			if (0 < AllocMem_d((void**)&m_d_detmask, nbytes, "DetectorSetup", "detector masks", true)) { nerr = 108; goto _Exit; }
+			nbytes = sizeof(float)*(size_t)m_ndet*m_ndetslc;
+			if (0 < AllocMem_h((void**)&m_d_det_int, nbytes, "DetectorSetup", "integrated detector channels, GPU", true)) { nerr = 104; goto _Exit; }
+		}
+		if (m_imagedet&_JMS_DETECT_IMAGE) { // prepare image plane readout arrays
+			nbytes = sizeof(float)*nitems*m_ndetslc; // calculate number of bytes to allocate
+			if (0 < AllocMem_d((void**)&m_d_det_img, nbytes, "DetectorSetup", "image planes", true)) { nerr = 105; goto _Exit; }
+		}
+		if (m_imagedet&_JMS_DETECT_DIFFRACTION) { // prepare diffraction plane readout arrays
+			nbytes = sizeof(float)*nitems*m_ndetslc; // calculate number of bytes to allocate
+			if (0 < AllocMem_d((void**)&m_d_det_dif, nbytes, "DetectorSetup", "diffraction planes", true)) { nerr = 106; goto _Exit; }
+		}
+		if (m_imagedet&_JMS_DETECT_WAVEREAL) { // prepare psi(r) readout arrays
+			nbytes = sizeof(cuComplex)*nitems*m_ndetslc; // calculate number of bytes to allocate
+			if (0 < AllocMem_d((void**)&m_d_det_wfr, nbytes, "DetectorSetup", "real-space wavefunction", true)) { nerr = 107; goto _Exit; }
+		}
+		if (m_imagedet&_JMS_DETECT_WAVEFOURIER) { // prepare psi(k) readout arrays
+			nbytes = sizeof(cuComplex)*nitems*m_ndetslc; // calculate number of bytes to allocate
+			if (0 < AllocMem_d((void**)&m_d_det_wff, nbytes, "DetectorSetup", "Fourier-space wavefunction", true)) { nerr = 109; goto _Exit; }
+		}
+	}
+
+_Exit:
+	if (nerr == 0) {
+		if (whichcode & (int)_JMS_CODE_CPU) m_status_setup_CPU |= (int)_JMS_STATUS_DET;
+		if (whichcode & (int)_JMS_CODE_GPU) m_status_setup_GPU |= (int)_JMS_STATUS_DET;
+	}
+	return nerr;
+}
+
 
 
 void CJMultiSlice::SetSliceThickness(int islc, float fthickness)

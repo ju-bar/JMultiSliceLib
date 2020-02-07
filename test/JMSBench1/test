@@ -12,10 +12,20 @@ set_sample_thickness_max
 128
 set_sample_thickness_step
 4
+set_sample_tilt
+0 0
 set_probe_ekv
 200.000000
 set_probe_convergence
 25.000000
+set_scan_beam_pos
+0 0
+set_scan_frame_size
+0.782 0.782
+set_scan_sampling
+78 78
+set_scan_frame_rot
+0
 set_det_annular
 80 200 0.0 0.0 HAADF
 set_det_annular

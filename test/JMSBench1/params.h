@@ -30,11 +30,14 @@
 #include <fstream>
 #include <vector>
 #include "perfclock.h"
+#include "string_format.h"
+
 class params
 {
 public:
 
 	params(); // standard constructor
+	params(const params &prm); // copy constructor
 	~params(); // destructor
 
 	// member parameters
@@ -59,6 +62,9 @@ protected:
 
 public:
 
+	// set control interface parameters in base class members
+	void set_ctrl(const params &ctrl);
+
 	// checks whether a file specified by its file name (sfile) exists
 	bool file_exists(std::string sfile);
 
@@ -74,6 +80,7 @@ public:
 	// separates a single parameter string (*prm)
 	// from a list of parameters in a string (*pstr)
 	// beginning with position (ipos) of (*pstr)
+	// returns a position in pstr which might be the offset for the next parameter
 	int read_param(int ipos, std::string * pstr, std::string * prm);
 
 	// converts a string to int
