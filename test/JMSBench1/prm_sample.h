@@ -88,6 +88,11 @@ public:
 	// load data from slice file headers and fill related data members
 	int load_sli_file_headers(void);
 
+	// prepare buffers and load daa from slice files
+	// - assumes previous successful call of load_sli_file_headers
+	// (actual loading may be postponed by load-on-demand switches, to be implemented later)
+	int load_sli_file_data(void);
+
 	// setup the sample thickness / slice sequence
 	unsigned int setup_thickness(void);
 

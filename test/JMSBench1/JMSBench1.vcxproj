@@ -23,19 +23,19 @@
     <ProjectGuid>{BC9E0420-8819-4492-8DD8-0106F0FBAF51}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>JMSBench1</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.17134.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
@@ -111,7 +111,7 @@
       <PrecompiledHeaderFile>
       </PrecompiledHeaderFile>
       <PrecompiledHeaderOutputFile />
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\fftw\include;$(ProjectDir)..\..\src;$(CUDA_PATH_V10_2)\include;C:\Program Files (x86)\IntelSWTools\parallel_studio_xe_2018\compilers_and_libraries_2018\windows\mkl\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\fftw\include;$(ProjectDir)..\..\src;$(CUDA_PATH_V10_2)\include;C:\Program Files (x86)\IntelSWTools\compilers_and_libraries\windows\mkl\include</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
     </ClCompile>
     <Link>
@@ -153,7 +153,7 @@
       <PrecompiledHeaderFile>
       </PrecompiledHeaderFile>
       <PrecompiledHeaderOutputFile />
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\fftw\include;$(ProjectDir)..\..\src;$(CUDA_PATH_V10_2)\include;C:\Program Files (x86)\IntelSWTools\parallel_studio_xe_2018\compilers_and_libraries_2018\windows\mkl\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\..\fftw\include;$(ProjectDir)..\..\src;$(CUDA_PATH_V10_2)\include;C:\Program Files (x86)\IntelSWTools\compilers_and_libraries\windows\mkl\include</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>

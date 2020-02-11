@@ -426,6 +426,29 @@ exit:
 }
 
 
+int prm_sample::load_sli_file_data(void)
+{
+	int nerr = 0, ierr = 0;
+	unsigned int nslc = (unsigned int)v_slc.size();
+
+	if (nslc > 0) {
+		std::string sfile;
+		for (unsigned int i = 0; i < nslc; i++) {
+			sfile = generate_ser_file_name(str_slc_file_pre + "_", i + 1, 3, str_slc_file_suf);
+			ierr = v_slc[i].load_ems_data(sfile);
+			if (0 < ierr) {
+				nerr = 1;
+				std::cerr << "Error: (load_sli_file_data) failed to load data from file " << sfile << " (" << ierr << ")." << std::endl;
+				goto _exit;
+			}
+		}
+	}
+
+_exit:
+	return nerr;
+}
+
+
 unsigned int prm_sample::get_num_slc_det(void)
 {
 	unsigned int num_slc_det = 0;
