@@ -348,7 +348,7 @@ int finish(prm_main *pprm)
 
 	if (pprm->btalk) {
 		std::cout << std::endl;
-		std::cout << "  Total time elapsed: " << std::setprecision(4) << 0.001f * pprm->clock.getmsec(false) << " s" << std::endl;
+		std::cout << "  Total time elapsed: " << std::setprecision(6) << 0.001f * pprm->clock.getmsec(false) << " s" << std::endl;
 		std::cout << std::endl;
 	}
 
