@@ -96,4 +96,7 @@
   <ItemGroup>
     <Text Include="input_command.txt" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="test" />
+  </ItemGroup>
 </Project>

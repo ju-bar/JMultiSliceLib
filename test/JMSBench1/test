@@ -15,7 +15,7 @@ set_sample_thickness_step
 set_sample_tilt
 0 0
 set_probe_ekv
-200.000000
+300.000000
 set_probe_convergence
 25.000000
 set_scan_beam_pos
