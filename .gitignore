@@ -260,3 +260,6 @@ paket-files/
 # Python Tools for Visual Studio (PTVS)
 __pycache__/
 *.pyc
+/test/JMSBench1/STO_001_300kV_qep_HAADF.bin
+/test/JMSBench1/STO_001_300kV_qep_BF.bin
+/test/JMSBench1/STO_001_300kV_qep_ABF.bin

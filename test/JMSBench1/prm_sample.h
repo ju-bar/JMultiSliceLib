@@ -59,13 +59,14 @@ public:
 	unsigned int grid_ny; // potential samples along y
 	float grid_a0; // potential grid size along x (nm)
 	float grid_a1; // potential grid size along y (nm)
+	float grid_a2; // potential grid size along z (nm)
 	float grid_ekv; // electron energy from sample data (keV)
 	float tilt_x; // sample tilt along x (mrad)
 	float tilt_y; // sample tilt along y (mrad)
 
 	std::vector<unsigned int> v_slc_obj; // list of object slice indices stacked to max. thickness
 	std::vector<int> v_slc_det; // list of object slice detection plane indices; 0: before object, 1: after first slice, ... to slice at max. thickness
-	std::vector<prm_slice> v_slc; // list of slice data
+	std::vector<prm_slice> v_slc; // list of slice data, length represents the number of potential samples along z
 
 	// member functions
 

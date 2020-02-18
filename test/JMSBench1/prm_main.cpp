@@ -434,20 +434,23 @@ int prm_main::prepare_sample_pgr(void)
 {
 	int nerr = 0, ierr = 0;
 
-	if (btalk || binteractive) {
-		std::cout << std::endl;
-		std::cout << "  Preparing object transmission functions ..." << std::endl;
-	}
-
 	// Create or load phase gratings from information in member variable sample
 	switch (sample.input_form) {
 	case SAMPLE_INF_CEL:
+		if (btalk || binteractive) {
+			std::cout << std::endl;
+			std::cout << "  Calculating object transmission functions ..." << std::endl;
+		}
 		// TODO: implement atomic structure input options
 		nerr = 2;
 		std::cerr << "Error: (prepare_sample_pgr) atomic structure input currently not supported." << std::endl;
 		goto _exit;
 		break;
 	case SAMPLE_INF_SLI:
+		if (btalk || binteractive) {
+			std::cout << std::endl;
+			std::cout << "  Loading object transmission functions ..." << std::endl;
+		}
 		ierr = sample.load_sli_file_data();
 		if (0 < ierr) {
 			nerr = 10;
@@ -489,7 +492,7 @@ int prm_main::prepare_result_params()
 			free(stem_images.pdata);
 			stem_images.sz_data = 0;
 		}
-		stem_images.sz_data = (size_t)scan.nx*scan.ny*num_det_pln*num_ann;
+		stem_images.sz_data = stem_images.get_item_bytes() * scan.nx * scan.ny * num_det_pln * num_ann;
 		if (stem_images.sz_data > 0) {
 			stem_images.pdata = (float*)malloc(stem_images.sz_data);
 			if (NULL == stem_images.pdata) {

@@ -80,7 +80,7 @@ int prm_slice::load_ems_data(std::string sfile)
 		goto exit;
 	}
 	// open the file
-	fs.open(sfile);
+	fs.open(sfile, std::ios::binary);
 	if (fs.is_open()) {
 		// goto data offset
 		fs.seekg((std::streampos)header.data_offset);

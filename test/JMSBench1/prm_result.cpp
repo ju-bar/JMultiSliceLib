@@ -81,6 +81,42 @@ prm_result::~prm_result()
 }
 
 
+size_t prm_result::get_item_bytes()
+{
+	size_t szi = 0;
+	switch (data_type) {
+	case _RESULT_DATA_TYPE_FLOAT:
+		szi = sizeof(float);
+		break;
+	case _RESULT_DATA_TYPE_COMPLEX:
+		szi = sizeof(fcmplx);
+		break;
+	default:
+		szi = 1;
+	}
+	return szi;
+}
+
+
+std::string prm_result::get_data_type_name(void)
+{
+	std::string sname = "";
+
+	switch (data_type) {
+	case _RESULT_DATA_TYPE_FLOAT:
+		sname = "32-bit float";
+		break;
+	case _RESULT_DATA_TYPE_COMPLEX:
+		sname = "64-bit complex";
+		break;
+	default:
+		sname = "unknown";
+	}
+
+	return sname;
+}
+
+
 size_t prm_result::get_data_bytes()
 {
 	sz_data = 0;
@@ -142,7 +178,7 @@ float prm_result::get_dataf(std::vector<unsigned int> v_pos)
 {
 	float f_val = 0.f;
 	if (NULL != pdata) {
-		f_val = pdata[get_pos_index(v_pos)];
+		f_val = ((float*)pdata)[get_pos_index(v_pos)];
 	}
 	return f_val;
 }
@@ -154,4 +190,76 @@ fcmplx prm_result::get_datac(std::vector<unsigned int> v_pos)
 		c_val = ((fcmplx*)pdata)[get_pos_index(v_pos)];
 	}
 	return c_val;
+}
+
+int prm_result::write_image_series(std::string sfilename, unsigned int idx_chan)
+{
+	int nerr = 0;
+	size_t dim_num = v_dim.size(); // number of data dimensions
+	size_t items_num = 0; // number of items per image (pixels)
+	size_t sz_out = 0; // size of output in bytes
+	size_t chan_pos = 0; // offset position (item) of the channel
+	unsigned int img_num = 1; // number of images per channel
+	unsigned int chan_num = 1; // number of channels
+	float* pchan = (float*)pdata; // pointer to the channel in pdata
+	std::ofstream ofs;
+	
+	if (dim_num < 2) {
+		nerr = 1;
+		std::cerr << "Error (write_image_series): data has insufficient number of dimensions to represent images." << std::endl;
+		goto _exit;
+	}
+
+	if (NULL == pdata || 0 == sz_data) {
+		nerr = 2;
+		std::cerr << "Error (write_image_series): data buffer not allocated." << std::endl;
+		goto _exit;
+	}
+
+	items_num = (size_t)v_dim[0] * v_dim[1];
+
+	if (dim_num > 2) {
+		img_num = v_dim[2];
+	}
+	if (dim_num > 3) {
+		chan_num = v_dim[3];
+	}
+
+	if (idx_chan >= chan_num) {
+		nerr = 3;
+		std::cerr << "Error (write_image_series): index of selected output channel (" << 
+			idx_chan << ") is too large for present number of channels (" << 
+			chan_num << ")." << std::endl;
+		goto _exit;
+	}
+
+	sz_out = get_item_bytes() * items_num * img_num; // size of the output in bytes
+	chan_pos = items_num * img_num * idx_chan;
+	pchan = &((float*)pdata)[chan_pos];
+
+	ofs.open(sfilename, std::ios::out | std::ios::trunc | std::ios::binary);
+	if (ofs.is_open()) {
+		ofs.write((char*)pchan, sz_out);
+		if (ofs.fail()) {
+			nerr = 5;
+			std::cerr << "Error (write_image_series): failed to write data to file [" << sfilename << "]." << std::endl;
+			goto _exit;
+		}
+	}
+	else {
+		nerr = 4;
+		std::cerr << "Error (write_image_series): failed to open file [" << sfilename << "]." << std::endl;
+		goto _exit;
+	}
+
+	if (btalk) {
+		std::cout << std::endl;
+		std::cout << "  Image series of channel #" << idx_chan << " written to file [" << sfilename << "]" << std::endl;
+		std::cout << "  - " << v_dim[0] << " x " << v_dim[1] << " x " << img_num << " x " << get_data_type_name() << std::endl;
+	}
+
+
+_exit:
+	if (ofs.is_open()) { ofs.close(); }
+	return nerr;
 }

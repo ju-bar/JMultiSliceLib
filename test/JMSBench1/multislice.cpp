@@ -477,6 +477,10 @@ _exit: // final state
 
 unsigned int __cdecl singlethread_run(prm_main *pprm)
 {
+	if (NULL == pprm) {
+		std::cerr << "Error (singlethread_run): invalid parameter interface." << std::endl;
+		return 666;
+	}
 	unsigned int nerr = 0, ierr = 0;
 	int njmserr = 0;
 	CJMultiSlice jms;
@@ -484,6 +488,7 @@ unsigned int __cdecl singlethread_run(prm_main *pprm)
 	jms_worker_init(&w);
 	unsigned int num_scan = 1;
 	unsigned int ix = 0, iy = 0, idx = 0; // scan indices
+	unsigned int ix0 = 0, ix1 = pprm->scan.nx, iy0 = 0, iy1 = pprm->scan.ny; // scan range
 	unsigned int i = 0, j = 0;
 	float scan_rot_sin = 0.f, scan_rot_cos = 1.f;
 	float scan_step_x = pprm->scan.get_step_x();
@@ -504,6 +509,7 @@ unsigned int __cdecl singlethread_run(prm_main *pprm)
 
 	jms.SetHighTension(pprm->probe.ekv);
 	jms.SetGridSize(pprm->sample.grid_nx, pprm->sample.grid_ny);
+	jms.SetSupercellSize(pprm->sample.grid_a0, pprm->sample.grid_a1, pprm->sample.grid_a2);
 	jms.SetGPUPgrLoading();
 	// jms.SetPlasmonMC(...);
 
@@ -515,9 +521,11 @@ unsigned int __cdecl singlethread_run(prm_main *pprm)
 			std::cerr << "Error: (singlethread_run) failed to set GPU #" << pprm->gpu_id << ". (" << njmserr << ")" << std::endl;
 			goto _exit;
 		}
+		w.n_thread = -1;
 	}
 	else {
 		w.whichcode = _JMS_CODE_CPU;
+		w.n_thread = 0;
 	}
 
 	if (pprm->scan.nx > 0 && pprm->scan.ny > 0) {
@@ -591,14 +599,14 @@ unsigned int __cdecl singlethread_run(prm_main *pprm)
 		std::cout << std::endl;
 	}
 	//
-	for (iy = 0; iy < pprm->scan.ny; iy++) {
+	for (iy = iy0; iy < iy1; iy++) {
 		//
-		for (ix = 0; ix < pprm->scan.nx; ix++) {
+		for (ix = ix0; ix < ix1; ix++) {
 			//
 			idx = ix + iy * pprm->scan.nx;
 			//
 			if (pprm->btalk) {
-				std::cout << "  scanning  x: " << ix << " / " << pprm->scan.nx << "   y: " << iy << " / " << pprm->scan.ny << "\r";
+				std::cout << "  scanning  x: " << ix+1 << " / " << pprm->scan.nx << "   y: " << iy+1 << " / " << pprm->scan.ny << "     \r";
 			}
 			//
 			w.f_dx = pprm->scan.offset_x + scan_rot_cos * scan_step_x * (float)ix - scan_rot_sin * scan_step_y * (float)iy;
@@ -611,7 +619,9 @@ unsigned int __cdecl singlethread_run(prm_main *pprm)
 			ierr = run_multislice(&w);
 			if (0 < ierr) {
 				nerr = 20;
-				std::cerr << "Error: (singlethread_run) failed to run multislice (" << ierr << ")." << std::endl;
+				std::cerr << "Error (JMS): " << w.str_err << std::endl;
+				std::cerr << "Error (singlethread_run): failed to run multislice (" << ierr << ")." << std::endl;
+				
 				goto _exit;
 			}
 			//
@@ -622,8 +632,8 @@ unsigned int __cdecl singlethread_run(prm_main *pprm)
 				// - {{plane 1, detector 1},{plane 2, detector 1}, ...{plane N, detector M}}
 				for (j = 0; j < num_ann; j++) { // for each detector j
 					for (i = 0; i < num_det_slc; i++) { // for each plane i
-						dst = &pprm->stem_images.pdata[w.n_scan_idx + i * num_scan + j * num_det_slc * num_scan];
-						src = &w.pf_res_int[i + j * num_ann];
+						dst = &((float*)pprm->stem_images.pdata)[w.n_scan_idx + i * num_scan + j * num_det_slc * num_scan];
+						src = &w.pf_res_int[i * num_ann + j];
 						*dst = *src / w.f_wgt;
 					}
 				}
@@ -644,6 +654,6 @@ unsigned int __cdecl multithread_run(prm_main *pprm)
 {
 	unsigned int nerr = 0;
 	std::cout << "Multi-threaded calculation is not yet implemented." << std::endl;
-_exit:
+//_exit:
 	return nerr;
 }

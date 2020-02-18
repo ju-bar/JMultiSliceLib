@@ -9,7 +9,7 @@ set_slc_num
 set_slc_file_name
 'STO_test'
 set_sample_thickness_max
-128
+64
 set_sample_thickness_step
 4
 set_sample_tilt
@@ -23,7 +23,7 @@ set_scan_beam_pos
 set_scan_frame_size
 0.782 0.782
 set_scan_sampling
-78 78
+40 40
 set_scan_frame_rot
 0
 set_det_annular
@@ -32,3 +32,5 @@ set_det_annular
 12 24 0.0 0.0 ABF
 set_det_annular
 0 10 0.0 0.0 BF
+set_output_file
+'STO_001_300kV_qep'

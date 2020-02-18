@@ -59,12 +59,12 @@ public:
 public:
 	// member data
 
-	unsigned int data_type; // data type flag (1 = float, 2 = complex)
+	unsigned int data_type; // data type flag (1 = 32-bit float, 2 = 64-bit complex)
 	unsigned int det_type; // copy of the _JMS_DETECT_* type used to calculate the result
 	std::vector<unsigned int> v_dim; // data dimensions
 	
 	size_t sz_data; // size of the data buffer, modify with care
-	float *pdata; // data buffer, modify with care
+	void *pdata; // data buffer, modify with care
 
 	std::string str_out_file; // file name used to save the data
 
@@ -75,6 +75,12 @@ public:
 
 	// member functions
 	
+	// Returns the number of bytes per data item as determined by data_type
+	size_t get_item_bytes(void);
+
+	// Returns a string label for teh current data_type
+	std::string get_data_type_name(void);
+
 	// Returns the number of bytes representing the data = buffer size (pdata)
 	size_t get_data_bytes(void); 
 
@@ -92,5 +98,13 @@ public:
 	// returns a complex element of result data
 	// Warning: The routine works without controlling consistency with object data and assumes pdata is allocated.
 	fcmplx get_datac(std::vector<unsigned int> v_pos);
+
+	// Writes a series of images from pdata for a selected channel to one file.
+	// Images are assumed to be made of the first 2 dimensions of pdata listed in v_dim.
+	// Channels are assumed to be the fourth index in v_dim, if existing
+	// With the above assumptions, the output can represent a thickness series.
+	// - sfilename = name of the output file
+	// - idx_chan = index of the output channel (detector, variation of parameter, etc.)
+	int write_image_series(std::string sfilename, unsigned int idx_chan);
 };
 

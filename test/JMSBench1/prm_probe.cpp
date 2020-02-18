@@ -238,7 +238,7 @@ int prm_probe::get_jpg_params(CJProbeParams *pjpp)
 	pjpp->m_fspread_width = focus_spread;
 	pjpp->m_source_shape = (int)size_distribution;
 	pjpp->m_source_width = size;
-	nab = __min(num_aberrations, pjpp->GetAberrationNum());
+	nab = __min((int)num_aberrations, pjpp->GetAberrationNum());
 	if (nab > 0) {
 		for (int i = 0; i < nab; i++) {
 			pjpp->m_abrr_coeff[2 * i] = aberrations[2 * i];

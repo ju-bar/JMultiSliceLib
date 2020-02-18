@@ -76,8 +76,9 @@ bool params::file_exists(std::string sfile)
 
 bool params::file_read_buf(std::ifstream *pfs, char * buf, size_t sz_item, size_t num_items)
 {
+	std::streamsize sz = (std::streamsize)sz_item*num_items;
 	if (!pfs->is_open()) return false;
-	pfs->read(buf, (std::streamsize)sz_item*num_items); // always read data from stream
+	pfs->read(buf, sz); // always read data from stream
 	if (pfs->bad()) return false;
 	if (in_byte_swap && sz_item > 1) { // support 2, 4, and 8 byte items
 		// swap bytes in buf

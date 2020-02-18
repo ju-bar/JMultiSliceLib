@@ -34,6 +34,10 @@
 
 int parseoptions(prm_main *pprm, int argc, char* argv[])
 {
+	if (NULL == pprm) {
+		std::cerr << "Error (parseoptions): missing parameter interface." << std::endl;
+		return 1;
+	}
 	pprm->btalk = true;
 	pprm->ndebug = 0;
 	if (argc > 1) {
@@ -96,6 +100,12 @@ int init(prm_main *pprm)
 	int ichk = 0;
 	int ichk2 = 0;
 
+	if (NULL == pprm) {
+		nerr = 1;
+		std::cerr << "Error (init): missing parameter interface." << std::endl;
+		goto exit;
+	}
+
 	pprm->bstore = false;
 	pprm->binteractive = false; // activate interactive mode to record input
 	pprm->v_str_ctrl.clear(); // clear input sequence
@@ -105,14 +115,14 @@ int init(prm_main *pprm)
 	if (pprm->btalk) {
 		std::cout << std::endl;
 		std::cout << "  +------------------------------------------+  " << std::endl;
-		std::cout << "  |                                          +  " << std::endl;
-		std::cout << "  |   JMSBench1 - version 1.0 - 2019-12-17   +  " << std::endl;
-		std::cout << "  |                                          +  " << std::endl;
-		std::cout << "  |   by J. Barthel                          +  " << std::endl;
-		std::cout << "  |      ju.barthel@fz-juelich.de            +  " << std::endl;
-		std::cout << "  |      Forschungszentrum Juelich GmbH      +  " << std::endl;
-		std::cout << "  |      52425 Juelich, Germany              +  " << std::endl;
-		std::cout << "  |                                          +  " << std::endl;
+		std::cout << "  |                                          |  " << std::endl;
+		std::cout << "  |   JMSBench1 - version 1.0 - 2020-02-12   |  " << std::endl;
+		std::cout << "  |                                          |  " << std::endl;
+		std::cout << "  |   by J. Barthel                          |  " << std::endl;
+		std::cout << "  |      ju.barthel@fz-juelich.de            |  " << std::endl;
+		std::cout << "  |      Forschungszentrum Juelich GmbH      |  " << std::endl;
+		std::cout << "  |      52425 Juelich, Germany              |  " << std::endl;
+		std::cout << "  |                                          |  " << std::endl;
 		std::cout << "  +------------------------------------------+  " << std::endl;
 		std::cout << std::endl;
 	}
@@ -161,6 +171,12 @@ int setup(prm_main *pprm)
 {
 	int ierr = 0;
 	int nerr = 0;
+
+	if (NULL == pprm) {
+		nerr = 1;
+		std::cerr << "Error (setup): missing parameter interface." << std::endl;
+		goto exit;
+	}
 
 	if (pprm->btalk || pprm->binteractive) {
 		std::cout << std::endl;
@@ -253,11 +269,16 @@ int calculate(prm_main *pprm)
 
 	if (NULL == pprm) {
 		nerr = 1;
-		std::cerr << "Error: parameter interface missing in (calculate)" << std::endl;
+		std::cerr << "Error (calculate): missing parameter interface." << std::endl;
 		goto exit;
 	}
 
-	// determine calculation scheme
+	// calculate phase gratings
+	nerr = pprm->prepare_sample_pgr();
+	if (0 < nerr) goto exit;
+
+
+	// determine multislice calculation scheme
 	if ((pprm->gpu_id >= 0 && pprm->cpu_num == 0) ||
 		(pprm->gpu_id < 0 && pprm->cpu_num == 1)) {
 		// pure gpu calculation (no multi-threading)
@@ -266,6 +287,42 @@ int calculate(prm_main *pprm)
 	else {
 		// multi-threading calculation
 		nerr = multithread_run(pprm);
+	}
+
+exit:
+	return nerr;
+}
+
+
+int output(prm_main *pprm)
+{
+	int ierr = 0, nerr = 0;
+	unsigned int det_num = 0, idet = 0;
+	std::string sfile = "";
+
+	if (NULL == pprm) {
+		nerr = 1;
+		std::cerr << "Error (output): missing parameter interface" << std::endl;
+		goto exit;
+	}
+
+	
+	if (pprm->stem_images.detector.b_annular && (0 < pprm->stem_images.get_data_bytes())) {
+		// store stem images for each detector separately, but as series over thickness
+		det_num = (unsigned int)pprm->stem_images.detector.v_annular.size(); // number of detectors
+		if (det_num > 0) { 
+			for (idet = 0; idet < det_num; idet++) { // loop over detectors
+				// generate file name
+				sfile = pprm->str_out_file + "_" + pprm->stem_images.detector.v_annular[idet].name + ".bin";
+				// write data to file
+				ierr = pprm->stem_images.write_image_series(sfile, idet);
+				if (0 < ierr) {
+					nerr = 2;
+					std::cerr << "Error (output): failed to write " << pprm->stem_images.detector.v_annular[idet].name  <<
+						" STEM images." << std::endl;
+				}
+			}
+		}
 	}
 
 exit:
@@ -324,8 +381,18 @@ int main(int argc, char* argv[])
 	}
 
 	// run calculations
+	ierr = calculate(&prm);
+	if (0 < ierr) {
+		nerr = ierr;
+		goto exit;
+	}
 
 	// output results
+	ierr = output(&prm);
+	if (0 < ierr) {
+		nerr = ierr;
+		goto exit;
+	}
 
 exit:
 

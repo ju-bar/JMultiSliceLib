@@ -39,6 +39,7 @@ prm_sample::prm_sample()
 	grid_ny = 0;
 	grid_a0 = 0.0f;
 	grid_a1 = 0.0f;
+	grid_a2 = 0.0f;
 	grid_ekv = 0.0f;
 	tilt_x = 0.0f;
 	tilt_y = 0.0f;
@@ -58,6 +59,7 @@ void prm_sample::copy_data_from(prm_sample *psrc)
 		str_slc_file_suf = psrc->str_slc_file_suf;
 		grid_a0 = psrc->grid_a0;
 		grid_a1 = psrc->grid_a1;
+		grid_a2 = psrc->grid_a2;
 		grid_ekv = psrc->grid_ekv;
 		grid_nx = psrc->grid_nx;
 		grid_ny = psrc->grid_ny;
@@ -82,6 +84,7 @@ void prm_sample::copy_setup_from(prm_sample *psrc)
 		str_slc_file_suf = psrc->str_slc_file_suf;
 		grid_a0 = psrc->grid_a0;
 		grid_a1 = psrc->grid_a1;
+		grid_a2 = psrc->grid_a2;
 		grid_ekv = psrc->grid_ekv;
 		grid_nx = psrc->grid_nx;
 		grid_ny = psrc->grid_ny;
@@ -92,7 +95,7 @@ void prm_sample::copy_setup_from(prm_sample *psrc)
 		int nslc = (int)psrc->v_slc.size();
 		if (nslc > 0) {
 			prm_slice slc_tmp;
-			for (int i = 0; i <= nslc; i++) {
+			for (int i = 0; i < nslc; i++) {
 				slc_tmp.header = psrc->v_slc[i].header;
 				v_slc.push_back(slc_tmp);
 			}
@@ -275,12 +278,11 @@ unsigned int prm_sample::setup_tilt()
 	std::string  stmp, sprm;
 
 	if (binteractive) {
-	_repeat_input:
 		std::cout << std::endl;
-		std::cout << "  Set the sampel tilt to the optics axis along x in mrad: ";
+		std::cout << "  Set the sample tilt to the optics axis along x in mrad: ";
 		std::cin >> tilt_x;
 		std::cout << std::endl;
-		std::cout << "  Set the sampel tilt to the optics axis along y in mrad: ";
+		std::cout << "  Set the sample tilt to the optics axis along y in mrad: ";
 		std::cin >> tilt_y;
 		v_str_ctrl.push_back("set_sample_tilt");
 		v_str_ctrl.push_back(format("%8.2f %8.2f", tilt_x, tilt_y));
@@ -396,6 +398,7 @@ int prm_sample::load_sli_file_headers(void)
 		std::string sfile;
 		prm_slice slc;
 		slc.set_ctrl(*this);
+		grid_a2 = 0.f;
 		for (unsigned int i = 0; i < nslc; i++) {
 			sfile = generate_ser_file_name(str_slc_file_pre + "_", i+1, 3, str_slc_file_suf);
 			ierr = slc.load_ems_header(sfile);
@@ -405,6 +408,7 @@ int prm_sample::load_sli_file_headers(void)
 				goto exit;
 			}
 			v_slc_tmp.push_back(slc);
+			grid_a2 += slc.header.sz;
 			if (i == 0) {
 				slc.get_grid_dim(&grid_nx, &grid_ny);
 				slc.get_grid_size(&grid_a0, &grid_a1);
@@ -420,6 +424,9 @@ int prm_sample::load_sli_file_headers(void)
 			}
 		}
 		v_slc = v_slc_tmp;
+		if (btalk) {
+			std::cout << "    slice data total thickness (nm): " << grid_a2 << std::endl;
+		}
 	}
 exit:
 	return ierr;

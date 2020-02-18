@@ -51,6 +51,13 @@ set_sample_thickness_step
 	series of images.
 
 
+set_sample_tilt
+<float> <float>
+
+	Set the sample tilt, i.e. the tilt of the z-axis of the input structure
+	relative to the optics axis in mrad.
+
+
 set_probe_ekv
 <float>
 
