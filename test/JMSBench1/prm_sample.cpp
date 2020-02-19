@@ -529,7 +529,7 @@ int prm_sample::setup_pgr_jms(CJMultiSlice *pjms, int whichcode)
 	ierr = pjms->PhaseGratingSetup(whichcode, grid_nx, grid_ny, nslc, nmaxvar, pnslcvar);
 	if (ierr != 0) {
 		nerr = 2;
-		std::cerr << "Error: (setup_pgr_jms) phase grating setup faileed in multislice module (" << ierr << ")." << std::endl;
+		std::cerr << "Error: (setup_pgr_jms) phase grating setup failed in multislice module (" << ierr << ")." << std::endl;
 		goto _exit;
 	}
 

@@ -3,8 +3,8 @@
 // implementation for library JMultislice.lib (declarations see JMultislice.h)
 //
 //
-// Copyright (C) 2018, 2019 - Juri Barthel (juribarthel@gmail.com)
-// Copyright (C) 2018, 2019 - Forschungszentrum Jülich GmbH, 52425 Jülich, Germany
+// Copyright (C) 2018, 2020 - Juri Barthel (juribarthel@gmail.com)
+// Copyright (C) 2018, 2020 - Forschungszentrum Jülich GmbH, 52425 Jülich, Germany
 //
 //
 /*
@@ -488,6 +488,7 @@ int CJMultiSlice::PhaseGratingSetup(int whichcode, int nx, int ny, int nslc, int
 		if (memoffset > 0) { // make sure to allocate only if data is expected.
 			if (0 == m_d_pgr_src) { // try allocation for pre-loading of all phase gratings to device
 				if (0 < AllocMem_d((void**)&m_d_pgr, sizeof(cuComplex)*memoffset, "PhaseGratingSetup", "phase gratings", true)) {
+					std::cerr << "  - Setting single phase grating mode on GPU." << std::endl;
 					m_d_pgr_src = 1; // continue trying to use load-on-demand
 				}
 			}
@@ -497,7 +498,9 @@ int CJMultiSlice::PhaseGratingSetup(int whichcode, int nx, int ny, int nslc, int
 				}
 				if (NULL == m_h_pgr) { // single phase grating mode needs phase grating pointers on host
 					// allocate host pointer list // allocate this list here, make sure to check setup in SetPhaseGratingData
-					if (0 < AllocMem_h((void**)&m_h_pgr, sizeof(fcmplx*)*m_nscslc, "PhaseGratingSetup", "phase grating addresses", true)) { nerr = 105; goto _Exit; }
+					if (0 < AllocMem_h((void**)&m_h_pgr, sizeof(fcmplx*)*m_nscslc, "PhaseGratingSetup", "phase grating addresses", true)) {
+						nerr = 105; goto _Exit; // cannot use GPU
+					}
 				}
 			}
 		}
@@ -2894,20 +2897,16 @@ void CJMultiSlice::PostCUDAError(char* smsg, cudaError code)
 {
 	if (code > 0) {
 		std::cerr << "Error: " << smsg << ", code: " << code << std::endl;
-		std::cerr << "     - " << cudaGetErrorString(code) << std::endl;
+		std::cerr << "  - " << cudaGetErrorString(code) << std::endl;
 	}
 }
 
 void CJMultiSlice::PostCUDAMemory(size_t nrequestedbytes)
 {
-	int64_t memavail = 0, memtotal = 0;
-	int idev = 0, cc1 = 0, cc2 = 0, nmaxthread = 0;
-	idev = GetCurrentGPU();
-	if (idev >= 0) {
-		if (0 == GetGPUStats(idev, cc1, cc2, nmaxthread, memtotal, memavail)) {
-			std::cerr << "  - requested device memory [MB]: " << nrequestedbytes / 1048576;
-			std::cerr << "  - available device memory [MB]: " << memavail / 1048576;
-		}
+	size_t memtotal = 0, memavail = 0;
+	if (0 == GetGPUMemInfo(memtotal, memavail)) {
+		std::cerr << "  - requested device memory [MB]: " << (nrequestedbytes >> 20) << std::endl;
+		std::cerr << "  - available device memory [MB]: " << (memavail >> 20) << std::endl;
 	}
 }
 
@@ -3047,6 +3046,12 @@ int CJMultiSlice::SetGPUPgrLoading(int npgrload)
 int CJMultiSlice::AllocMem_d(void ** _d_a, size_t size, char* callfn, char* arrnam, bool zero)
 {
 	cudaError cuerr;
+	size_t gpu_mem_tot = 0, gpu_mem_free = 0;
+	GetGPUMemInfo(gpu_mem_tot, gpu_mem_free);
+	if (size > gpu_mem_free) {
+		std::cerr << "Error: requested memory (" << (size >> 20) << " MB) is larger than available memory (" << (gpu_mem_free >> 20) << " MB)." << std::endl;
+		return 1;
+	}
 	if (NULL != *_d_a) {
 		cuerr = cudaFree(*_d_a);
 		*_d_a = NULL;
@@ -3057,14 +3062,14 @@ int CJMultiSlice::AllocMem_d(void ** _d_a, size_t size, char* callfn, char* arrn
 			sprintf_s(m_msg, "(%s): Failed to allocate device memory (%s)", callfn, arrnam);
 			PostCUDAError(m_msg, cuerr);
 			PostCUDAMemory(size);
-			return 1;
+			return 2;
 		}
 		if (zero) {
 			cuerr = cudaMemset(*_d_a, 0, size);
 			if (cuerr != cudaSuccess) {
 				sprintf_s(m_msg, "(%s): Failed to zeroe device memory (%s)", callfn, arrnam);
 				PostCUDAError(m_msg, cuerr);
-				return 2;
+				return 3;
 			}
 		}
 	}

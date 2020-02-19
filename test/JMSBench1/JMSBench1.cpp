@@ -116,7 +116,7 @@ int init(prm_main *pprm)
 		std::cout << std::endl;
 		std::cout << "  +------------------------------------------+  " << std::endl;
 		std::cout << "  |                                          |  " << std::endl;
-		std::cout << "  |   JMSBench1 - version 1.0 - 2020-02-12   |  " << std::endl;
+		std::cout << "  |   JMSBench1 - version 1.0 - 2020-02-19   |  " << std::endl;
 		std::cout << "  |                                          |  " << std::endl;
 		std::cout << "  |   by J. Barthel                          |  " << std::endl;
 		std::cout << "  |      ju.barthel@fz-juelich.de            |  " << std::endl;
