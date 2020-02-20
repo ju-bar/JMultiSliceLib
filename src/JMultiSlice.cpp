@@ -3093,13 +3093,28 @@ float CJMultiSlice::DotProduct_d(float *in_1, float *in_2, size_t len, int nBloc
 	/*       Using ArrayOps on Device                                             */
 	float fsum = 0.f;
 	ArrayOpStats1 stats;
-	float* ftmp = NULL;
+	static size_t len_alloc = 0;
+	static float* ftmp = NULL; // using static buffer allocation to reduce calls to cudaMAlloc
 	cudaError cuerr;
 	if (len < 1) goto _Exit;
 	stats.uSize = (unsigned int)len;
 	stats.nBlockSize = nBlockSize;
 	stats.nGridSize = (int)(len + nBlockSize - 1) / nBlockSize;
-	if (0 < AllocMem_d((void**)&ftmp, sizeof(float)*len, "DotProduct_d", "temp. array")) goto _Exit;
+	if (len_alloc > 0 && len > len_alloc) { // current pre-allocated grid is insufficient in size
+		// free memory in order to force re-allocation
+		if (NULL != ftmp) { cudaFree(ftmp); ftmp = NULL; }
+		len_alloc = 0;
+	}
+	if (NULL == ftmp) {
+		cuerr = cudaMalloc((void**)&ftmp, sizeof(float)*len);
+		if (cuerr != cudaSuccess) {
+			PostCUDAError("(DotProduct_d): Failed to allocate temp. buffer", cuerr);
+			goto _Exit;
+		}
+		len_alloc = len;
+	}
+	//if (0 < AllocMem_d((void**)&ftmp, sizeof(float)*len, "DotProduct_d", "temp. array")) goto _Exit;
+	
 	cuerr = ArrayOpFFMul(ftmp, in_1, in_2, stats);
 	if (cuerr != cudaSuccess) {
 		PostCUDAError("(DotProduct_d): Failed to multiply arrays on device (ArrayOpFFMul)", cuerr);
@@ -3111,7 +3126,7 @@ float CJMultiSlice::DotProduct_d(float *in_1, float *in_2, size_t len, int nBloc
 		goto _Exit;
 	}
 _Exit:
-	DeallocMem_d((void**)&ftmp);
+	//DeallocMem_d((void**)&ftmp);
 	return fsum;
 }
 

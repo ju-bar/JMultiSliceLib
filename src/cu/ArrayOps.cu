@@ -1690,14 +1690,28 @@ cudaError_t ArrayOpFSum(float &out_1, float * in_1, ArrayOpStats1 stats, int CPU
 	unsigned int ns1 = size;
 	unsigned int nstage = 0;
 	float dsum = 0.0, dc = 0.0, dy = 0.0, dt = 0.0;
+	static int d_alloc_grid = 0;
+	static float * d_odata = NULL;
+	static float * d_idata = NULL;
 	// init output
 	out_1 = 0.f;
 	// allocate temp output array on device, one slot for each block and preset with zeroes
-	float * d_odata = NULL;
-	float * d_idata = NULL;
-	cudaStatus = cudaMalloc((void**)&d_odata, sizeof(float)*gridSize);
-	if (cudaSuccess != cudaStatus) { nstage=1;  goto Error;	}
-	cudaStatus = cudaMalloc((void**)&d_idata, sizeof(float)*gridSize);
+	if (d_alloc_grid > 0 && gridSize > d_alloc_grid) { // current pre-allocated grid is insufficient in size
+		// free memory in order to force re-allocation
+		if (NULL != d_odata) { cudaFree(d_odata); d_odata = NULL; }
+		if (NULL != d_idata) { cudaFree(d_idata); d_idata = NULL; }
+		d_alloc_grid = 0;
+	}
+	if (d_odata == NULL) {
+		cudaStatus = cudaMalloc((void**)&d_odata, sizeof(float)*gridSize);
+		if (cudaSuccess != cudaStatus) { nstage = 1;  goto Error; }
+		d_alloc_grid = gridSize;
+	}
+	if (d_idata == NULL) {
+		cudaStatus = cudaMalloc((void**)&d_idata, sizeof(float)*gridSize);
+		if (cudaSuccess != cudaStatus) { nstage = 2;  goto Error; }
+		d_alloc_grid = gridSize;
+	}
 	if (cudaSuccess != cudaStatus) { nstage=2;  goto Error; }
 	cudaStatus = cudaMemset(d_odata, 0, sizeof(float)*gridSize);
 	if (cudaSuccess != cudaStatus) { nstage=3;  goto Error; }
@@ -1844,8 +1858,8 @@ cudaError_t ArrayOpFSum(float &out_1, float * in_1, ArrayOpStats1 stats, int CPU
 	}
 	//
 Error:
-	if (NULL != d_odata) cudaFree(d_odata);
-	if (NULL != d_idata) cudaFree(d_idata);
+	// if (NULL != d_odata) cudaFree(d_odata);
+	// if (NULL != d_idata) cudaFree(d_idata);
 	if (nstage > 0) {
 		fprintf(stderr, "CUDA error in ArrayOpFSum: %s\n", cudaGetErrorString(cudaStatus));
 		fprintf(stderr, "  - procedure stage: %d\n", nstage);
@@ -1866,15 +1880,29 @@ cudaError_t ArrayOpMaskFSum(float &out_1, int * mask, float * in_1, ArrayOpStats
 	unsigned int ns1 = size;
 	unsigned int nstage = 0;
 	float dsum = 0.0, dc = 0.0, dy = 0.0, dt = 0.0;
+	static int d_alloc_grid = 0;
+	static float * d_odata = NULL;
+	static float * d_idata = NULL;
 	// init output
 	out_1 = 0.f;
 	// allocate temp output array on device, one slot for each block and preset with zeroes
-	float * d_odata = NULL;
-	float * d_idata = NULL;
-	cudaStatus = cudaMalloc((void**)&d_odata, sizeof(float)*gridSize);
-	if (cudaSuccess != cudaStatus) { nstage = 1;  goto Error; }
-	cudaStatus = cudaMalloc((void**)&d_idata, sizeof(float)*gridSize);
-	if (cudaSuccess != cudaStatus) { nstage = 2;  goto Error; }
+	if (d_alloc_grid > 0 && gridSize > d_alloc_grid) { // current pre-allocated grid is insufficient in size
+		// free memory in order to force re-allocation
+		if (NULL != d_odata) { cudaFree(d_odata); d_odata = NULL; }
+		if (NULL != d_idata) { cudaFree(d_idata); d_idata = NULL; }
+		d_alloc_grid = 0;
+	}
+	if (d_odata == NULL) {
+		cudaStatus = cudaMalloc((void**)&d_odata, sizeof(float)*gridSize);
+		if (cudaSuccess != cudaStatus) { nstage = 1;  goto Error; }
+		d_alloc_grid = gridSize;
+	}
+	if (d_idata == NULL) {
+		cudaStatus = cudaMalloc((void**)&d_idata, sizeof(float)*gridSize);
+		if (cudaSuccess != cudaStatus) { nstage = 2;  goto Error; }
+		d_alloc_grid = gridSize;
+	}
+	
 	cudaStatus = cudaMemset(d_odata, 0, sizeof(float)*gridSize);
 	if (cudaSuccess != cudaStatus) { nstage = 3;  goto Error; }
 	cudaStatus = cudaMemset(d_idata, 0, sizeof(float)*gridSize);
@@ -2021,8 +2049,8 @@ cudaError_t ArrayOpMaskFSum(float &out_1, int * mask, float * in_1, ArrayOpStats
 	}
 	//
 Error:
-	if (NULL != d_odata) cudaFree(d_odata);
-	if (NULL != d_idata) cudaFree(d_idata);
+	//if (NULL != d_odata) cudaFree(d_odata);
+	//if (NULL != d_idata) cudaFree(d_idata);
 	if (nstage > 0) {
 		fprintf(stderr, "CUDA error in ArrayOpMaskFSum: %s\n", cudaGetErrorString(cudaStatus));
 		fprintf(stderr, "  - procedure stage: %d\n", nstage);
@@ -2056,14 +2084,17 @@ cudaError_t ArrayOpMaskFDot(float &out_1, int * mask, float * in_1, float * in_2
 		// free memory in order to force re-allocation
 		if (NULL != d_odata) { cudaFree(d_odata); d_odata = NULL; }
 		if (NULL != d_idata) { cudaFree(d_idata); d_idata = NULL; }
+		d_alloc_grid = 0;
 	}
 	if (d_odata == NULL) {
 		cudaStatus = cudaMalloc((void**)&d_odata, sizeof(float)*gridSize);
 		if (cudaSuccess != cudaStatus) { nstage = 1;  goto Error; }
+		d_alloc_grid = gridSize;
 	}
 	if (d_idata == NULL) {
 		cudaStatus = cudaMalloc((void**)&d_idata, sizeof(float)*gridSize);
 		if (cudaSuccess != cudaStatus) { nstage = 2;  goto Error; }
+		d_alloc_grid = gridSize;
 	}
 	cudaStatus = cudaMemset(d_odata, 0, sizeof(float)*gridSize);
 	if (cudaSuccess != cudaStatus) { nstage = 3;  goto Error; }
@@ -2230,9 +2261,18 @@ cudaError_t ArrayOpCPowSum(float &out_1, cuComplex *in_1, float sca, ArrayOpStat
 	unsigned int nstage = 0;			// internal error stage code
 	// allocate temporary output size and allocate on device
 	size_t sz_tmp_out = sizeof(float)*size;
-	float * tmp_out_1 = NULL;
-	cudaStatus = cudaMalloc((void**)&tmp_out_1, sz_tmp_out);
-	if (cudaStatus != cudaSuccess) { nstage = 1; goto Error; }
+	static unsigned int d_alloc_grid = 0;
+	static float * tmp_out_1 = NULL;
+	if (d_alloc_grid > 0 && size > d_alloc_grid) { // current pre-allocated grid is insufficient in size
+		// free memory in order to force re-allocation
+		if (NULL != tmp_out_1) { cudaFree(tmp_out_1); tmp_out_1 = NULL; }
+		d_alloc_grid = 0;
+	}
+	if (NULL == tmp_out_1) {
+		cudaStatus = cudaMalloc((void**)&tmp_out_1, sz_tmp_out);
+		if (cudaStatus != cudaSuccess) { nstage = 1; goto Error; }
+		d_alloc_grid = size;
+	}
 	cudaStatus = cudaMemset(tmp_out_1, 0, sz_tmp_out);
 	if (cudaStatus != cudaSuccess) { nstage = 2; goto Error; }
 	// Launch the parallel CPow operation: tmp_out_1[i] -> in_1[i]*conjg( in_1[i] )
@@ -2244,7 +2284,7 @@ cudaError_t ArrayOpCPowSum(float &out_1, cuComplex *in_1, float sca, ArrayOpStat
 	// Final scaling
 	out_1 *= sca;
 Error:
-	if (tmp_out_1 != NULL) cudaFree(tmp_out_1);
+	// if (tmp_out_1 != NULL) cudaFree(tmp_out_1);
 	if (nstage > 0) {
 		fprintf(stderr, "CUDA error in ArrayOpCPowSum: %s\n", cudaGetErrorString(cudaStatus));
 		fprintf(stderr, "  - procedure stage: %d\n", nstage);
@@ -2261,11 +2301,18 @@ cudaError_t ArrayOpCPowSumFMul(float &out_1, cuComplex *in_1, float *in_2, float
 	unsigned int size = stats.uSize;	// input size
 	unsigned int nstage = 0;			// internal error stage code
 	size_t sz_tmp_out = sizeof(float)*size; // size of float temporaray working array on device
-	float * tmp_out_1 = NULL;			// temporary working array on device
-
-	// allocate temporary output size and allocate on device
-	cudaStatus = cudaMalloc((void**)&tmp_out_1, sz_tmp_out);
-	if (cudaStatus != cudaSuccess) { nstage = 1; goto Error; }
+	static unsigned int d_alloc_grid = 0;
+	static float * tmp_out_1 = NULL;
+	if (d_alloc_grid > 0 && size > d_alloc_grid) { // current pre-allocated grid is insufficient in size
+		// free memory in order to force re-allocation
+		if (NULL != tmp_out_1) { cudaFree(tmp_out_1); tmp_out_1 = NULL; }
+		d_alloc_grid = 0;
+	}
+	if (NULL == tmp_out_1) {
+		cudaStatus = cudaMalloc((void**)&tmp_out_1, sz_tmp_out);
+		if (cudaStatus != cudaSuccess) { nstage = 1; goto Error; }
+		d_alloc_grid = size;
+	}
 	cudaStatus = cudaMemset(tmp_out_1, 0, sz_tmp_out);
 	if (cudaStatus != cudaSuccess) { nstage = 2; goto Error; }
 

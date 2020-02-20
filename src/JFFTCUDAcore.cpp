@@ -330,13 +330,24 @@ int CJFFTCUDAcore::MultiplyF(float * src)
 		return 2;
 	size_t nd = GetDataSize(); // get data size (number of items)
 	size_t nbytes = nd * sizeof(float);
+	
 	// prepare to copy source from host to the device
-	float * pfsrcdev = NULL;
-	m_cuerrLast = cudaMalloc((void**)&pfsrcdev, nbytes);
-	if (m_cuerrLast != cudaSuccess) {
-		PostCUDAError("(JFFTCUDAcore::MultiplyF): Failed to allocate on device", m_cuerrLast);
-		return 3;
+	static size_t nd_alloc = 0;
+	static float * pfsrcdev = NULL;
+	if (nd_alloc > 0 && nd > nd_alloc) { // current pre-allocated grid is insufficient in size
+		// free memory in order to force re-allocation
+		if (NULL != pfsrcdev) { cudaFree(pfsrcdev); pfsrcdev = NULL; }
+		nd_alloc = 0;
 	}
+	if (NULL == pfsrcdev) {
+		m_cuerrLast = cudaMalloc((void**)&pfsrcdev, nbytes);
+		if (m_cuerrLast != cudaSuccess) {
+			PostCUDAError("(JFFTCUDAcore): Failed to allocate on device", m_cuerrLast);
+			return 3;
+		}
+		nd_alloc = nd;
+	}
+
 	// copy from host to device
 	m_cuerrLast = cudaMemcpy(pfsrcdev, src, nbytes, ::cudaMemcpyHostToDevice);
 	if (m_cuerrLast != cudaSuccess) {
@@ -345,12 +356,14 @@ int CJFFTCUDAcore::MultiplyF(float * src)
 	}
 	// multiply on device pointwise (m_pcw * pcsrvdev)
 	m_cuerrLast = ArrayOpFMul(m_pcw, m_pcw, pfsrcdev, m_aos1dMult);
+	/*
 	// destroy source helper on device
 	m_cuerrLast = cudaFree(pfsrcdev);
 	if (m_cuerrLast != cudaSuccess) {
 		PostCUDAError("(JFFTCUDAcore::MultiplyF): Failed to destroy helper array on device", m_cuerrLast);
 		return 5;
 	}
+	*/
 	return 0;
 }
 
@@ -403,12 +416,22 @@ int CJFFTCUDAcore::MultiplyC(fcmplx * src)
 	size_t nd = GetDataSize();
 	size_t nbytes = nd * sizeof(cufftComplex);
 	// prepare to copy source from host to the device
-	cufftComplex * pcsrcdev = NULL;
-	m_cuerrLast = cudaMalloc((void**)&pcsrcdev, nbytes);
-	if (m_cuerrLast != cudaSuccess) {
-		PostCUDAError("(JFFTCUDAcore): Failed to allocate on device", m_cuerrLast);
-		return 3;
+	static size_t nd_alloc = 0;
+	static cufftComplex * pcsrcdev = NULL;
+	if (nd_alloc > 0 && nd > nd_alloc) { // current pre-allocated grid is insufficient in size
+		// free memory in order to force re-allocation
+		if (NULL != pcsrcdev) { cudaFree(pcsrcdev); pcsrcdev = NULL; }
+		nd_alloc = 0;
 	}
+	if (NULL == pcsrcdev) {
+		m_cuerrLast = cudaMalloc((void**)&pcsrcdev, nbytes);
+		if (m_cuerrLast != cudaSuccess) { 
+			PostCUDAError("(JFFTCUDAcore): Failed to allocate on device", m_cuerrLast);
+			return 3;
+		}
+		nd_alloc = nd;
+	}
+	
 	// copy from host to device
 	m_cuerrLast = cudaMemcpy(pcsrcdev, src, nbytes, ::cudaMemcpyHostToDevice);
 	if (m_cuerrLast != cudaSuccess) {
@@ -417,12 +440,14 @@ int CJFFTCUDAcore::MultiplyC(fcmplx * src)
 	}
 	// multiply on device pointwise (m_pcw * pcsrvdev)
 	m_cuerrLast = ArrayOpMul(m_pcw, pcsrcdev, m_pcw, m_aos1dMult);
+	/*
 	// destroy source helper on device
 	m_cuerrLast = cudaFree(pcsrcdev);
 	if (m_cuerrLast != cudaSuccess) {
 		PostCUDAError("(JFFTCUDAcore): Failed to destroy helper array on device", m_cuerrLast);
 		return 6;
 	}
+	*/
 	return 0;
 }
 
@@ -444,12 +469,22 @@ int CJFFTCUDAcore::CShift2d(int nsh0, int nsh1)
 	size_t nd = GetDataSize();
 	size_t nbytes = nd * sizeof(cufftComplex);
 	// prepare a buffer on the device
-	cufftComplex * d_tmp = NULL;
-	m_cuerrLast = cudaMalloc((void**)&d_tmp, nbytes);
-	if (m_cuerrLast != cudaSuccess) {
-		PostCUDAError("(JFFTCUDAcore): Failed to allocate on device", m_cuerrLast);
-		return 3;
+	static size_t nd_alloc = 0;
+	static cufftComplex * d_tmp = NULL;
+	if (nd_alloc > 0 && nd > nd_alloc) { // current pre-allocated grid is insufficient in size
+		// free memory in order to force re-allocation
+		if (NULL != d_tmp) { cudaFree(d_tmp); d_tmp = NULL; }
+		nd_alloc = 0;
 	}
+	if (NULL == d_tmp) {
+		m_cuerrLast = cudaMalloc((void**)&d_tmp, nbytes);
+		if (m_cuerrLast != cudaSuccess) {
+			PostCUDAError("(JFFTCUDAcore): Failed to allocate on device", m_cuerrLast);
+			return 3;
+		}
+		nd_alloc = nd;
+	}
+
 	m_cuerrLast = cudaMemcpy(d_tmp, m_pcw, nbytes, ::cudaMemcpyDeviceToDevice);
 	if (m_cuerrLast != cudaSuccess) {
 		PostCUDAError("(JFFTCUDAcore): Failed to copy data on device", m_cuerrLast);
@@ -458,12 +493,13 @@ int CJFFTCUDAcore::CShift2d(int nsh0, int nsh1)
 
 	// call out-of-place 2d shifter
 	m_cuerrLast = ArrayOpCShift2d(m_pcw, d_tmp, ish, jsh, (unsigned int)m_pdims[1], (unsigned int)m_pdims[0], m_aos1dMult);
-
+	/*
 	m_cuerrLast = cudaFree(d_tmp);
 	if (m_cuerrLast != cudaSuccess) {
 		PostCUDAError("(JFFTCUDAcore): Failed to destroy helper array on device", m_cuerrLast);
 		return 6;
 	}
+	*/
 	return 0;
 }
 
@@ -790,7 +826,8 @@ int CJFFTCUDAcore::GetDataAbs(float * dst)
 	int nerr = 0;
 	size_t nd =0;
 	size_t nbytes = 0;
-	float *d_tmp = NULL;
+	static size_t nd_alloc = 0;
+	static float *d_tmp = NULL; // using static temp array to reduce calls to cudaMalloc
 	if (m_nstatus < 1) {
 		cerr << "Error(JFFTCUDAcore::GetDataAbs): Cannot transfer data, not initialized." << endl;
 		nerr = 1;
@@ -803,12 +840,27 @@ int CJFFTCUDAcore::GetDataAbs(float * dst)
 	}
 	nd = GetDataSize();
 	nbytes = sizeof(float)*nd;
+	if (nd_alloc > 0 && nd > nd_alloc) { // current pre-allocated grid is insufficient in size
+		// free memory in order to force re-allocation
+		if (NULL != d_tmp) { cudaFree(d_tmp); d_tmp = NULL; }
+		nd_alloc = 0;
+	}
+	if (NULL == d_tmp) {
+		m_cuerrLast = cudaMalloc((void**)&d_tmp, nbytes);
+		if (m_cuerrLast != cudaSuccess) {
+			PostCUDAError("(JFFTCUDAcore): Failed to allocate on device", m_cuerrLast);
+			return 2;
+		}
+		nd_alloc = nd;
+	}
+	/*
 	m_cuerrLast = cudaMalloc((void**)&d_tmp, nbytes);
 	if (m_cuerrLast != cudaSuccess) {
 		PostCUDAError("(JFFTCUDAcore::GetDataAbs): Failed to allocate on device", m_cuerrLast);
 		nerr = 3;
 		goto Error;
 	}
+	*/
 	m_cuerrLast = ArrayOpCAbs(d_tmp, m_pcw, m_aos1dMult);
 	if (m_cuerrLast != cudaSuccess) {
 		PostCUDAError("(JFFTCUDAcore::GetDataAbs): Failed to calculate CAbs on device", m_cuerrLast);
@@ -822,7 +874,7 @@ int CJFFTCUDAcore::GetDataAbs(float * dst)
 		goto Error;
 	}
 Error:
-	if (NULL != d_tmp) cudaFree(d_tmp);
+	// if (NULL != d_tmp) cudaFree(d_tmp);
 	return nerr;
 }
 
@@ -831,7 +883,8 @@ int CJFFTCUDAcore::GetDataArg(float * dst)
 	int nerr = 0;
 	size_t nd = 0;
 	size_t nbytes = 0;
-	float *d_tmp = NULL;
+	static size_t nd_alloc = 0;
+	static float *d_tmp = NULL; // using static temp array to reduce calls to cudaMalloc
 	if (m_nstatus < 1) {
 		cerr << "Error(JFFTCUDAcore::GetDataArg): Cannot transfer data, not initialized." << endl;
 		nerr = 1;
@@ -844,12 +897,27 @@ int CJFFTCUDAcore::GetDataArg(float * dst)
 	}
 	nd = GetDataSize();
 	nbytes = sizeof(float)*nd;
+	if (nd_alloc > 0 && nd > nd_alloc) { // current pre-allocated grid is insufficient in size
+		// free memory in order to force re-allocation
+		if (NULL != d_tmp) { cudaFree(d_tmp); d_tmp = NULL; }
+		nd_alloc = 0;
+	}
+	if (NULL == d_tmp) {
+		m_cuerrLast = cudaMalloc((void**)&d_tmp, nbytes);
+		if (m_cuerrLast != cudaSuccess) {
+			PostCUDAError("(JFFTCUDAcore): Failed to allocate on device", m_cuerrLast);
+			return 2;
+		}
+		nd_alloc = nd;
+	}
+	/*
 	m_cuerrLast = cudaMalloc((void**)&d_tmp, nbytes);
 	if (m_cuerrLast != cudaSuccess) {
 		PostCUDAError("(JFFTCUDAcore::GetDataArg): Failed to allocate on device", m_cuerrLast);
 		nerr = 3;
 		goto Error;
 	}
+	*/
 	m_cuerrLast = ArrayOpCArg(d_tmp, m_pcw, m_aos1dMult);
 	if (m_cuerrLast != cudaSuccess) {
 		PostCUDAError("(JFFTCUDAcore::GetDataArg): Failed to calculate CArg on device", m_cuerrLast);
@@ -863,7 +931,7 @@ int CJFFTCUDAcore::GetDataArg(float * dst)
 		goto Error;
 	}
 Error:
-	if (NULL != d_tmp) cudaFree(d_tmp);
+	//if (NULL != d_tmp) cudaFree(d_tmp);
 	return nerr;
 }
 
@@ -923,7 +991,8 @@ int CJFFTCUDAcore::GetDataPow(float * dst)
 	int nerr = 0;
 	size_t nd = 0;
 	size_t nbytes = 0;
-	float *d_tmp = NULL;
+	static size_t nd_alloc = 0;
+	static float *d_tmp = NULL; // using static temp array to reduce calls to cudaMalloc
 	if (m_nstatus < 1) {
 		cerr << "Error(JFFTCUDAcore::GetDataPow_d): Cannot transfer data, not initialized." << endl;
 		nerr = 1;
@@ -931,21 +1000,37 @@ int CJFFTCUDAcore::GetDataPow(float * dst)
 	}
 	nd = GetDataSize();
 	nbytes = sizeof(float)*nd;
-	m_cuerrLast = cudaMalloc((void**)&d_tmp, nbytes);
+	if (nd_alloc > 0 && nd > nd_alloc) { // current pre-allocated grid is insufficient in size
+		// free memory in order to force re-allocation
+		if (NULL != d_tmp) { cudaFree(d_tmp); d_tmp = NULL; }
+		nd_alloc = 0;
+	}
+	if (NULL == d_tmp) {
+		m_cuerrLast = cudaMalloc((void**)&d_tmp, nbytes);
+		if (m_cuerrLast != cudaSuccess) {
+			PostCUDAError("(JFFTCUDAcore): Failed to allocate on device", m_cuerrLast);
+			return 2;
+		}
+		nd_alloc = nd;
+	}
+	//m_cuerrLast = cudaMalloc((void**)&d_tmp, nbytes);
+
 	m_cuerrLast = ArrayOpCPow(d_tmp, m_pcw, m_aos1dMult);
 	if (m_cuerrLast != cudaSuccess) {
 		PostCUDAError("(JFFTCUDAcore::GetDataPow_d): Failed calculate complex power on device", m_cuerrLast);
-		nerr = 2;
+		nerr = 3;
 		goto Error;
 	}
+
 	m_cuerrLast = cudaMemcpy(dst, d_tmp, nbytes, ::cudaMemcpyDeviceToHost);
 	if (m_cuerrLast != cudaSuccess) {
 		PostCUDAError("(JFFTCUDAcore::GetDataArg): Failed to copy from device to host", m_cuerrLast);
 		nerr = 5;
 		goto Error;
 	}
+
 Error:
-	if (NULL != d_tmp) cudaFree(d_tmp);
+	// if (NULL != d_tmp) cudaFree(d_tmp);
 	return nerr;
 }
 
