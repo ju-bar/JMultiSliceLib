@@ -60,6 +60,7 @@
 #define _ME0					9.10938356E-31 // electron rest mass, error (11) in last digits [ kg ]
 
 #define _EEL0					_ME0*_C0*_C0 // electron rest energy [ J ]
+#define _EEL0EV					_EEL0/_QEL // electron rest energy [ eV ]
 #define _EEL0KEV				_EEL0/_QEL/1000. // electron rest energy [ keV ]
 
 #define _WLELKEV				_C0*_HPL/_QEL*1.0E+6 // electron wave length from energy [ nm keV ]

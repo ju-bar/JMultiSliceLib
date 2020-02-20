@@ -28,6 +28,7 @@
 
 #include "prm_sample.h"
 #include "prm_slice.h"
+#include "NatureConstants.h"
 
 
 prm_sample::prm_sample()
@@ -43,6 +44,10 @@ prm_sample::prm_sample()
 	grid_ekv = 0.0f;
 	tilt_x = 0.0f;
 	tilt_y = 0.0f;
+	lis_exc_max = 0; // 0 = no low-loss inelastic scattering
+	lis_qe = 0.f;
+	lis_qc = 0.f;
+	lis_mfp = 0.f;
 }
 
 
@@ -65,6 +70,10 @@ void prm_sample::copy_data_from(prm_sample *psrc)
 		grid_ny = psrc->grid_ny;
 		tilt_x = psrc->tilt_x;
 		tilt_y = psrc->tilt_y;
+		lis_exc_max = psrc->lis_exc_max;
+		lis_qe = psrc->lis_qe;
+		lis_qc = psrc->lis_qc;
+		lis_mfp = psrc->lis_mfp;
 
 		v_slc = psrc->v_slc;
 		
@@ -90,6 +99,10 @@ void prm_sample::copy_setup_from(prm_sample *psrc)
 		grid_ny = psrc->grid_ny;
 		tilt_x = psrc->tilt_x;
 		tilt_y = psrc->tilt_y;
+		lis_exc_max = psrc->lis_exc_max;
+		lis_qe = psrc->lis_qe;
+		lis_qc = psrc->lis_qc;
+		lis_mfp = psrc->lis_mfp;
 
 		v_slc.clear();
 		int nslc = (int)psrc->v_slc.size();
@@ -304,6 +317,103 @@ unsigned int prm_sample::setup_tilt()
 	return ierr;
 }
 
+
+unsigned int prm_sample::setup_lis()
+{
+	int ierr = 0, i = 0, j = 0, lis_mod = 0;
+	std::string  stmp, sprm;
+	float ep = 0.f; // plasmon energy (eV)
+	float ek = 1000.f * grid_ekv; // kinetic energy of probe electrons (eV)
+	float e0 = (float)(_EEL0EV); // rest energy of electrons (eV)
+	float wthr = 0.01f, tol = 0.f , wt = 1.f, facn = 1.f;
+	lis_exc_max = 0;
+	lis_mfp = 0.f;
+	lis_qe = 0.f;
+	lis_qc = 0.f;
+	if (binteractive) {
+		std::cout << std::endl;
+		std::cout << "  Supported input for low-loss inelastic scattering: " << std::endl;
+		std::cout << "  <0> No low-loss inelastic scattering simulation" << std::endl;
+		std::cout << "  <1> Plasmonic model (free electron gas, metals)" << std::endl;
+		std::cout << "  <2> Generalized model" << std::endl;
+		std::cout << std::endl;
+		std::cout << "  Select form of low-loss inelastic scattering: ";
+		std::cin >> lis_mod;
+		while (lis_mod < SAMPLE_LIS_INF_MIN || lis_mod > SAMPLE_LIS_INF_MAX) {
+			std::cout << std::endl;
+			std::cout << "  Select form of low-loss inelastic scattering: ";
+			std::cin >> lis_mod;
+		}
+		switch (lis_mod) {
+		case 0:
+			lis_exc_max = 0;
+			break;
+		case 1:
+			std::cout << std::endl;
+			std::cout << "  Set the plasmon energy in eV: ";
+			std::cin >> ep;
+			std::cout << std::endl;
+			std::cout << "  Set the mean free path for inelastic scattering in nm: ";
+			std::cin >> lis_mfp;
+			// calculate the characteristic angle
+			lis_qe = ep / ek * (ek + e0) / (ek + 2.f * e0);
+			// estimate the critical angle
+			lis_qc = sqrt(ep / e0);
+			// estimate max. number of excitations
+			tol = get_thickness_max() / lis_mfp;
+			wt = 1.f - exp(-tol);
+			facn = 1.;
+			while (wt > wthr) { // include more excitation levels until remaining total probability of all higher levels is below the threshold wthr
+				lis_exc_max++;
+				facn = facn * (float)lis_exc_max; // n!
+				wt -= (float)pow(tol, lis_exc_max) * exp(-tol) / facn;
+			}
+			break;
+		case 2:
+			std::cout << std::endl;
+			std::cout << "  Set the maximum number of excitations per electron in the sample: ";
+			std::cin >> lis_exc_max;
+			std::cout << std::endl;
+			std::cout << "  Set the mean free path for inelastic scattering in nm: ";
+			std::cin >> lis_mfp;
+			std::cout << std::endl;
+			std::cout << "  Set the characteristic angle for inelastic scattering in mrad: ";
+			std::cin >> lis_qe;
+			std::cout << std::endl;
+			std::cout << "  Set the critical angle for inelastic scattering in mrad: ";
+			std::cin >> lis_qc;
+			break;
+		}
+
+		v_str_ctrl.push_back("set_lis");
+		v_str_ctrl.push_back(format("%d %10.4f %10.4f %10.4f", lis_exc_max, lis_mfp, lis_qe, lis_qc));
+	}
+	else {
+		i = ctrl_find_param("set_lis", &stmp);
+		if (i >= 0) {
+			// TODO: implement input error handling by checking sprm.length() > 0
+			j = read_param(0, &stmp, &sprm);
+			lis_exc_max = (unsigned int)to_int(sprm);
+			j = read_param(j, &stmp, &sprm);
+			lis_mfp = to_float(sprm);
+			j = read_param(j, &stmp, &sprm);
+			lis_qe = to_float(sprm);
+			j = read_param(j, &stmp, &sprm);
+			lis_qc = to_float(sprm);
+		}
+		if (btalk && lis_exc_max > 0) {
+			std::cout << std::endl;
+			std::cout << "  Low-loss inelastic scattering parameters:" << std::endl;
+			std::cout << "  - max. number of excitations per electron: " << lis_exc_max << std::endl;
+			std::cout << "  - inelastic mean free path in nm: " << lis_mfp << std::endl;
+			std::cout << "  - characteristic angle in mrad: " << lis_qe << std::endl;
+			std::cout << "  - critical angle in mrad: " << lis_qc << std::endl;
+		}
+	}
+
+	return ierr;
+}
+
 unsigned int prm_sample::get_sli_file_num(std::string sfile_name_prefix)
 {
 	bool bfilefound = true;
@@ -482,6 +592,36 @@ float prm_sample::get_slc_obj_thickness(unsigned int idx)
 		}
 	}
 	return f_dz;
+}
+
+float prm_sample::get_thickness_max()
+{
+	float thick = 0.f;
+	size_t num_slc_obj = v_slc_obj.size();
+	size_t num_slc = v_slc.size();
+	size_t islc_obj = 0, islc = 0;
+	if (num_slc > 0 && num_slc_obj > 0) {
+		for (islc_obj = 0; islc_obj < num_slc_obj; islc_obj++) {
+			islc = (size_t)v_slc_obj[islc_obj];
+			thick += v_slc[islc].get_thickness();
+		}
+	}
+	return thick;
+}
+
+float prm_sample::get_thickness_at(unsigned int idx)
+{
+	float thick = 0.f;
+	size_t num_slc_obj = v_slc_obj.size();
+	size_t num_slc = v_slc.size();
+	size_t islc_obj = 0, islc = 0, nobjslc = __min((size_t)idx, num_slc_obj);
+	if (num_slc > 0 && nobjslc > 0) {
+		for (islc_obj = 0; islc_obj < nobjslc; islc_obj++) {
+			islc = (size_t)v_slc_obj[islc_obj];
+			thick += v_slc[islc].get_thickness();
+		}
+	}
+	return thick;
 }
 
 

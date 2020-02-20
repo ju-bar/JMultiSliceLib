@@ -37,6 +37,13 @@
 #define SAMPLE_INF_NONE	0 // no sample
 #define SAMPLE_INF_CEL	1 // structure file
 #define SAMPLE_INF_SLI	2 // sample data input from SLI files
+// range of  input forms for Low-loss Inelastic Scattering
+#define SAMPLE_LIS_INF_MIN	0 //
+#define SAMPLE_LIS_INF_MAX	0 //
+// supported input forms for Low-loss Inelastic Scattering
+#define SAMPLE_LIS_INF_NONE	0 // none
+#define SAMPLE_LIS_INF_PLA	1 // plasmonic
+#define SAMPLE_LIS_INF_GEN	2 // generalized
 
 class prm_sample :
 	public params
@@ -63,6 +70,11 @@ public:
 	float grid_ekv; // electron energy from sample data (keV)
 	float tilt_x; // sample tilt along x (mrad)
 	float tilt_y; // sample tilt along y (mrad)
+
+	float lis_mfp; // mean free path for low-loss inelastic scattering (nm)
+	float lis_qe; // characteristic angle for low-loss inelastic scattering (mrad)
+	float lis_qc; // critical angle for low-loss inelastic scattering (mrad)
+	unsigned int lis_exc_max; // max. number of excitations for los-loss inelastic scattering
 
 	std::vector<unsigned int> v_slc_obj; // list of object slice indices stacked to max. thickness
 	std::vector<int> v_slc_det; // list of object slice detection plane indices; 0: before object, 1: after first slice, ... to slice at max. thickness
@@ -100,11 +112,21 @@ public:
 	// setup sample tilt
 	unsigned int setup_tilt(void);
 
+	// setup low-loss inelastic scattering
+	// /!\ Call this at a stage where the electron energy (grid_ekv) and the maximum sample thickness are known.
+	unsigned int setup_lis(void);
+
 	// get number of registered detection planes
 	unsigned int get_num_slc_det(void);
 
 	// returns the thickness of slice with index idx in the object slice stack
 	float get_slc_obj_thickness(unsigned int idx);
+
+	// returns the maximum sample thickness of the simulation
+	float get_thickness_max(void);
+
+	// returns the sample thickness upt to a given object slice index
+	float get_thickness_at(unsigned int idx);
 
 	// return the maximum number of variants over all slices
 	int get_variant_num_max(void);

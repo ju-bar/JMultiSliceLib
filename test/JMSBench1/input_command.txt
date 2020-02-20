@@ -114,3 +114,26 @@ set_num_repeat
 	image simulations require a much larger amount of averaging with
 	a few hundred or even thousand repetitions.
 
+
+set_lis
+<int> <float> <float> <float>
+
+    Sets parameters of low-loss inelastic scattering simulations
+	by a Monte-Carlo approach in a generalized model. Provide the
+	following sequence of parameters:
+	<int>    maximum number of inelastic scattering events per probe
+	         electron, allows multiple scattering via Possionian
+			 statistics
+	<float>  mean free path for inelastic scatterin (nm),
+	         regulates the general strength of inelastic scattering
+	<float>  characteristic angle for inelastic scattering (mrad),
+	         determines the decay of inelastic scattering with
+			 increasing scattering angle, can be calculated from
+			 plasmon energy Ep and kinetic energy Ek of the probe by
+			 theta_E = Ep / Ek * (Ek + E0) / (Ek + 2*E0),
+			 where E0 is 511 keV, the rest mass of electrons.
+	<float>  critical angle for inelastic scattering (mrad),
+	         determines a cut-off in momentum transfer leading to
+			 significant reduction of inelastic scattering beyond
+			 this angle, can be calculated for plasmons (metals)
+			 from the plasmon energy via the Fermi velocity.

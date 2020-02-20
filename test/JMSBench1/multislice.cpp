@@ -606,7 +606,7 @@ unsigned int __cdecl singlethread_run(prm_main *pprm)
 			idx = ix + iy * pprm->scan.nx;
 			//
 			if (pprm->btalk) {
-				std::cout << "  scanning  x: " << ix+1 << " / " << pprm->scan.nx << "   y: " << iy+1 << " / " << pprm->scan.ny << "     \r";
+				std::cout << "  Scanning  x: " << ix+1 << " / " << pprm->scan.nx << "   y: " << iy+1 << " / " << pprm->scan.ny << "     \r";
 			}
 			//
 			w.f_dx = pprm->scan.offset_x + scan_rot_cos * scan_step_x * (float)ix - scan_rot_sin * scan_step_y * (float)iy;

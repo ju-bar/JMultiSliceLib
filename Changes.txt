@@ -1,5 +1,10 @@
 List of changes to JMultiSliceLib
 
+2020-02-20: 0.40 KB
+- Improved speed by replacing some frequent CUDA mallocs by
+  static allocations in the integrated detection scheme
+  (contribution by E. Westphal, FZ-Jülich)
+
 2020-02-19: 0.39 JB
 - Added an allocation memory check before the actual allocation
   call on the CUDA device to prevent persistence of out of memory

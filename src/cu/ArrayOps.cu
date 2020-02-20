@@ -1,6 +1,6 @@
 // file ArrayOps.cu
 // author: Juri Barthel, ju.barthel@fz-juelich.de
-// 2018
+// 2018 - 2020
 //
 //
 /*
@@ -2045,16 +2045,26 @@ cudaError_t ArrayOpMaskFDot(float &out_1, int * mask, float * in_1, float * in_2
 	int smemSize = (blockSize <= 32) ? 2 * blockSize * sizeof(float) : blockSize * sizeof(float);
 	unsigned int ns1 = size;
 	unsigned int nstage = 0;
+	static int d_alloc_grid = 0; // remember size of allocated static grids
+	static float * d_odata = NULL; // use static array to avoid repeated allocation
+	static float * d_idata = NULL;
 	float dsum = 0.0, dc = 0.0, dy = 0.0, dt = 0.0;
 	// init output
 	out_1 = 0.f;
 	// allocate temp output array on device, one slot for each block and preset with zeroes
-	float * d_odata = NULL;
-	float * d_idata = NULL;
-	cudaStatus = cudaMalloc((void**)&d_odata, sizeof(float)*gridSize);
-	if (cudaSuccess != cudaStatus) { nstage = 1;  goto Error; }
-	cudaStatus = cudaMalloc((void**)&d_idata, sizeof(float)*gridSize);
-	if (cudaSuccess != cudaStatus) { nstage = 2;  goto Error; }
+	if (d_alloc_grid > 0 && gridSize > d_alloc_grid) { // current pre-allocated grid is insufficient in size
+		// free memory in order to force re-allocation
+		if (NULL != d_odata) { cudaFree(d_odata); d_odata = NULL; }
+		if (NULL != d_idata) { cudaFree(d_idata); d_idata = NULL; }
+	}
+	if (d_odata == NULL) {
+		cudaStatus = cudaMalloc((void**)&d_odata, sizeof(float)*gridSize);
+		if (cudaSuccess != cudaStatus) { nstage = 1;  goto Error; }
+	}
+	if (d_idata == NULL) {
+		cudaStatus = cudaMalloc((void**)&d_idata, sizeof(float)*gridSize);
+		if (cudaSuccess != cudaStatus) { nstage = 2;  goto Error; }
+	}
 	cudaStatus = cudaMemset(d_odata, 0, sizeof(float)*gridSize);
 	if (cudaSuccess != cudaStatus) { nstage = 3;  goto Error; }
 	cudaStatus = cudaMemset(d_idata, 0, sizeof(float)*gridSize);
@@ -2201,8 +2211,8 @@ cudaError_t ArrayOpMaskFDot(float &out_1, int * mask, float * in_1, float * in_2
 	}
 	//
 Error:
-	if (NULL != d_odata) cudaFree(d_odata);
-	if (NULL != d_idata) cudaFree(d_idata);
+	//if (NULL != d_odata) cudaFree(d_odata);
+	//if (NULL != d_idata) cudaFree(d_idata);
 	if (nstage > 0) {
 		fprintf(stderr, "CUDA error in ArrayOpMaskFSum: %s\n", cudaGetErrorString(cudaStatus));
 		fprintf(stderr, "  - procedure stage: %d\n", nstage);

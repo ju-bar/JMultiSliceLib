@@ -6,7 +6,7 @@
 // Copyright (C) 2018 - 2020 - Juri Barthel (juribarthel@gmail.com)
 // Copyright (C) 2018 - 2020 - Forschungszentrum Juelich GmbH, 52425 Juelich, Germany
 //
-// Verions of JMultiSlice: 0.39b (2020 - Feb - 19)
+// Verions of JMultiSlice: 0.40b (2020 - Feb - 20)
 //
 /*
 This program is free software : you can redistribute it and/or modify
@@ -119,9 +119,9 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 #define __JMS__
 // VERSION NUMBERS
 #define __JMS_VERSION__			0
-#define __JMS_VERSION_SUB__		3
-#define __JMS_VERSION_SUB_SUB__	9
-#define __JMS_VERSION_BUILD__	20200219
+#define __JMS_VERSION_SUB__		4
+#define __JMS_VERSION_SUB_SUB__	0
+#define __JMS_VERSION_BUILD__	20200220
 // CODE IDs
 #define _JMS_CODE_CPU			1
 #define _JMS_CODE_GPU			2
