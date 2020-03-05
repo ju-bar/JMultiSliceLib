@@ -464,8 +464,8 @@ int CJFFTCUDAcore::CShift2d(int nsh0, int nsh1)
 		cerr << "Error(JFFTCUDAcore): cyclic 2d shift not supported on other dimensions than 2." << endl;
 		return 2;
 	}
-	unsigned int jsh = (unsigned int)imod(nsh1, m_pdims[0]); // clip shifts to positive values
-	unsigned int ish = (unsigned int)imod(nsh0, m_pdims[1]);
+	unsigned int ish = (unsigned int)imod(nsh0, m_pdims[0]);
+	unsigned int jsh = (unsigned int)imod(nsh1, m_pdims[1]); // clip shifts to positive values
 	size_t nd = GetDataSize();
 	size_t nbytes = nd * sizeof(cufftComplex);
 	// prepare a buffer on the device
@@ -492,7 +492,7 @@ int CJFFTCUDAcore::CShift2d(int nsh0, int nsh1)
 	}
 
 	// call out-of-place 2d shifter
-	m_cuerrLast = ArrayOpCShift2d(m_pcw, d_tmp, ish, jsh, (unsigned int)m_pdims[1], (unsigned int)m_pdims[0], m_aos1dMult);
+	m_cuerrLast = ArrayOpCShift2d(m_pcw, d_tmp, ish, jsh, (unsigned int)m_pdims[0], (unsigned int)m_pdims[1], m_aos1dMult);
 	/*
 	m_cuerrLast = cudaFree(d_tmp);
 	if (m_cuerrLast != cudaSuccess) {

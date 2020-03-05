@@ -304,11 +304,11 @@ int CJFFTWcore::CShift2d(int nsh0, int nsh1)
 		cerr << "Error(JFFTWcore): cyclic 2d shift not supported on other dimensions than 2." << endl;
 		return 2;
 	}
-	int jsh = imod(nsh1, m_pdims[0]);
-	int ish = imod(nsh0, m_pdims[1]);
+	int ish = imod(nsh0, m_pdims[0]);
+	int jsh = imod(nsh1, m_pdims[1]);
 	int j0 = 0, j1 = 0, i0 = 0, i1 = 0, jdx0 = 0, jdx1 = 0;
-	size_t b_x = (size_t)m_pdims[1] * sizeof(fcmplx);
-	size_t b_n = b_x * (size_t)m_pdims[0];
+	size_t b_x = (size_t)m_pdims[0] * sizeof(fcmplx);
+	size_t b_n = b_x * (size_t)m_pdims[1];
 	size_t b_right = (size_t)ish * sizeof(fcmplx); // number of bytes hanging over on the right end
 	size_t b_left = b_x - b_right; // number of bytes remaining inside horizontally
 	fcmplx* tmp = (fcmplx*)malloc(b_n); // prepare a temporary buffer for the working data
@@ -319,15 +319,15 @@ int CJFFTWcore::CShift2d(int nsh0, int nsh1)
 	//
 	nerr = memcpy_s((void*)tmp, b_n, (void*)m_pcw, b_n); // get a copy of the data
 	//
-	for (j0 = 0; j0 < m_pdims[0]; j0++) { // loop over source row indices 
-		j1 = imod(j0 + jsh, m_pdims[0]); // destination row index
-		jdx0 = j0 * m_pdims[1]; // index of first row item in source
-		jdx1 = j1 * m_pdims[1]; // index of first row item in destination
+	for (j0 = 0; j0 < m_pdims[1]; j0++) { // loop over source row indices 
+		j1 = imod(j0 + jsh, m_pdims[1]); // destination row index
+		jdx0 = j0 * m_pdims[0]; // index of first row item in source
+		jdx1 = j1 * m_pdims[0]; // index of first row item in destination
 		// copy left part (left b_left bytes of source to ish shifted position in destination) 
 		nerr = memcpy_s(&m_pcw[jdx1 + ish], b_left, &tmp[jdx0], b_left);
 		if (b_right > 0) { // ... if there is a shift
 			// copy right part (right b_right bytes of source to first position of destination)
-			nerr = memcpy_s(&m_pcw[jdx1], b_right, &tmp[jdx0 + m_pdims[1] - ish], b_right);
+			nerr = memcpy_s(&m_pcw[jdx1], b_right, &tmp[jdx0 + m_pdims[0] - ish], b_right);
 		}
 	}
 	free(tmp);
