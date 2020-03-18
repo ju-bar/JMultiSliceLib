@@ -475,10 +475,10 @@ _exit: // final state
 }
 
 
-unsigned int __cdecl singlethread_run(prm_main *pprm)
+unsigned int __cdecl singlethread_stem(prm_main *pprm)
 {
 	if (NULL == pprm) {
-		std::cerr << "Error (singlethread_run): invalid parameter interface." << std::endl;
+		std::cerr << "Error (singlethread_stem): invalid parameter interface." << std::endl;
 		return 666;
 	}
 	unsigned int nerr = 0, ierr = 0;
@@ -490,19 +490,23 @@ unsigned int __cdecl singlethread_run(prm_main *pprm)
 	unsigned int ix = 0, iy = 0, idx = 0; // scan indices
 	unsigned int ix0 = 0, ix1 = pprm->scan.nx, iy0 = 0, iy1 = pprm->scan.ny; // scan range
 	unsigned int i = 0, j = 0;
+	unsigned int nyqx = pprm->sample.grid_nx >> 1, nyqy = pprm->sample.grid_ny >> 1; // image nyquist numbers
 	float scan_rot_sin = 0.f, scan_rot_cos = 1.f;
 	float scan_step_x = pprm->scan.get_step_x();
 	float scan_step_y = pprm->scan.get_step_y();
 	float *det_annular = NULL; // pointer to result array for integrating detectors
+	float *det_pix_dif = NULL; // pointer to result array for diffraction patterns
+	float *det_pix_img = NULL; // pointer to result array for image patterns
 	float *dst = NULL;
 	float *src = NULL;
-	size_t num_mem = 0; // memory size
+	size_t sz_mem_ann = 0, sz_mem_dif = 0, sz_mem_img = 0; // memory sizes eventually allocated locally
 	size_t num_ann = pprm->detector.v_annular.size();
 	size_t num_det_slc = 0; // number of detection planes in z
+	std::string str_pix;
 
 	if (pprm->btalk) {
 		std::cout << std::endl;
-		std::cout << "  Initializing single-thread calculation ..." << std::endl;
+		std::cout << "  Initializing single-thread STEM simulation ..." << std::endl;
 	}
 
 	w.pjms = &jms;
@@ -518,7 +522,7 @@ unsigned int __cdecl singlethread_run(prm_main *pprm)
 		njmserr = jms.SetCurrentGPU(pprm->gpu_id);
 		if (0 < njmserr) {
 			nerr = 1;
-			std::cerr << "Error: (singlethread_run) failed to set GPU #" << pprm->gpu_id << ". (" << njmserr << ")" << std::endl;
+			std::cerr << "Error: (singlethread_stem) failed to set GPU #" << pprm->gpu_id << ". (" << njmserr << ")" << std::endl;
 			goto _exit;
 		}
 		w.n_thread = -1;
@@ -538,7 +542,7 @@ unsigned int __cdecl singlethread_run(prm_main *pprm)
 	ierr = prepare_slices(pprm, &jms);
 	if (0 < ierr) {
 		nerr = 1000 + ierr;
-		std::cerr << "Error: (singlethread_run) failed to prepare transmission functions (" << ierr << ")." << std::endl;
+		std::cerr << "Error: (singlethread_stem) failed to prepare transmission functions (" << ierr << ")." << std::endl;
 		goto _exit;
 	}
 
@@ -546,7 +550,7 @@ unsigned int __cdecl singlethread_run(prm_main *pprm)
 	ierr = prepare_detectors(pprm, &jms);
 	if (0 < ierr) {
 		nerr = 2000 + ierr;
-		std::cerr << "Error: (singlethread_run) failed to prepare detectors (" << ierr << ")." << std::endl;
+		std::cerr << "Error: (singlethread_stem) failed to prepare detectors (" << ierr << ")." << std::endl;
 		goto _exit;
 	}
 	num_det_slc = (unsigned int)jms.GetDetetionSliceNum();
@@ -556,7 +560,7 @@ unsigned int __cdecl singlethread_run(prm_main *pprm)
 	ierr = prepare_cores(pprm, &jms);
 	if (0 < ierr) {
 		nerr = 3000 + ierr;
-		std::cerr << "Error: (singlethread_run) failed to calculation cores (" << ierr << ")." << std::endl;
+		std::cerr << "Error: (singlethread_stem) failed to calculation cores (" << ierr << ")." << std::endl;
 		goto _exit;
 	}
 	
@@ -564,29 +568,63 @@ unsigned int __cdecl singlethread_run(prm_main *pprm)
 	ierr = prepare_probe(pprm, &jms);
 	if (0 < ierr) {
 		nerr = 4000 + ierr;
-		std::cerr << "Error: (singlethread_run) failed to prepare probe (" << ierr << ")." << std::endl;
+		std::cerr << "Error: (singlethread_stem) failed to prepare probe (" << ierr << ")." << std::endl;
 		goto _exit;
-	}
-
-	// prepare local result arrays
-	if (pprm->detector.b_annular && num_ann > 0 && num_det_slc > 0) {
-		// local buffer: holds data of all detectors and all detection planes for one scan position
-		num_mem = sizeof(float) * num_det_slc * num_ann;
-		det_annular = (float*)malloc(num_mem);
-		if (NULL == det_annular) {
-			nerr = 10;
-			std::cerr << "Error: (singlethread_run) failed to allocate memory." << std::endl;
-			goto _exit;
-		}
-		memset(det_annular, 0, num_mem);
 	}
 
 	// prepare result containers of the prm_main object linked by the function interface
 	ierr = pprm->prepare_result_params();
 	if (0 < ierr) {
 		nerr = 13;
-		std::cerr << "Error: (singlethread_run) failed to prepare result containers." << std::endl;
+		std::cerr << "Error: (singlethread_stem) failed to prepare result containers." << std::endl;
 		goto _exit;
+	}
+
+	// prepare local result arrays
+	if (pprm->detector.b_annular && num_ann > 0 && num_det_slc > 0) {
+		// local buffer: holds data of all detectors and all detection planes for one scan position
+		sz_mem_ann = sizeof(float) * num_det_slc * num_ann;
+		det_annular = (float*)malloc(sz_mem_ann);
+		if (NULL == det_annular) {
+			nerr = 10;
+			std::cerr << "Error: (singlethread_stem) failed to allocate local scan result buffer." << std::endl;
+			goto _exit;
+		}
+		memset(det_annular, 0, sz_mem_ann);
+	}
+	if ((pprm->detector.b_difpat || pprm->detector.b_difpat_avg) && num_det_slc > 0) {
+		if (!pprm->detector.b_difpat) { // no individual diffraction pattern result handler
+			// allocate a local temporary buffer to gather diffraction results
+			// local buffer: holds diffraction patterns for all detection planes for one scan position
+			sz_mem_dif = sizeof(float) * num_det_slc * pprm->sample.grid_nx * pprm->sample.grid_ny;
+			det_pix_dif = (float*)malloc(sz_mem_dif);
+			if (NULL == det_pix_dif) {
+				nerr = 11;
+				std::cerr << "Error: (singlethread_stem) failed to allocate local diffraction result buffer." << std::endl;
+				goto _exit;
+			}
+			memset(det_pix_dif, 0, sz_mem_dif);
+		}
+		else { // use result handler to gather diffraction patterns
+			det_pix_dif = (float*)pprm->stem_pix_dif.pdata;
+		}
+	}
+	if ((pprm->detector.b_image || pprm->detector.b_image_avg) && num_det_slc > 0) {
+		if (!pprm->detector.b_image) { // no individual image result handler
+			// allocate a local temporary buffer to gather image results
+			// local buffer: holds image patterns for all detection planes for one scan position
+			sz_mem_img = sizeof(float) * num_det_slc * pprm->sample.grid_nx * pprm->sample.grid_ny;
+			det_pix_img = (float*)malloc(sz_mem_img);
+			if (NULL == det_pix_img) {
+				nerr = 11;
+				std::cerr << "Error: (singlethread_stem) failed to allocate local image result buffer." << std::endl;
+				goto _exit;
+			}
+			memset(det_pix_img, 0, sz_mem_img);
+		}
+		else { // use result handler to gather image patterns
+			det_pix_img = (float*)pprm->stem_pix_img.pdata;
+		}
 	}
 
 	w.n_acc_data = (unsigned int)_JMS_ACCMODE_NONE;
@@ -599,33 +637,39 @@ unsigned int __cdecl singlethread_run(prm_main *pprm)
 		std::cout << std::endl;
 	}
 	//
-	for (iy = iy0; iy < iy1; iy++) {
+	for (iy = iy0; iy < iy1; iy++) { // slow loop over scan rows
 		//
-		for (ix = ix0; ix < ix1; ix++) {
+		for (ix = ix0; ix < ix1; ix++) { // fast loop through each scan row
 			//
-			idx = ix + iy * pprm->scan.nx;
+			idx = ix + iy * pprm->scan.nx; // index of the pixel in the scan image
 			//
 			if (pprm->btalk) {
 				std::cout << "  Scanning  x: " << ix+1 << " / " << pprm->scan.nx << "   y: " << iy+1 << " / " << pprm->scan.ny << "     \r";
 			}
 			//
+			// set physical scan pixel position (grid coordinates)
 			w.f_dx = pprm->scan.offset_x + scan_rot_cos * scan_step_x * (float)ix - scan_rot_sin * scan_step_y * (float)iy;
 			w.f_dy = pprm->scan.offset_y + scan_rot_cos * scan_step_y * (float)iy + scan_rot_sin * scan_step_x * (float)ix;
 			w.f_dz = 0.f;
-			// add random variations here for explicit averaging
+			//
+			// set worker parameters
 			w.n_scan_idx = idx;
 			w.pf_res_int = det_annular;
+			w.pf_res_dif = det_pix_dif;
+			w.pf_res_img = det_pix_img;
 			//
+			// run the multislice calculation for this scan pixel
+			// (this may include several passes)
 			ierr = run_multislice(&w);
 			if (0 < ierr) {
 				nerr = 20;
 				std::cerr << "Error (JMS): " << w.str_err << std::endl;
-				std::cerr << "Error (singlethread_run): failed to run multislice (" << ierr << ")." << std::endl;
-				
+				std::cerr << "Error (singlethread_stem): failed to run multislice (" << ierr << ")." << std::endl;
 				goto _exit;
 			}
 			//
-			// transfer results
+			// transfer data to result objects
+			// - STEM images of integrated detectors
 			if (0 < (w.n_det_flags &(unsigned int)_JMS_DETECT_INTEGRATED)) {
 				// write data to result buffer
 				// as image series over thickness for each detector
@@ -638,22 +682,56 @@ unsigned int __cdecl singlethread_run(prm_main *pprm)
 					}
 				}
 			}
-		}
-	}
+			// - STEM images of integrated detectors
+			if (0 < (w.n_det_flags &(unsigned int)_JMS_DETECT_DIFFRACTION)) {
+				// write data to result buffers
+				// as image series over thickness
+				// - position dependent data -> push to disk
+				if (pprm->detector.b_difpat) {
+					str_pix = format("_px%03d_py%03d", ix, iy); // format pixel string
+					pprm->stem_pix_dif.shift_org(nyqx + 1, nyqy + 1, 1.f / w.f_wgt); // shift and normalize pattern
+					pprm->stem_pix_dif.save(0, "_pdif" + str_pix, "bin"); // save pattern
+				}
+				// - position averaged data -> accumulate
+				if (pprm->detector.b_difpat_avg) {
+					pprm->stem_pix_padif.add_buffer(w.pf_res_dif, w.f_wgt);
+				}
+			}
+			if (0 < (w.n_det_flags &(unsigned int)_JMS_DETECT_IMAGE)) {
+				// write data to result buffers
+				// as image series over thickness
+				// - position dependent data -> push to disk
+				if (pprm->detector.b_image) {
+					str_pix = format("_px%03d_py%03d", ix, iy); // format pixel string
+					pprm->stem_pix_img.normalize(w.f_wgt / pprm->stem_pix_img.f_calc_scale); // normalize image
+					pprm->stem_pix_img.save(0, "_pimg" + str_pix, "bin"); // save image
+				}
+				// - position averaged data -> accumulate
+				if (pprm->detector.b_image_avg) {
+					pprm->stem_pix_paimg.add_buffer(w.pf_res_img, w.f_wgt);
+				}
+			}
+		} // scan x
+	} // scan y
+	//
+	// collect averaged data from jms
+	//
 	if (pprm->btalk) {
 		std::cout << std::endl;
 	}
 
 _exit:
-	if (NULL != det_annular) { free(det_annular); det_annular = NULL; }
+	if (0 < sz_mem_ann) { free(det_annular); det_annular = NULL; sz_mem_ann = 0; }
+	if (0 < sz_mem_dif) { free(det_pix_dif); det_pix_dif = NULL; sz_mem_dif = 0; }
+	if (0 < sz_mem_img) { free(det_pix_img); det_pix_img = NULL; sz_mem_img = 0; }
 	return nerr;
 }
 
 
-unsigned int __cdecl multithread_run(prm_main *pprm)
+unsigned int __cdecl multithread_stem(prm_main *pprm)
 {
 	unsigned int nerr = 0;
-	std::cout << "Multi-threaded calculation is not yet implemented." << std::endl;
+	std::cout << "Multi-threaded STEM simulation is not yet implemented." << std::endl;
 //_exit:
 	return nerr;
 }

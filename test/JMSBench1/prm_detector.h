@@ -119,6 +119,7 @@ public:
 	bool b_difpat; // record diffraction pattern (CBED)
 	bool b_difpat_avg; // record average diffraction pattern (PACBED)
 	bool b_image; // record image pattern (probe image)
+	bool b_image_avg; // record average image pattern (ISTEM)
 	bool b_wave; // record wave function
 	bool b_waveft; // record wave function in reciprocal space
 	bool b_wave_avg; // record average wave function (elastic channel)
@@ -140,6 +141,12 @@ public:
 	// The setup may be provided as pointer to a std::vector<prm_annular> object
 	// The current object member v_annular is printed, if the argument is NULL (default).
 	void print_setup_annular(std::vector<prm_annular> *pv_ad = NULL);
+
+	// prints the current pixelated detector setup
+	void print_setup_pixelated(void);
+
+	// user input and setup of pixelated detectors
+	int setup_pixelated(void);
 
 	// user input and setup of annular detectors
 	int setup_annular(void);

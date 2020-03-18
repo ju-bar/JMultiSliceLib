@@ -343,9 +343,17 @@ int prm_main::setup_detector(void)
 		std::cout << "  Detector setup ..." << std::endl;
 	}
 
+	// setup integrating annular detectors
 	ierr = detector.setup_annular();
 	if (0 < ierr) {
 		nerr = 100 + ierr;
+		goto exit;
+	}
+
+	// setup pixelated detectors
+	ierr = detector.setup_pixelated();
+	if (0 < ierr) {
+		nerr = 200 + ierr;
 		goto exit;
 	}
 
@@ -479,29 +487,105 @@ int prm_main::prepare_result_params()
 		stem_images.set_ctrl(*this);
 		stem_images.data_type = (unsigned int)_RESULT_DATA_TYPE_FLOAT;
 		stem_images.det_type = (unsigned int)_JMS_DETECT_INTEGRATED;
-		stem_images.v_dim.push_back((int)scan.nx); // length of scan rows
-		stem_images.v_dim.push_back((int)scan.ny); // number of scan rows
-		stem_images.v_dim.push_back((int)num_det_pln); // number of thickness samples
-		stem_images.v_dim.push_back((int)num_ann); // number of detectors
+		stem_images.v_dim.push_back(scan.nx); // length of scan rows
+		stem_images.v_dim.push_back(scan.ny); // number of scan rows
+		stem_images.v_dim.push_back(num_det_pln); // number of thickness samples
+		stem_images.v_dim.push_back(num_ann); // number of detectors
 		stem_images.probe.copy_data_from(&probe); // copy probe parameters
 		stem_images.sample.copy_setup_from(&sample); // copy sample setup (not all data)
 		stem_images.detector.copy_setup_from(&detector); // copy detector parameters
 		stem_images.scan = scan; // copy scan setup
 		stem_images.str_out_file = str_out_file;
-		if (NULL != stem_images.pdata) {
-			free(stem_images.pdata);
-			stem_images.sz_data = 0;
+		stem_images.f_calc_scale = 1.f;
+		stem_images.f_calc_weight = 0.f;
+		if (0 < stem_images.init_buffer()) {
+			nerr = 1;
+			std::cerr << "Error: (prepare_result_params) failed to allocate scan image buffer." << std::endl;
+			goto _exit;
 		}
-		stem_images.sz_data = stem_images.get_item_bytes() * scan.nx * scan.ny * num_det_pln * num_ann;
-		if (stem_images.sz_data > 0) {
-			stem_images.pdata = (float*)malloc(stem_images.sz_data);
-			if (NULL == stem_images.pdata) {
-				stem_images.sz_data = 0;
-				nerr = 1;
-				std::cerr << "Error: (prepare_result_params) failed to allocate scan image buffer." << std::endl;
-				goto _exit;
-			}
-			memset(stem_images.pdata, 0, stem_images.sz_data);
+	}
+
+	if (detector.b_difpat) {
+		stem_pix_dif.set_ctrl(*this);
+		stem_pix_dif.data_type = (unsigned int)_RESULT_DATA_TYPE_FLOAT;
+		stem_pix_dif.det_type = (unsigned int)_JMS_DETECT_DIFFRACTION;
+		stem_pix_dif.v_dim.push_back(sample.grid_nx); // grid row length
+		stem_pix_dif.v_dim.push_back(sample.grid_ny); // grid column length
+		stem_pix_dif.v_dim.push_back(num_det_pln); // number of thickness samples
+		stem_pix_dif.probe.copy_data_from(&probe); // copy probe parameters
+		stem_pix_dif.sample.copy_setup_from(&sample); // copy sample setup (not all data)
+		stem_pix_dif.detector.copy_setup_from(&detector); // copy detector parameters
+		stem_pix_dif.scan = scan; // copy scan setup
+		stem_pix_dif.str_out_file = str_out_file;
+		stem_pix_dif.f_calc_scale = 1.f;
+		stem_pix_dif.f_calc_weight = 0.f;
+		if (0 < stem_pix_dif.init_buffer()) {
+			nerr = 2;
+			std::cerr << "Error: (prepare_result_params) failed to allocate scanned diffraction buffer." << std::endl;
+			goto _exit;
+		}
+	}
+
+	if (detector.b_difpat_avg) {
+		stem_pix_padif.set_ctrl(*this);
+		stem_pix_padif.data_type = (unsigned int)_RESULT_DATA_TYPE_FLOAT;
+		stem_pix_padif.det_type = (unsigned int)_JMS_DETECT_DIFFRACTION;
+		stem_pix_padif.v_dim.push_back(sample.grid_nx); // grid row length
+		stem_pix_padif.v_dim.push_back(sample.grid_ny); // grid column length
+		stem_pix_padif.v_dim.push_back(num_det_pln); // number of thickness samples
+		stem_pix_padif.probe.copy_data_from(&probe); // copy probe parameters
+		stem_pix_padif.sample.copy_setup_from(&sample); // copy sample setup (not all data)
+		stem_pix_padif.detector.copy_setup_from(&detector); // copy detector parameters
+		stem_pix_padif.scan = scan; // copy scan setup
+		stem_pix_padif.str_out_file = str_out_file;
+		stem_pix_padif.f_calc_scale = 1.f;
+		stem_pix_padif.f_calc_weight = 0.f;
+		if (0 < stem_pix_padif.init_buffer()) {
+			nerr = 2;
+			std::cerr << "Error: (prepare_result_params) failed to allocate average diffraction buffer." << std::endl;
+			goto _exit;
+		}
+	}
+
+	if (detector.b_image) {
+		stem_pix_img.set_ctrl(*this);
+		stem_pix_img.data_type = (unsigned int)_RESULT_DATA_TYPE_FLOAT;
+		stem_pix_img.det_type = (unsigned int)_JMS_DETECT_IMAGE;
+		stem_pix_img.v_dim.push_back(sample.grid_nx); // grid row length
+		stem_pix_img.v_dim.push_back(sample.grid_ny); // grid column length
+		stem_pix_img.v_dim.push_back(num_det_pln); // number of thickness samples
+		stem_pix_img.probe.copy_data_from(&probe); // copy probe parameters
+		stem_pix_img.sample.copy_setup_from(&sample); // copy sample setup (not all data)
+		stem_pix_img.detector.copy_setup_from(&detector); // copy detector parameters
+		stem_pix_img.scan = scan; // copy scan setup
+		stem_pix_img.str_out_file = str_out_file;
+		stem_pix_img.f_calc_scale = 1.f / ((float)sample.grid_nx*sample.grid_ny);
+		stem_pix_img.f_calc_weight = 0.f;
+		if (0 < stem_pix_img.init_buffer()) {
+			nerr = 2;
+			std::cerr << "Error: (prepare_result_params) failed to allocate scanned image buffer." << std::endl;
+			goto _exit;
+		}
+	}
+
+	if (detector.b_image_avg) {
+		stem_pix_paimg.set_ctrl(*this);
+		stem_pix_paimg.data_type = (unsigned int)_RESULT_DATA_TYPE_FLOAT;
+		stem_pix_paimg.det_type = (unsigned int)_JMS_DETECT_IMAGE;
+		stem_pix_paimg.v_dim.push_back(sample.grid_nx); // grid row length
+		stem_pix_paimg.v_dim.push_back(sample.grid_ny); // grid column length
+		stem_pix_paimg.v_dim.push_back(num_det_pln); // number of thickness samples
+		stem_pix_paimg.probe.copy_data_from(&probe); // copy probe parameters
+		stem_pix_paimg.sample.copy_setup_from(&sample); // copy sample setup (not all data)
+		stem_pix_paimg.detector.copy_setup_from(&detector); // copy detector parameters
+		stem_pix_paimg.scan = scan; // copy scan setup
+		stem_pix_paimg.str_out_file = str_out_file;
+		stem_pix_paimg.f_calc_scale = 1.f / ((float)sample.grid_nx*sample.grid_ny);
+		stem_pix_paimg.f_calc_weight = 0.f;
+		if (0 < stem_pix_paimg.init_buffer()) {
+			nerr = 2;
+			std::cerr << "Error: (prepare_result_params) failed to allocate average image buffer." << std::endl;
+			goto _exit;
 		}
 	}
 

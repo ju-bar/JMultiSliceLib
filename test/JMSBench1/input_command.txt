@@ -77,6 +77,31 @@ set_det_annular
 	plane.
 
 
+set_det_dif
+
+	Activate the collection of diffraction patterns for each
+	probe position of the scan.
+	Warning: This can produce considerable amounts of data.
+
+
+set_det_padif
+
+	Activate the collection of diffraction patterns averaged over
+	probe positions of the scan.
+
+
+set_det_img
+
+	Activate the collection of probe images for each
+	probe position of the scan.
+
+
+set_det_paimg
+
+	Activate the collection of probe images averaged over
+	probe positions of the scan.
+
+
 set_scan_sampling
 <int> <int>
 

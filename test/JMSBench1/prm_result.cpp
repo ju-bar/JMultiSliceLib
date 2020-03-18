@@ -40,6 +40,10 @@ prm_result::prm_result()
 	sz_data = 0;
 	pdata = NULL;
 	str_out_file = "";
+	f_calc_scale = 1.f;
+	f_calc_weight = 0.f;
+	pshift_hash = NULL;
+	sz_shift_hash = 0;
 }
 
 
@@ -53,6 +57,8 @@ prm_result::prm_result(const prm_result &src)
 	det_type = src.det_type;
 	v_dim = src.v_dim;
 	str_out_file = src.str_out_file;
+	f_calc_scale = src.f_calc_scale;
+	f_calc_weight = src.f_calc_weight;
 	
 	pdata = NULL;
 	sz_data = 0;
@@ -77,9 +83,179 @@ prm_result::~prm_result()
 		pdata = NULL;
 		sz_data = 0;
 	}
+	if (NULL != pshift_hash) {
+		free(pshift_hash);
+		pshift_hash = NULL;
+		sz_shift_hash = 0;
+	}
 	v_dim.clear();
 }
 
+
+int prm_result::init_buffer()
+{
+	size_t nd = v_dim.size();
+	size_t sz = get_item_bytes();
+	if (NULL != pdata) {
+		free(pdata);
+		pdata = NULL;
+	}
+	sz_data = 0;
+	if (NULL != pshift_hash) {
+		free(pshift_hash);
+		pshift_hash = NULL;
+	}
+	sz_shift_hash = 0;
+	
+	if (nd > 0) {
+		sz_data = sz;
+		for (size_t i = 0; i < nd; i++) {
+			sz_data *= ((size_t)v_dim[i]);
+		}
+		pdata = (float*)malloc(sz_data);
+		if (NULL == pdata) {
+			sz_data = 0;
+			std::cerr << "Error: (init_buffer) failed to allocate result buffer." << std::endl;
+			return 1;
+		}
+	}
+	zero_buffer();
+	return 0;
+}
+
+
+int prm_result::zero_buffer()
+{
+	if (NULL == pdata || 0 == sz_data) return 1;
+	memset(pdata, 0, sz_data);
+	f_calc_weight = 0.f;
+	return 0;
+}
+
+
+int prm_result::add_buffer(float* src, float weight)
+{
+	if (NULL == pdata || 0 == sz_data) return 1;
+	if (NULL == src) return 2;
+	if (weight == 0.f) return 0;
+	float* dst = (float*)pdata;
+	size_t num_float = sz_data / sizeof(float);
+	for (size_t i = 0; i < num_float; i++) {
+		dst[i] = dst[i] + weight * src[i];
+	}
+	f_calc_weight += weight;
+	return 0;
+}
+
+int prm_result::normalize(float weight)
+{
+	if (NULL == pdata || 0 == sz_data) return 1;
+	if (weight == 0.f) return 2;
+	float iwgt = 1.f / weight;
+	float* pfdata = (float*)pdata;
+	size_t num_float = sz_data / sizeof(float);
+	for (size_t i = 0; i < num_float; i++) {
+		pfdata[i] = pfdata[i] * iwgt;
+	}
+	return 0;
+}
+
+int prm_result::save(unsigned int idx_chan, std::string str_suffix, std::string str_format)
+{
+	int nerr = 0;
+	int ifmt = 0;
+	size_t dim_num = v_dim.size(); // number of data dimensions
+	size_t items_num = 0; // number of items per image (pixels)
+	size_t sz_out = 0; // size of output in bytes
+	size_t chan_pos = 0; // offset position (item) of the channel
+	unsigned int img_num = 1; // number of images per channel
+	unsigned int chan_num = 1; // number of channels
+	float* pchan = (float*)pdata; // pointer to the channel in pdata
+	std::string str_file;
+	std::ofstream ofs;
+
+	// check for sufficient image dimensions
+	if (dim_num < 2) {
+		nerr = 1;
+		std::cerr << "Error (save): data has insufficient number of dimensions to represent images." << std::endl;
+		goto _exit;
+	}
+
+	// check state of data buffer
+	if (NULL == pdata || 0 == sz_data) {
+		nerr = 2;
+		std::cerr << "Error (save): data buffer not allocated." << std::endl;
+		goto _exit;
+	}
+
+	// calculate number of data items per image
+	items_num = (size_t)v_dim[0] * v_dim[1];
+
+	// get length of image series (thickness)
+	if (dim_num > 2) {
+		img_num = v_dim[2];
+	}
+
+	// get number of data channels (detectors)
+	if (dim_num > 3) {
+		chan_num = v_dim[3];
+	}
+
+	// check selected output channel
+	if (idx_chan >= chan_num) {
+		nerr = 3;
+		std::cerr << "Error (save): index of selected output channel (" <<
+			idx_chan << ") is too large for present number of channels (" <<
+			chan_num << ")." << std::endl;
+		goto _exit;
+	}
+
+	// calculate output bytes
+	sz_out = get_item_bytes() * items_num * img_num; // size of the output in bytes
+	chan_pos = items_num * img_num * idx_chan;
+	pchan = &((float*)pdata)[chan_pos];
+
+	// prepare output file name
+	str_file = str_out_file + str_suffix;
+
+	// make format specific settings
+	if (str_format == "bin") {
+		ifmt = 1;
+		str_file = str_file + ".bin";
+	}
+
+	if (ifmt == 0) { // format not supported
+		nerr = 999;
+		std::cerr << "Error: failed to save result due to unsupported format (" << str_format << ")." << std::endl;
+		goto _exit;
+	}
+
+	ofs.open(str_file, std::ios::out | std::ios::trunc | std::ios::binary);
+	if (!ofs.is_open()) {
+		nerr = 4;
+		std::cerr << "Error (save): failed to open file [" << str_file << "]." << std::endl;
+		goto _exit;
+	}
+
+	// save depending on format
+	if (str_format == "bin") {
+		ofs.write((char*)pchan, sz_out);
+		if (ofs.fail()) {
+			nerr = 5;
+			std::cerr << "Error (save): failed to write data to file [" << str_file << "]." << std::endl;
+			goto _exit;
+		}
+		if (btalk) {
+			std::cout << std::endl;
+			std::cout << "  Image series of channel #" << idx_chan << " written to file [" << str_file << "]" << std::endl;
+			std::cout << "  - " << v_dim[0] << " x " << v_dim[1] << " x " << img_num << " x " << get_data_type_name() << std::endl;
+		}
+	}
+
+_exit:
+	if (ofs.is_open()) { ofs.close(); }
+	return nerr;
+}
 
 size_t prm_result::get_item_bytes()
 {
@@ -192,74 +368,112 @@ fcmplx prm_result::get_datac(std::vector<unsigned int> v_pos)
 	return c_val;
 }
 
-int prm_result::write_image_series(std::string sfilename, unsigned int idx_chan)
+int prm_result::shift_org(int orgx, int orgy, float fac)
 {
 	int nerr = 0;
-	size_t dim_num = v_dim.size(); // number of data dimensions
-	size_t items_num = 0; // number of items per image (pixels)
-	size_t sz_out = 0; // size of output in bytes
-	size_t chan_pos = 0; // offset position (item) of the channel
-	unsigned int img_num = 1; // number of images per channel
-	unsigned int chan_num = 1; // number of channels
-	float* pchan = (float*)pdata; // pointer to the channel in pdata
-	std::ofstream ofs;
-	
+	unsigned int dim_num = (unsigned int)v_dim.size(); // number of data dimensions
+	unsigned int items_num = 0; // number of items per image (pixels)
+	unsigned int float_num = 1; // number of floats per item
+	unsigned int float_tot = 1; // total number of floats
+	size_t sz_img = 0; // number of bytes per image
+	unsigned int i = 0, h = 0, k = 0, l = 0, h0 = 0, k0 = 0, h1 = 0, k1 = 0;
+	unsigned int idx = 0, idx1 = 0, idy = 0, idy1 = 0;
+	unsigned int img_num = 1; // number of images
+	float* pimg = (float*)pdata; // pointer to the current image
+	float* ptmp = NULL; // temporary copy of an image
+	unsigned int* pidx = NULL; // shift hash table (target index -> source index)
+
+	// check for sufficient image dimensions
 	if (dim_num < 2) {
 		nerr = 1;
-		std::cerr << "Error (write_image_series): data has insufficient number of dimensions to represent images." << std::endl;
+		std::cerr << "Error (shift_org): data has insufficient number of dimensions to represent images." << std::endl;
 		goto _exit;
 	}
 
+	// check state of data buffer
 	if (NULL == pdata || 0 == sz_data) {
 		nerr = 2;
-		std::cerr << "Error (write_image_series): data buffer not allocated." << std::endl;
+		std::cerr << "Error (shift_org): data buffer not allocated." << std::endl;
 		goto _exit;
 	}
 
-	items_num = (size_t)v_dim[0] * v_dim[1];
+	float_num = (unsigned int)(get_item_bytes() / sizeof(float)); // # floats per item
+	items_num = v_dim[0] * v_dim[1]; // # items per image
+	float_tot = float_num * items_num; // total # floats per image
+	sz_img = sizeof(float) * (size_t)(float_tot); // # bytes per image
 
+	// get location of the origin in the array
+	h0 = (unsigned int)(orgx % (int)v_dim[0]);
+	k0 = (unsigned int)(orgy % (int)v_dim[1]);
+	if (h0 == 0 && k0 == 0) { // no shift needed
+		goto _exit;
+	}
+
+	// allocate a local buffer to store a temporary image copy
+	ptmp = (float*)malloc(sz_img);
+	if (NULL == ptmp) {
+		nerr = 3;
+		std::cerr << "Error (shift_org): data buffer not allocated." << std::endl;
+		goto _exit;
+	}
+	// allocate a local buffer for shift indices + setup the shifts
+	if (NULL == pshift_hash) {
+		sz_shift_hash = sizeof(unsigned int) * (size_t)(float_num * items_num);
+		pshift_hash = (unsigned int*)malloc(sz_shift_hash);
+		if (NULL == pshift_hash) {
+			nerr = 4;
+			std::cerr << "Error (shift_org): data buffer not allocated." << std::endl;
+			goto _exit;
+		}
+		// the following calculation of shift assignments should happen only once per lifetime
+		// of the data buffer
+		for (k = 0; k < v_dim[1]; k++) { // loop over destination rows (y)
+			idy = k * v_dim[0]; // target row offset
+			k1 = (k + k0) % v_dim[1]; // get position + source origin wrapped to array bounds on dim 1
+			idy1 = k1 * v_dim[0]; // source row offset
+			for (h = 0; h < v_dim[0]; h++) { // loop through destination rows (x)
+				idx = h + idy; // target column
+				h1 = (h + h0) % v_dim[0]; // get position + source origin wrapped to array bounds on dim 0
+				idx1 = h1 + idy1; // source column
+				for (l = 0; l < float_num; l++) { // store assignment idx -> idx1 for all floats per item
+					pshift_hash[l + idx] = l + idx1;
+				}
+			}
+		}
+	}
+
+	// get length of image series (thickness)
 	if (dim_num > 2) {
 		img_num = v_dim[2];
 	}
+
+	// get number of data channels (detectors)
 	if (dim_num > 3) {
-		chan_num = v_dim[3];
-	}
-
-	if (idx_chan >= chan_num) {
-		nerr = 3;
-		std::cerr << "Error (write_image_series): index of selected output channel (" << 
-			idx_chan << ") is too large for present number of channels (" << 
-			chan_num << ")." << std::endl;
-		goto _exit;
-	}
-
-	sz_out = get_item_bytes() * items_num * img_num; // size of the output in bytes
-	chan_pos = items_num * img_num * idx_chan;
-	pchan = &((float*)pdata)[chan_pos];
-
-	ofs.open(sfilename, std::ios::out | std::ios::trunc | std::ios::binary);
-	if (ofs.is_open()) {
-		ofs.write((char*)pchan, sz_out);
-		if (ofs.fail()) {
-			nerr = 5;
-			std::cerr << "Error (write_image_series): failed to write data to file [" << sfilename << "]." << std::endl;
-			goto _exit;
+		for (i = 3; i < dim_num; i++) {
+			img_num = img_num * v_dim[i];
 		}
 	}
-	else {
-		nerr = 4;
-		std::cerr << "Error (write_image_series): failed to open file [" << sfilename << "]." << std::endl;
-		goto _exit;
-	}
 
-	if (btalk) {
-		std::cout << std::endl;
-		std::cout << "  Image series of channel #" << idx_chan << " written to file [" << sfilename << "]" << std::endl;
-		std::cout << "  - " << v_dim[0] << " x " << v_dim[1] << " x " << img_num << " x " << get_data_type_name() << std::endl;
+	// loop over images
+	for (i = 0; i < img_num; i++) {
+		pimg = &((float*)pdata)[i * float_tot]; // get pointer to current image
+		memcpy(ptmp, pimg, sz_img); // copy the image
+		// copy all floats shifted using the table pshift_hash
+		if (fac == 1.f) { // shift without multiplication
+			for (idx = 0; idx < float_tot; idx++) {
+				idx1 = pshift_hash[idx];
+				pimg[idx] = ptmp[idx1];
+			}
+		}
+		else { // shift with multiplication
+			for (idx = 0; idx < float_tot; idx++) {
+				idx1 = pshift_hash[idx];
+				pimg[idx] = ptmp[idx1] * fac;
+			}
+		}
 	}
-
 
 _exit:
-	if (ofs.is_open()) { ofs.close(); }
+	if (NULL != ptmp) { free(ptmp); }
 	return nerr;
 }

@@ -306,6 +306,11 @@ CJMultiSlice::CJMultiSlice()
 	m_h_det_dif = NULL;
 	m_h_det_wfr = NULL;
 	m_h_det_wff = NULL;
+	m_h_det_img_avg = NULL;
+	m_h_det_dif_avg = NULL;
+	m_h_det_wfr_avg = NULL;
+	m_h_det_wff_avg = NULL;
+	m_h_weight_avg = NULL;
 	m_h_dif_ndescanx = NULL;
 	m_h_dif_ndescany = NULL;
 	m_d_wav = NULL;
@@ -319,6 +324,11 @@ CJMultiSlice::CJMultiSlice()
 	m_d_det_dif = NULL;
 	m_d_det_wfr = NULL;
 	m_d_det_wff = NULL;
+	m_d_det_img_avg = NULL;
+	m_d_det_dif_avg = NULL;
+	m_d_det_wfr_avg = NULL;
+	m_d_det_wff_avg = NULL;
+	m_d_weight_avg = 0.f;
 	m_d_det_tmp = NULL;
 	m_d_det_tmpwav = NULL;
 	m_d_dif_ndescanx = 0;
@@ -731,6 +741,23 @@ int CJMultiSlice::DetectorSetup(int whichcode, int ndetper, int ndetint, int ima
 			nbytes = sizeof(fcmplx)*nitems*m_ndetslc*m_threads_CPU_out;
 			if (0 < AllocMem_h((void**)&m_h_det_wff, nbytes, "DetectorSetup", "Fourier-space wavefunction", true)) { nerr = 9; goto _Exit; }
 		}
+		if (0 < AllocMem_h((void**)&m_h_weight_avg, sizeof(float)*m_threads_CPU_out, "DetectorSetup", "averaging weights", true)) { nerr = 10; goto _Exit; }
+		if (m_imagedet&_JMS_DETECT_IMAGE_AVG) { // prepare averaged image plane readout arrays
+			nbytes = sizeof(float)*nitems*m_ndetslc*m_threads_CPU_out;
+			if (0 < AllocMem_h((void**)&m_h_det_img_avg, nbytes, "DetectorSetup", "averaged image planes", true)) { nerr = 11; goto _Exit; }
+		}
+		if (m_imagedet&_JMS_DETECT_DIFFR_AVG) { // prepare averaged diffraction plane readout arrays
+			nbytes = sizeof(float)*nitems*m_ndetslc*m_threads_CPU_out;
+			if (0 < AllocMem_h((void**)&m_h_det_dif_avg, nbytes, "DetectorSetup", "averaged diffraction planes", true)) { nerr = 12; goto _Exit; }
+		}
+		if (m_imagedet&_JMS_DETECT_WAVER_AVG) { // prepare averaged psi(r) readout arrays
+			nbytes = sizeof(fcmplx)*nitems*m_ndetslc*m_threads_CPU_out;
+			if (0 < AllocMem_h((void**)&m_h_det_wfr_avg, nbytes, "DetectorSetup", "averaged real-space wavefunction", true)) { nerr = 13; goto _Exit; }
+		}
+		if (m_imagedet&_JMS_DETECT_WAVEF_AVG) { // prepare averaged psi(k) readout arrays
+			nbytes = sizeof(fcmplx)*nitems*m_ndetslc*m_threads_CPU_out;
+			if (0 < AllocMem_h((void**)&m_h_det_wff_avg, nbytes, "DetectorSetup", "averaged Fourier-space wavefunction", true)) { nerr = 14; goto _Exit; }
+		}
 	}
 	
 	// GPU code - detector setup -> Memory prepared but no data set.
@@ -759,6 +786,23 @@ int CJMultiSlice::DetectorSetup(int whichcode, int ndetper, int ndetint, int ima
 		if (m_imagedet&_JMS_DETECT_WAVEFOURIER) { // prepare psi(k) readout arrays
 			nbytes = sizeof(cuComplex)*nitems*m_ndetslc; // calculate number of bytes to allocate
 			if (0 < AllocMem_d((void**)&m_d_det_wff, nbytes, "DetectorSetup", "Fourier-space wavefunction", true)) { nerr = 109; goto _Exit; }
+		}
+		m_d_weight_avg = 0.f;
+		if (m_imagedet&_JMS_DETECT_IMAGE_AVG) { // prepare averaged image plane readout arrays
+			nbytes = sizeof(float)*nitems*m_ndetslc; // calculate number of bytes to allocate
+			if (0 < AllocMem_d((void**)&m_d_det_img_avg, nbytes, "DetectorSetup", "averaged image planes", true)) { nerr = 111; goto _Exit; }
+		}
+		if (m_imagedet&_JMS_DETECT_DIFFR_AVG) { // prepare averaged diffraction plane readout arrays
+			nbytes = sizeof(float)*nitems*m_ndetslc; // calculate number of bytes to allocate
+			if (0 < AllocMem_d((void**)&m_d_det_dif_avg, nbytes, "DetectorSetup", "averaged diffraction planes", true)) { nerr = 112; goto _Exit; }
+		}
+		if (m_imagedet&_JMS_DETECT_WAVER_AVG) { // prepare averaged psi(r) readout arrays
+			nbytes = sizeof(cuComplex)*nitems*m_ndetslc; // calculate number of bytes to allocate
+			if (0 < AllocMem_d((void**)&m_d_det_wfr_avg, nbytes, "DetectorSetup", "averaged real-space wavefunction", true)) { nerr = 114; goto _Exit; }
+		}
+		if (m_imagedet&_JMS_DETECT_WAVEF_AVG) { // prepare averaged psi(k) readout arrays
+			nbytes = sizeof(cuComplex)*nitems*m_ndetslc; // calculate number of bytes to allocate
+			if (0 < AllocMem_d((void**)&m_d_det_wff_avg, nbytes, "DetectorSetup", "averaged Fourier-space wavefunction", true)) { nerr = 115; goto _Exit; }
 		}
 	}
 	
@@ -1649,6 +1693,7 @@ int CJMultiSlice::InitCore(int whichcode, int nCPUthreads)
 		for (icore = 0; icore < m_ncputhreads; icore++) { // initialize all FFTW cores
 			//if (0 == m_jcpuco[icore].Init(2, pdims, (int)_JMS_FFTW_PLANFLAG)) {
 			if (0 == m_jcpuco[icore].Init(2, pdims)) {
+				ResetAveraging(_JMS_CODE_CPU, icore);
 				ncore_ready++;
 			}
 			else {
@@ -1672,6 +1717,7 @@ int CJMultiSlice::InitCore(int whichcode, int nCPUthreads)
 			std::cerr << "Error: (InitCore): Failed to initialize GPU core." << std::endl;
 			nerr = 103; goto _Exit; 
 		} // gpu core init failure?
+		ResetAveraging(_JMS_CODE_GPU, 0);
 		nbytes = sizeof(cuComplex)*(size_t)nitems;
 		if (0 < AllocMem_d((void**)&m_d_wav0, nbytes, "InitCore", "wave function backup", true)) { nerr = 104; goto _Exit; }
 		if (0 < AllocMem_d((void**)&m_d_wav, nbytes, "InitCore", "wave function", true)) { nerr = 105; goto _Exit; }
@@ -2230,6 +2276,79 @@ _Exit:
 }
 
 
+
+float CJMultiSlice::GetAveragingWeight(int whichcode, int iThread)
+{
+	float fwgt = 0.f;
+	if ((whichcode&_JMS_CODE_GPU)) {
+		fwgt = m_d_weight_avg;
+	}
+	if ((whichcode&_JMS_CODE_CPU) && (NULL != m_h_weight_avg) && (iThread >= 0) && (iThread < m_ncputhreads)) {
+		fwgt = m_h_weight_avg[iThread];
+	}
+	return fwgt;
+}
+
+
+int CJMultiSlice::ResetAveraging(int whichcode, int iThread)
+{
+	int nerr = 0;
+	cudaError cuerr;
+	size_t nitems = (size_t)m_nscx * (size_t)m_nscy * (size_t)m_ndetslc;
+	void *pchan = NULL;
+	if (nitems == 0) return 0;
+	if ((whichcode&_JMS_CODE_CPU) && (NULL != m_h_weight_avg) && (iThread >= 0) && (iThread < m_ncputhreads)) {
+		m_h_weight_avg[iThread] = 0.f;
+		if ((m_imagedet & _JMS_DETECT_IMAGE_AVG) && (NULL != m_h_det_img_avg)) {
+			pchan = (void*)(&m_d_det_img_avg[iThread * nitems]);
+			if (NULL == memset(pchan, 0, sizeof(float) * nitems)) {
+				nerr = 1; goto _exit;
+			}
+		}
+		if ((m_imagedet & _JMS_DETECT_DIFFR_AVG) && (NULL != m_h_det_dif_avg)) {
+			pchan = (void*)(&m_d_det_dif_avg[iThread * nitems]);
+			if (NULL == memset(pchan, 0, sizeof(float) * nitems)) {
+				nerr = 2; goto _exit;
+			}
+		}
+		if ((m_imagedet & _JMS_DETECT_WAVER_AVG) && (NULL != m_h_det_wfr_avg)) {
+			pchan = (void*)(&m_d_det_wfr_avg[iThread * nitems]);
+			if (NULL == memset(pchan, 0, sizeof(fcmplx) * nitems)) {
+				nerr = 3; goto _exit;
+			}
+		}
+		if ((m_imagedet & _JMS_DETECT_WAVEF_AVG) && (NULL != m_h_det_wff_avg)) {
+			pchan = (void*)(&m_d_det_wff_avg[iThread * nitems]);
+			if (NULL == memset(pchan, 0, sizeof(fcmplx) * nitems)) {
+				nerr = 4; goto _exit;
+			}
+		}
+	}
+	if ((whichcode&_JMS_CODE_GPU)) {
+		m_d_weight_avg = 0.f;
+		if ((m_imagedet & _JMS_DETECT_IMAGE_AVG) && (NULL != m_d_det_img_avg)) {
+			cuerr = cudaMemset((void*)m_d_det_img_avg, 0, sizeof(float) * nitems);
+			if (cuerr != cudaSuccess) { nerr = 101; goto _exit; }
+		}
+		if ((m_imagedet & _JMS_DETECT_DIFFR_AVG) && (NULL != m_d_det_dif_avg)) {
+			cuerr = cudaMemset((void*)m_d_det_dif_avg, 0, sizeof(float) * nitems);
+			if (cuerr != cudaSuccess) { nerr = 102; goto _exit; }
+		}
+		if ((m_imagedet & _JMS_DETECT_WAVER_AVG) && (NULL != m_d_det_wfr_avg)) {
+			cuerr = cudaMemset((void*)m_d_det_wfr_avg, 0, sizeof(cuComplex) * nitems);
+			if (cuerr != cudaSuccess) { nerr = 103; goto _exit; }
+		}
+		if ((m_imagedet & _JMS_DETECT_WAVEF_AVG) && (NULL != m_d_det_wff_avg)) {
+			cuerr = cudaMemset((void*)m_d_det_wff_avg, 0, sizeof(cuComplex) * nitems);
+			if (cuerr != cudaSuccess) { nerr = 104; goto _exit; }
+		}
+	}
+_exit:
+	return nerr;
+}
+
+
+
 int CJMultiSlice::Cleanup(void)
 {
 	int nerr = 0;
@@ -2262,6 +2381,11 @@ int CJMultiSlice::Cleanup(void)
 	if ((m_status_setup_GPU & (int)_JMS_STATUS_CORE) > 0) m_status_setup_GPU -= (int)_JMS_STATUS_CORE;
 	
 	// (int)_JMS_STATUS_DET
+	DeallocMem_h((void**)&m_h_det_wfr_avg);
+	DeallocMem_h((void**)&m_h_det_wff_avg);
+	DeallocMem_h((void**)&m_h_det_dif_avg);
+	DeallocMem_h((void**)&m_h_det_img_avg);
+	DeallocMem_h((void**)&m_h_weight_avg);
 	DeallocMem_h((void**)&m_h_det_wfr);
 	DeallocMem_h((void**)&m_h_det_wff);
 	DeallocMem_h((void**)&m_h_det_dif);
@@ -2269,6 +2393,10 @@ int CJMultiSlice::Cleanup(void)
 	DeallocMem_h((void**)&m_h_det_int);
 	DeallocMem_h((void**)&m_h_det);
 	DeallocMem_h((void**)&m_h_detmask);
+	DeallocMem_d((void**)&m_d_det_wff_avg);
+	DeallocMem_d((void**)&m_d_det_wfr_avg);
+	DeallocMem_d((void**)&m_d_det_dif_avg);
+	DeallocMem_d((void**)&m_d_det_img_avg);
 	DeallocMem_d((void**)&m_d_det_wff);
 	DeallocMem_d((void**)&m_d_det_wfr);
 	DeallocMem_d((void**)&m_d_det_dif);
@@ -2278,6 +2406,7 @@ int CJMultiSlice::Cleanup(void)
 	DeallocMem_d((void**)&m_d_detmask);
 	DeallocMem_h((void**)&m_det_objslc);
 	DeallocMem_h((void**)&m_detmask_len);
+	m_d_weight_avg = 0.f;
 	m_ndet = 0;
 	m_ndetper = 0;
 	m_imagedet = (int)_JMS_DETECT_NONE;
@@ -2607,9 +2736,6 @@ int CJMultiSlice::ReadoutDifDet_h(int iSlice, int iThread, float weight)
 	int idx = 0;
 	int idet = 0;
 	if (m_ndetslc == 0) { goto _Exit; } // handle no detection
-	if ((0 == m_ndet || 0 == (m_imagedet&_JMS_DETECT_INTEGRATED)) &&
-		0 == (m_imagedet&_JMS_DETECT_DIFFRACTION) &&
-		0 == (m_imagedet&_JMS_DETECT_WAVEFOURIER)) { goto _Exit; } // handle no diffraction detection requested
 	if (NULL != m_jcpuco && NULL != m_det_objslc && (iSlice >= 0) && (iSlice < m_nobjslc+1) && (nitems > 0)) {
 		idetslc = m_det_objslc[iSlice]; // get index of the slice in detection output arrays
 		if (0 <= idetslc) { // there is detection registered for this slice
@@ -2686,8 +2812,6 @@ int CJMultiSlice::ReadoutImgDet_h(int iSlice, int iThread, float weight)
 	int nitems = m_nscx*m_nscy;
 	int idx = 0;
 	if (0 == m_ndetslc) { goto _Exit; } // handle no detection
-	if (0 == (m_imagedet&_JMS_DETECT_IMAGE) && 
-		0 == (m_imagedet&_JMS_DETECT_WAVEREAL)) { goto _Exit; } // handle no image detection requested
 	if (NULL != m_jcpuco && NULL != m_det_objslc && (iSlice >= 0) && (iSlice < m_nobjslc+1) && (nitems > 0)) {
 		idetslc = m_det_objslc[iSlice]; // get index of the slice in detection output arrays
 		if (0 <= idetslc) { // there is detection registered for this slice
@@ -2789,6 +2913,11 @@ int CJMultiSlice::CPUMultislice(int islc0, int accmode, float weight, int iThrea
 	int npgitems = m_npgx*m_npgy;
 	bool bsubframe = false;
 	bool bdetect = false;
+	bool bdet_img = ((m_imagedet&_JMS_DETECT_IMAGE) || (m_imagedet&_JMS_DETECT_WAVEREAL)
+		|| (m_imagedet&_JMS_DETECT_IMAGE_AVG) || (m_imagedet&_JMS_DETECT_WAVER_AVG));
+	bool bdet_dif = ((m_imagedet&_JMS_DETECT_INTEGRATED)
+		|| (m_imagedet&_JMS_DETECT_DIFFRACTION) || (m_imagedet&_JMS_DETECT_WAVEFOURIER)
+		|| (m_imagedet&_JMS_DETECT_DIFFR_AVG) || (m_imagedet&_JMS_DETECT_WAVEF_AVG));
 	if (nitems != npgitems) {
 		bsubframe = true;
 	}
@@ -2833,14 +2962,14 @@ int CJMultiSlice::CPUMultislice(int islc0, int accmode, float weight, int iThrea
 		for (jslc = islc; jslc < m_nobjslc; jslc++) {
 			bdetect = (m_det_objslc[jslc] >= 0);
 			// 1) readout (Fourier space)
-			if (bdetect) {
+			if (bdetect && bdet_dif) {
 				nerr = ReadoutDifDet_h(jslc, iThread, weight);
 				if (nerr > 0) { nerr += 100; goto _CancelMS; }
 			}
 			// 2) scattering (real space)
 			nerr = jco->IFT(); // inverse FFT
 			if (nerr > 0) { nerr += 200; goto _CancelMS; }
-			if (bdetect && ((m_imagedet&_JMS_DETECT_IMAGE)|| (m_imagedet&_JMS_DETECT_WAVEREAL))) {  // non-default real-space readout
+			if (bdetect && bdet_img ) {  // non-default real-space readout
 				nerr = ReadoutImgDet_h(jslc, iThread, weight);
 				if (nerr > 0) { nerr += 300; goto _CancelMS; }
 			}
@@ -2856,7 +2985,8 @@ int CJMultiSlice::CPUMultislice(int islc0, int accmode, float weight, int iThrea
 			nerr = jco->FT(); // forward FFT
 			if (nerr > 0) { nerr += 500; goto _CancelMS; }
 			// 3.1) plasmon scattering
-			if (m_plasmonmc_flg == 1) {
+			//if (m_plasmonmc_flg == 1 && (jslc == 0 || jslc == m_nobjslc - 1)) { // surface plasmon activation
+			if (m_plasmonmc_flg == 1) { // bulk plasmon activation
 				fthick = GetSliceThickness(m_objslc[jslc]);
 				if (0 < jpl.ScatGridMC(fthick, m_a0[0], m_a0[1], &ish0, &ish1)) { // scattering happened
 					if (ish0 != 0 || ish1 != 0) { // wave function needs shift
@@ -2874,9 +3004,11 @@ int CJMultiSlice::CPUMultislice(int islc0, int accmode, float weight, int iThrea
 		if (nerr > 0) goto _Exit;
 	}
 	// Final readout for the exit plane (do this always even if there is no object slice)
-	nerr = ReadoutDifDet_h(m_nobjslc, iThread, weight);
-	if (nerr > 0) { nerr += 700; goto _Exit; }
-	if ((m_imagedet&_JMS_DETECT_IMAGE)|| (m_imagedet&_JMS_DETECT_WAVEREAL)) { // non-default real-space readout
+	if (bdet_dif) {
+		nerr = ReadoutDifDet_h(m_nobjslc, iThread, weight);
+		if (nerr > 0) { nerr += 700; goto _Exit; }
+	}
+	if (bdet_img) { // non-default real-space readout
 		nerr = jco->IFT(); // inverse FFT
 		if (nerr > 0) { nerr += 800; goto _Exit; }
 		nerr = ReadoutImgDet_h(m_nobjslc, iThread, weight);
@@ -3283,16 +3415,14 @@ int CJMultiSlice::ReadoutDifDet_d(int iSlice, float weight)
 	int idx = 0;
 	int idet = 0;
 	if (m_ndetslc == 0) { goto _Exit; } // handle no detection planes set up
-	if ((0 == m_ndet || 0 == (m_imagedet&_JMS_DETECT_INTEGRATED)) && 
-		0 == (m_imagedet&_JMS_DETECT_DIFFRACTION) &&
-		0 == (m_imagedet&_JMS_DETECT_WAVEFOURIER)) { goto _Exit; } // handle no diffraction detection requested
 	if (NULL != m_det_objslc && (0 <= iSlice) && (iSlice < m_nobjslc+1) && (0 < nitems)) { // check valid data
 		idetslc = m_det_objslc[iSlice]; // get index of the slice in detection output arrays
 		stats.uSize = (unsigned int)nitems;
 		stats.nBlockSize = jco->GetBlockSize();
 		stats.nGridSize = (nitems + stats.nBlockSize - 1) / stats.nBlockSize;
 		if (idetslc >= 0) { // there is detection registered for this slice
-			if ((0 < m_ndet && 0 < (m_imagedet&_JMS_DETECT_INTEGRATED)) || (0 < (m_imagedet&_JMS_DETECT_DIFFRACTION))) { // we need a diffraction pattern ...
+			if (   (0 < m_ndet && 0 < (m_imagedet&_JMS_DETECT_INTEGRATED))
+				|| (0 < (m_imagedet&_JMS_DETECT_DIFFRACTION)) ) { // we need a diffraction pattern ...
 				if (0 < m_dif_descan_flg) { // apply diffraction descan and readout to dif_d
 					if (0 < DescanDifN(_JMS_CODE_GPU, m_d_dif_ndescanx, m_d_dif_ndescany, dif_d)) { nerr = 2; goto _Exit; }
 				}
@@ -3386,8 +3516,6 @@ int CJMultiSlice::ReadoutImgDet_d(int iSlice, float weight)
 	int nitems = m_nscx*m_nscy;
 	int idx = 0;
 	if (m_ndetslc == 0) { goto _Exit; } // handle no detection
-	if (0 == (m_imagedet&_JMS_DETECT_IMAGE) && 
-		0 == (m_imagedet&_JMS_DETECT_WAVEREAL)) { goto _Exit; } // handle no image detection requested
 	if (NULL != m_det_objslc && (iSlice >= 0) && (iSlice < m_nobjslc+1) && (nitems > 0)) {
 		idetslc = m_det_objslc[iSlice]; // get index of the slice in detection output arrays
 		stats.uSize = (unsigned int)nitems;
@@ -3502,6 +3630,11 @@ int CJMultiSlice::GPUMultislice(int islc0, int accmode, float weight)
 	float fthick = 0.f;
 	bool bsubframe = false;
 	bool bdetect = false;
+	bool bdet_img = ((m_imagedet&_JMS_DETECT_IMAGE) || (m_imagedet&_JMS_DETECT_WAVEREAL)
+		|| (m_imagedet&_JMS_DETECT_IMAGE_AVG) || (m_imagedet&_JMS_DETECT_WAVER_AVG));
+	bool bdet_dif = ((m_imagedet&_JMS_DETECT_INTEGRATED)
+		|| (m_imagedet&_JMS_DETECT_DIFFRACTION) || (m_imagedet&_JMS_DETECT_WAVEFOURIER)
+		|| (m_imagedet&_JMS_DETECT_DIFFR_AVG) || (m_imagedet&_JMS_DETECT_WAVEF_AVG));
 	if (nitems != npgitems) { // calculation grid and phase gratings are on different sizes
 		bsubframe = true;
 	}
@@ -3560,14 +3693,14 @@ int CJMultiSlice::GPUMultislice(int islc0, int accmode, float weight)
 			bdetect = (m_det_objslc[jslc] >= 0);
 			// 1) readout (Fourier space)
 			//if (1 == m_objslc_det[jslc]) {
-			if (bdetect) {
+			if (bdetect && bdet_dif) {
 				nerr = ReadoutDifDet_d(jslc, weight);
 				if (0 < nerr) {	nerr += 100; goto _CancelMS; }
 			}
 			// 2) scattering (real space)
 			nerr = jco->IFT(); // inverse FFT
 			if (0 < nerr) { nerr += 200; goto _CancelMS; }
-			if (bdetect && ((m_imagedet&_JMS_DETECT_IMAGE)||(m_imagedet&_JMS_DETECT_WAVEREAL))) {  // non-default real-space readout
+			if (bdetect && bdet_img) {  // non-default real-space readout
 				nerr = ReadoutImgDet_d(jslc, weight);
 				if (0 < nerr) { nerr += 300; goto _CancelMS; }
 			}
@@ -3589,7 +3722,8 @@ int CJMultiSlice::GPUMultislice(int islc0, int accmode, float weight)
 			nerr = jco->FT(); // forward FFT
 			if (0 < nerr) { nerr += 500; goto _CancelMS; }
 			// 3.1) plasmon scattering
-			if (m_plasmonmc_flg == 1) {
+			//if (m_plasmonmc_flg == 1 && (jslc==0 || jslc==m_nobjslc-1)) { // surface plasmon activation
+			if (m_plasmonmc_flg == 1) { // bulk plasmon activation
 				fthick = GetSliceThickness(m_objslc[jslc]);
 				if (0 < jpl.ScatGridMC(fthick, m_a0[0], m_a0[1], &ish0, &ish1)) { // scattering happened
 					if (ish0 != 0 || ish1 != 0) { // wave function needs shift
@@ -3607,9 +3741,11 @@ int CJMultiSlice::GPUMultislice(int islc0, int accmode, float weight)
 		if (nerr > 0) goto _Exit;
 	}
 	// Final readout for the exit plane (do this always)
-	nerr = ReadoutDifDet_d(m_nobjslc, weight);
-	if (0 < nerr) { nerr += 700;  goto _Exit; }
-	if ((m_imagedet&_JMS_DETECT_IMAGE) || (m_imagedet&_JMS_DETECT_WAVEREAL)) { // non-default real-space readout
+	if (bdet_dif) {
+		nerr = ReadoutDifDet_d(m_nobjslc, weight);
+		if (0 < nerr) { nerr += 700;  goto _Exit; }
+	}
+	if (bdet_img) { // non-default real-space readout
 		nerr = jco->IFT(); // inverse FFT
 		if (0 < nerr) {	nerr += 800;  goto _Exit; }
 		nerr = ReadoutImgDet_d(m_nobjslc, weight);

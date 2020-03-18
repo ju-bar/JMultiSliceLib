@@ -282,11 +282,11 @@ int calculate(prm_main *pprm)
 	if ((pprm->gpu_id >= 0 && pprm->cpu_num == 0) ||
 		(pprm->gpu_id < 0 && pprm->cpu_num == 1)) {
 		// pure gpu calculation (no multi-threading)
-		nerr = singlethread_run(pprm);
+		nerr = singlethread_stem(pprm);
 	}
 	else {
 		// multi-threading calculation
-		nerr = multithread_run(pprm);
+		nerr = multithread_stem(pprm);
 	}
 
 exit:
@@ -299,29 +299,62 @@ int output(prm_main *pprm)
 	int ierr = 0, nerr = 0;
 	unsigned int det_num = 0, idet = 0;
 	std::string sfile = "";
+	float normfac = 1.f;
 
 	if (NULL == pprm) {
 		nerr = 1;
 		std::cerr << "Error (output): missing parameter interface" << std::endl;
 		goto exit;
 	}
-
 	
 	if (pprm->stem_images.detector.b_annular && (0 < pprm->stem_images.get_data_bytes())) {
 		// store stem images for each detector separately, but as series over thickness
 		det_num = (unsigned int)pprm->stem_images.detector.v_annular.size(); // number of detectors
 		if (det_num > 0) { 
 			for (idet = 0; idet < det_num; idet++) { // loop over detectors
-				// generate file name
-				sfile = pprm->str_out_file + "_" + pprm->stem_images.detector.v_annular[idet].name + ".bin";
-				// write data to file
-				ierr = pprm->stem_images.write_image_series(sfile, idet);
+				// write STEM image data of this detector to file
+				ierr = pprm->stem_images.save(idet, "_" + pprm->stem_images.detector.v_annular[idet].name, "bin");
 				if (0 < ierr) {
-					nerr = 2;
+					nerr = 10;
 					std::cerr << "Error (output): failed to write " << pprm->stem_images.detector.v_annular[idet].name  <<
 						" STEM images." << std::endl;
 				}
 			}
+		}
+	}
+
+	if (pprm->stem_pix_padif.detector.b_difpat_avg && (0 < pprm->stem_pix_padif.get_data_bytes())) {
+		// get origin shift
+		int orgx = 1 + (pprm->stem_pix_padif.sample.grid_nx >> 1);
+		int orgy = 1 + (pprm->stem_pix_padif.sample.grid_ny >> 1);
+		// get normalization factor
+		normfac = 1.f / (pprm->stem_pix_padif.f_calc_weight * pprm->stem_pix_padif.f_calc_scale);
+		// correct origin shift such that the zero beam is at (orgx, orgy)
+		ierr = pprm->stem_pix_padif.shift_org(orgx, orgy, normfac);
+		if (0 < ierr) {
+			nerr = 20;
+			std::cerr << "Error (output): failed to normalize and shift origin of STEM averaged diffraction pattern." << std::endl;
+		}
+		// store averaged stem diffraction pattern as series over thickness
+		ierr = pprm->stem_pix_padif.save(0, "_padif", "bin");
+		if (0 < ierr) {
+			nerr = 21;
+			std::cerr << "Error (output): failed to write STEM averaged diffraction pattern." << std::endl;
+		}
+	}
+
+	if (pprm->stem_pix_paimg.detector.b_image_avg && (0 < pprm->stem_pix_paimg.get_data_bytes())) {
+		// normalize the images
+		ierr = pprm->stem_pix_paimg.normalize(pprm->stem_pix_paimg.f_calc_weight / pprm->stem_pix_paimg.f_calc_scale);
+		if (0 < ierr) {
+			nerr = 30;
+			std::cerr << "Error (output): failed to normalize STEM averaged probe image." << std::endl;
+		}
+		// store averaged stem diffraction pattern as series over thickness
+		ierr = pprm->stem_pix_paimg.save(0, "_paimg", "bin");
+		if (0 < ierr) {
+			nerr = 31;
+			std::cerr << "Error (output): failed to write STEM averaged probe image." << std::endl;
 		}
 	}
 

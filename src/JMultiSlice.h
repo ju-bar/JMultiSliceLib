@@ -138,11 +138,15 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 #define _JMS_ACCMODE_NONE		0
 #define _JMS_ACCMODE_INTEGRATE	1
 #define _JMS_DETECT_NONE		0
-#define _JMS_DETECT_INTEGRATED	1
-#define _JMS_DETECT_IMAGE		2
-#define _JMS_DETECT_DIFFRACTION	4
-#define _JMS_DETECT_WAVEREAL	8
-#define _JMS_DETECT_WAVEFOURIER	16
+#define _JMS_DETECT_INTEGRATED	1    // flag integrating detection
+#define _JMS_DETECT_IMAGE		2    // flag image detection
+#define _JMS_DETECT_DIFFRACTION	4    // flag diffraction detection
+#define _JMS_DETECT_WAVEREAL	8    // flag real-space wave-function detection
+#define _JMS_DETECT_WAVEFOURIER	16   // flag reciprocal-space wave-function detection
+#define _JMS_DETECT_IMAGE_AVG	32   // flag average image detection
+#define _JMS_DETECT_DIFFR_AVG	64   // flag average diffraction detection
+#define _JMS_DETECT_WAVER_AVG	128  // flag average real-space wave-function detection
+#define _JMS_DETECT_WAVEF_AVG	256  // flag average reciprocal-space wave-function detection
 // OTHER PARAMETERS
 #define _JMS_MESSAGE_LEN		2048 // max. length of message strings
 #define _JMS_RELAPERTURE		(2./3.) // relative size of band-width limit
@@ -236,7 +240,7 @@ protected:
 	int m_ndet;
 	// detector readout period (used also for wave extraction)
 	int m_ndetper;
-	// intensity distribution output flag (0: off, 1: image, 2: diffraction, 4: wave real, 8: wave fourier, and all OR combinations of these numbers)
+	// intensity distribution output flag (0: off, 1: integrating, 2: image, 4: diffraction, 8: wave real, 16: wave fourier, 32: averaged image, 64: averaged diffraction, 128: averaged wave real, 256: averaged wave fourierand all OR combinations of these numbers)
 	int m_imagedet;
 	// number of slices with detection (sum of _JMS_objslc_det)
 	int m_ndetslc;
@@ -307,6 +311,16 @@ protected:
 	fcmplx *m_h_det_wfr;
 	// per thread list of host memory holding Fourier-space wave functions for all detection thicknesses ( iThread, -> idetslc*m_nscx*m_nscy )
 	fcmplx *m_h_det_wff;
+	// per thread list of host memory holding averaged probe intensity distributions for all detection thicknesses ( iThread, -> idetslc*m_nscx*m_nscy )
+	float *m_h_det_img_avg;
+	// per thread list of host memory holding averaged probe diffraction patterns all detection thicknesses ( iThread, -> idetslc*m_nscx*m_nscy )
+	float *m_h_det_dif_avg;
+	// per thread list of host memory holding averaged real-space wave functions for all detection thicknesses ( iThread, -> idetslc*m_nscx*m_nscy )
+	fcmplx *m_h_det_wfr_avg;
+	// per thread list of host memory holding averaged Fourier-space wave functions for all detection thicknesses ( iThread, -> idetslc*m_nscx*m_nscy )
+	fcmplx *m_h_det_wff_avg;
+	// per thread list of weights on host averging channels ( iThread )
+	float *m_h_weight_avg;
 	// per thread list of host memory diffraction de-scan in x direction [pixels]
 	int *m_h_dif_ndescanx;
 	// per thread list of host memory diffraction de-scan in y direction [pixels]
@@ -325,7 +339,7 @@ protected:
 	int *m_d_detmask;
 	// memory holding integrated detector results for all detection thicknesses ( -> idet + idetslc*ndet )
 	// This is for GPU calculations.
-	// ! Warning ! The memory is on host, since the integration routine output is on host scalars.
+	// ! Warning ! The memory of this buffer is on host, since the integration routine output is on host scalars.
 	float *m_d_det_int;
 	// device memory holding probe intensity distributions for all detection thicknesses ( -> idetslc*m_nscx*m_nscy )
 	float *m_d_det_img;
@@ -335,6 +349,16 @@ protected:
 	cuComplex *m_d_det_wfr;
 	// device memory holding Fourier-space wave functions for all detection thicknesses ( -> idetslc*m_nscx*m_nscy )
 	cuComplex *m_d_det_wff;
+	// device memory holding averaged probe intensity distributions for all detection thicknesses ( -> idetslc*m_nscx*m_nscy )
+	float *m_d_det_img_avg;
+	// device memory holding averaged probe diffraction patterns for all detection thicknesses ( -> idetslc*m_nscx*m_nscy )
+	float *m_d_det_dif_avg;
+	// device memory holding averaged real-space wave functions for all detection thicknesses ( -> idetslc*m_nscx*m_nscy )
+	cuComplex *m_d_det_wfr_avg;
+	// device memory holding averaged Fourier-space wave functions for all detection thicknesses ( -> idetslc*m_nscx*m_nscy )
+	cuComplex *m_d_det_wff_avg;
+	// weight on device averging channels
+	float m_d_weight_avg;
 	// device memory used temporary for readout steps (managed by InitCore)
 	float *m_d_det_tmp;
 	// device memory used temporary for readout steps (managed by InitCore)
@@ -824,12 +848,22 @@ public:
 	int GPUMultislice(int islc0, int accmode, float weight = 1.0f);
 
 	// Copies detection results to provided host address
-	// - whichcode: flag signaling which code to prepare (_JMS_CODE_CPU | whichcode)
+	// - whichcode: flag signaling which code to prepare (_JMS_CODE_GPU or _JMS_CODE_CPU)
 	// - whichresult: flag signaling which result to retrieve, one of _JMS_DETECT_INTEGRATED, _JMS_DETECT_IMAGE, _JMS_DETECT_DIFFRACTION
 	// - dst: destination address recieving results.
 	// - iThread: thread ID of CPU code
 	int GetResult(int whichcode, int whichresult, float *dst, int iThread=0);
 
+	// Returns the averaging weight of a given code channel
+	// - whichcode: flag signaling which code to prepare (_JMS_CODE_GPU or _JMS_CODE_CPU)
+	// - iThread: thread ID of CPU code
+	float GetAveragingWeight(int whichcode, int iThread=0);
+
+	// Resets active averaging channels and weight counters for a given code channel
+	// - whichcode: flag signaling which code to prepare (_JMS_CODE_GPU or _JMS_CODE_CPU)
+	// - iThread: thread ID of CPU code
+	// Returns an error code or 0 in case of success.
+	int ResetAveraging(int whichcode, int iThread = 0);
 
 };
 

@@ -47,6 +47,10 @@ public:
 	prm_scan scan; // scan data
 
 	prm_result stem_images; // STEM imaging results
+	prm_result stem_pix_dif; // STEM pixelated diffraction patterns
+	prm_result stem_pix_padif; // STEM pixelated averaged diffraction patterns
+	prm_result stem_pix_img; // STEM pixelated probe images
+	prm_result stem_pix_paimg; // STEM pixelated averaged probe images
 
 	// Methods
 

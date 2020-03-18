@@ -62,9 +62,15 @@ public:
 	unsigned int data_type; // data type flag (1 = 32-bit float, 2 = 64-bit complex)
 	unsigned int det_type; // copy of the _JMS_DETECT_* type used to calculate the result
 	std::vector<unsigned int> v_dim; // data dimensions
+
+	float f_calc_scale; // scaling factor of the data due to calculation properties
+	float f_calc_weight; // weight of the data due to calculation repeats
 	
 	size_t sz_data; // size of the data buffer, modify with care
 	void *pdata; // data buffer, modify with care
+
+	unsigned int *pshift_hash; // origin shift hash table (allocated on demand and may be re-used with care)
+	size_t sz_shift_hash; // size of origin shift hash table
 
 	std::string str_out_file; // file name used to save the data
 
@@ -74,6 +80,28 @@ public:
 	prm_detector detector;
 
 	// member functions
+
+	// Initializes the result data buffer from object parameters
+	int init_buffer(void);
+
+	// Resets the content of the result buffer to zero
+	int zero_buffer(void);
+
+	// Adds content of another buffer using an accumulation weight using float arithmetics.
+	// Also increments the f_calc_weight member by weight.
+	// Assumes identical size of the input buffer src and pdata
+	int add_buffer(float* src, float weight = 1.f);
+
+	// normalizes the data by dividing the data with a given weight
+	int normalize(float weight);
+
+	// Stores data of a selected channel to file.
+	// Channels are assumed to be the fourth index in v_dim, if existing.
+	// The file name is made from str_out_file and str_suffix is appended
+	// The data is stored in a format selected by str_format
+	// Currently supported formats:
+	// - "bin" = raw binary file, data is dumped as is
+	int save(unsigned int idx_chan, std::string str_suffix, std::string str_format);
 	
 	// Returns the number of bytes per data item as determined by data_type
 	size_t get_item_bytes(void);
@@ -99,12 +127,12 @@ public:
 	// Warning: The routine works without controlling consistency with object data and assumes pdata is allocated.
 	fcmplx get_datac(std::vector<unsigned int> v_pos);
 
-	// Writes a series of images from pdata for a selected channel to one file.
-	// Images are assumed to be made of the first 2 dimensions of pdata listed in v_dim.
-	// Channels are assumed to be the fourth index in v_dim, if existing
-	// With the above assumptions, the output can represent a thickness series.
-	// - sfilename = name of the output file
-	// - idx_chan = index of the output channel (detector, variation of parameter, etc.)
-	int write_image_series(std::string sfilename, unsigned int idx_chan);
+	// Rigidly shifts content of all images (first two dimensions of pdata),
+	// such that the pixel specified by (orgx, orgy) is on (0, 0).
+	// Applies periodic boundary conditions.
+	// This function may also be used to normalize the array with a factor fac.
+	// Returns an error code in case of failure.
+	int shift_org(int orgx, int orgy, float fac = 1.f);
+
 };
 

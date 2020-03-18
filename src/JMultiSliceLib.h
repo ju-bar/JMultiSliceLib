@@ -16,7 +16,7 @@
 //
 // Link cufft.lib; cudart_static.lib; with the main program.
 // You need to provide a version of the cuda fft runtime library ...
-// - CUDA version 9.0: cufft64_90.dll
+// - CUDA version 10.0: cufft64_10.dll
 //
 /*
  * The following statement of license applies *only* to this header file,
@@ -81,11 +81,15 @@
 #define JMS_CODE_GPU			2
 
 #define JMS_DETECT_NONE			0
-#define JMS_DETECT_INTEGRATED	1
-#define JMS_DETECT_IMAGE		2
-#define JMS_DETECT_DIFFRACTION	4
-#define JMS_DETECT_WAVEREAL		8
-#define JMS_DETECT_WAVEFOURIER	16
+#define JMS_DETECT_INTEGRATED	1    // flag integrating detection
+#define JMS_DETECT_IMAGE		2    // flag image detection
+#define JMS_DETECT_DIFFRACTION	4    // flag diffraction detection
+#define JMS_DETECT_WAVEREAL		8    // flag real-space wave-function detection
+#define JMS_DETECT_WAVEFOURIER	16   // flag reciprocal-space wave-function detection
+#define JMS_DETECT_IMAGE_AVG	32   // flag average image detection
+#define JMS_DETECT_DIFFR_AVG	64   // flag average diffraction detection
+#define JMS_DETECT_WAVER_AVG	128  // flag average real-space wave-function detection
+#define JMS_DETECT_WAVEF_AVG	256  // flag average reciprocal-space wave-function detection
 
 #define JMS_ACCMODE_NONE		0
 #define JMS_ACCMODE_INTEGRATE	1
@@ -340,6 +344,5 @@ extern "C" __declspec(dllexport) int __stdcall Cleanup(void);
 // - call this only if all FFTW/MKL routines are halted and no longer used.
 // - FFTW/MKL needs to be reinitialized afterwards.
 extern "C" __declspec(dllexport) void __stdcall FreeLibMem(void);
-
 
 #endif

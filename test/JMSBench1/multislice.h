@@ -95,8 +95,8 @@ unsigned int __cdecl prepare_probe(prm_main *pprm, CJMultiSlice *pjms);
 unsigned int __cdecl run_multislice(void* pParam);
 
 
-// runs a single thread calculation on CPU or GPU
-unsigned int __cdecl singlethread_run(prm_main *pprm);
+// runs a single thread STEM simulation on CPU or GPU
+unsigned int __cdecl singlethread_stem(prm_main *pprm);
 
-// runs a multi-thread calculation in CPU and GPU
-unsigned int __cdecl multithread_run(prm_main *pprm);
+// runs a multi-thread STEM simulation on CPU and GPU
+unsigned int __cdecl multithread_stem(prm_main *pprm);

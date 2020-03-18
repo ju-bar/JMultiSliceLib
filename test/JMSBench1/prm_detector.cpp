@@ -318,6 +318,7 @@ prm_detector::prm_detector()
 	b_difpat = false;
 	b_difpat_avg = false;
 	b_image = false;
+	b_image_avg = false;
 	b_wave = false;
 	b_waveft = false;
 	b_wave_avg = false;
@@ -336,6 +337,7 @@ void prm_detector::copy_data_from(prm_detector *psrc)
 		b_difpat = psrc->b_difpat;
 		b_difpat_avg = psrc->b_difpat_avg;
 		b_image = psrc->b_image;
+		b_image_avg = psrc->b_image_avg;
 		b_wave = psrc->b_wave;
 		b_waveft = psrc->b_waveft;
 		b_wave_avg = psrc->b_wave_avg;
@@ -351,6 +353,7 @@ void prm_detector::copy_setup_from(prm_detector *psrc)
 		b_difpat = psrc->b_difpat;
 		b_difpat_avg = psrc->b_difpat_avg;
 		b_image = psrc->b_image;
+		b_image_avg = psrc->b_image_avg;
 		b_wave = psrc->b_wave;
 		b_waveft = psrc->b_waveft;
 		b_wave_avg = psrc->b_wave_avg;
@@ -458,7 +461,123 @@ int prm_detector::setup_annular()
 				j = i + 2;
 			}
 		}
-		print_setup_annular(); // print the current temporary setup
+		if (btalk) {
+			print_setup_annular(); // print the current temporary setup
+		}
+	}
+
+	if (v_annular.size() > 0) {
+		b_annular = true;
+	}
+
+	return ierr;
+}
+
+
+void prm_detector::print_setup_pixelated()
+{
+	std::vector<std::string> v_str_switch;
+	if (b_difpat) {
+		v_str_switch.push_back("on");
+	}
+	else {
+		v_str_switch.push_back("off");
+	}
+	if (b_difpat_avg) {
+		v_str_switch.push_back("on");
+	}
+	else {
+		v_str_switch.push_back("off");
+	}
+	if (b_image) {
+		v_str_switch.push_back("on");
+	}
+	else {
+		v_str_switch.push_back("off");
+	}
+	if (b_image_avg) {
+		v_str_switch.push_back("on");
+	}
+	else {
+		v_str_switch.push_back("off");
+	}
+	std::cout << std::endl;
+	std::cout << "  Pixelated detector settings         : status" << std::endl;
+	std::cout << "   <1> scanned diffraction (4-D STEM) : " << v_str_switch[0] << std::endl;
+	std::cout << "   <2> averaged diffraction (PACBED)  : " << v_str_switch[1] << std::endl;
+	std::cout << "   <3> scanned imaging                : " << v_str_switch[2] << std::endl;
+	std::cout << "   <4> averaged imaging (ISTEM)       : " << v_str_switch[3] << std::endl;
+	v_str_switch.clear();
+}
+
+
+int prm_detector::setup_pixelated()
+{
+	int ierr = 0, ichk = 0, i = 0, idet = 0, j = 0;
+	std::string  stmp, sprm;
+	
+	
+	if (binteractive) {
+	_repeat_input: // display the current setup of annular detectors
+		// allow to modify the setup
+		print_setup_pixelated();
+		std::cout << "  Switch a detector on/off or select <0> to proceed? ";
+		std::cin >> ichk;
+		switch (ichk) {
+		case 0: // jump out and use this list
+			break;
+		case 1: // switch scanned diffraction
+			b_difpat |= true;
+			goto _repeat_input;
+			break;
+		case 2: // switch PACBED
+			b_difpat_avg |= true;
+			goto _repeat_input;
+			break;
+		case 3: // switch scanned images
+			b_image |= true;
+			goto _repeat_input;
+			break;
+		case 4:
+			b_image_avg |= true;
+			goto _repeat_input;
+			break;
+		default:
+			goto _repeat_input;
+			break;
+		}
+		
+		if (b_difpat) {
+			v_str_ctrl.push_back("set_det_dif");
+		}
+		if (b_difpat_avg) {
+			v_str_ctrl.push_back("set_det_padif");
+		}
+		if (b_image) {
+			v_str_ctrl.push_back("set_det_img");
+		}
+		if (b_image_avg) {
+			v_str_ctrl.push_back("set_det_paimg");
+		}
+
+	}
+	else { // read the setup from the control lines
+		if (0 <= ctrl_find_param("set_det_dif", &stmp, j)) {
+			b_difpat = true;
+		}
+		if (0 <= ctrl_find_param("set_det_padif", &stmp, j)) {
+			b_difpat_avg = true;
+		}
+		if (0 <= ctrl_find_param("set_det_img", &stmp, j)) {
+			b_image = true;
+		}
+		if (0 <= ctrl_find_param("set_det_paimg", &stmp, j)) {
+			b_image_avg = true;
+		}
+
+		if (btalk) {
+			print_setup_pixelated(); // print the current temporary setup
+		}
 	}
 
 	if (v_annular.size() > 0) {
@@ -474,7 +593,7 @@ int prm_detector::get_jms_flags()
 	int ndetflg = (int)_JMS_DETECT_NONE;
 	if (b_annular) ndetflg += (int)_JMS_DETECT_INTEGRATED;
 	if (b_difpat || b_difpat_avg) ndetflg += (int)_JMS_DETECT_DIFFRACTION;
-	if (b_image) ndetflg += (int)_JMS_DETECT_IMAGE;
+	if (b_image || b_image_avg) ndetflg += (int)_JMS_DETECT_IMAGE;
 	if (b_wave || b_waveft_avg) ndetflg += (int)_JMS_DETECT_WAVEREAL;
 	if (b_waveft || b_waveft_avg) ndetflg += (int)_JMS_DETECT_WAVEFOURIER;
 	return ndetflg;
