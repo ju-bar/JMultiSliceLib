@@ -216,7 +216,8 @@ extern "C" __declspec(dllexport) int __stdcall GetGPUCores(int idev, int &nMulti
 //          an unscrambled array (preallocated by the calling code)
 extern "C" __declspec(dllexport) int __stdcall GetUnscrambleHash(unsigned int* phash);
 
-
+// returns the total weight used for accumulation in the averaging detector channcels
+extern "C" __declspec(dllexport) float __stdcall GetAveragingWeight(int whichcode, int iThread = 0);
 
 // *** Setup Interface ***
 
@@ -251,6 +252,9 @@ extern "C" __declspec(dllexport) int __stdcall SetDetectorData(int whichcode, in
 // - npgrload: 0 = pre-load all to device (default),
 //             1 = each phase-grating is loaded to device on demand
 extern "C" __declspec(dllexport) int __stdcall SetGPUPgrLoading(int npgrload = 0);
+
+// Resets the data in the averaging output buffers to zero
+extern "C" __declspec(dllexport) int __stdcall ResetAveraging(int whichcode, int iThread = 0);
 
 
 // *** Calculation Interface ***
@@ -319,17 +323,30 @@ extern "C" __declspec(dllexport) int __stdcall GPUMultislice(int islc0, int accm
 
 // Copies detection results to provided host address
 // - whichcode: flag signaling which code to prepare (_JMS_CODE_CPU | whichcode)
-// - whichresult: flag signaling which result to retrieve, one of _JMS_DETECT_INTEGRATED, _JMS_DETECT_IMAGE, _JMS_DETECT_DIFFRACTION
+// - whichresult: flag signaling which result to retrieve, one of _JMS_DETECT_INTEGRATED, _JMS_DETECT_IMAGE, _JMS_DETECT_DIFFRACTION, ...
 // - dst: destination address recieving results.
 // - iThread: thread ID of CPU code
 extern "C" __declspec(dllexport) int __stdcall GetResult(int whichcode, int whichresult, float *dst, int iThread = 0);
 
+// Copies average detection results to provided host address
+// - whichcode: flag signaling which code to prepare (_JMS_CODE_CPU | whichcode)
+// - whichresult: flag signaling which result to retrieve, one of _JMS_DETECT_IMAGE_AVG, _JMS_DETECT_DIFFR_AVG, ...
+// - dst: destination address recieving results.
+// - wgt: destination address recieving the averaging weight
+// - iThread: thread ID of CPU code
+extern "C" __declspec(dllexport) int __stdcall GetAvgResult(int whichcode, int whichresult, float* dst, float* wgt, int iThread = 0);
+
 // Clears host detector memory for a CPU thread
 extern "C" __declspec(dllexport) int __stdcall ClearDetMem_h(int iThread);
+
+// Clears host averaging detector memory for a CPU thread
+extern "C" __declspec(dllexport) int __stdcall ClearDetAvgMem_h(int iThread);
 
 // Clears device detector memory
 extern "C" __declspec(dllexport) int __stdcall ClearDetMem_d(void);
 
+// Clears device averaging detector memory
+extern "C" __declspec(dllexport) int __stdcall ClearDetAvgMem_d(void);
 
 
 // ** Cleanup Interface ***

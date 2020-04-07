@@ -658,6 +658,11 @@ int prm_sample::setup_pgr_jms(CJMultiSlice *pjms, int whichcode)
 		nmaxvar = get_variant_num_max();
 		if (nmaxvar > 0) {
 			pnslcvar = (int*)malloc(sizeof(int)*nslc);
+			if (NULL == pnslcvar) {
+				nerr = 2;
+				std::cerr << "Error: (setup_pgr_jms) failed to allocate slie variant list." << std::endl;
+				goto _exit;
+			}
 			memset(pnslcvar, 0, sizeof(int)*nslc);
 			for (islc = 0; islc < nslc; islc++) {
 				pnslcvar[islc] = (int)v_slc[islc].header.num_var;
@@ -668,7 +673,7 @@ int prm_sample::setup_pgr_jms(CJMultiSlice *pjms, int whichcode)
 	// setup phase grating memory in JMS
 	ierr = pjms->PhaseGratingSetup(whichcode, grid_nx, grid_ny, nslc, nmaxvar, pnslcvar);
 	if (ierr != 0) {
-		nerr = 2;
+		nerr = 3;
 		std::cerr << "Error: (setup_pgr_jms) phase grating setup failed in multislice module (" << ierr << ")." << std::endl;
 		goto _exit;
 	}
@@ -678,13 +683,13 @@ int prm_sample::setup_pgr_jms(CJMultiSlice *pjms, int whichcode)
 		for (islc = 0; islc < nslc; islc++) {
 			pgr = v_slc[islc].get_pgr();
 			if (NULL == pgr) {
-				nerr = 3;
+				nerr = 4;
 				std::cerr << "Error: (setup_pgr_jms) no grating data for slice #" << islc << "." << std::endl;
 				goto _exit;
 			}
 			ierr = pjms->SetPhaseGratingData(whichcode, islc, pnslcvar[islc], pgr);
 			if (ierr != 0) {
-				nerr = 4;
+				nerr = 5;
 				std::cerr << "Error: (setup_pgr_jms) failed to transfer phase grating data of slice #" << islc << "to multislice module (" << ierr << ")." << std::endl;
 				goto _exit;
 			}

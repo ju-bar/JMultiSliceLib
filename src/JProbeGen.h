@@ -166,9 +166,6 @@ protected:
 	// processing member variables (all protected)
 	// These members are not shared in copy constructors or operators
 
-	// default message string for output (not initialized)
-	char m_msg[_JPG_MESSAGE_LEN];
-	
 	// length of the aberration table (number of aberrations)
 	int m_abrr_num;
 	

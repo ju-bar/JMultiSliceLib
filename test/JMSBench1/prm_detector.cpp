@@ -534,11 +534,11 @@ int prm_detector::setup_pixelated()
 			b_difpat_avg |= true;
 			goto _repeat_input;
 			break;
-		case 3: // switch scanned images
+		case 3: // switch scanned probe images
 			b_image |= true;
 			goto _repeat_input;
 			break;
-		case 4:
+		case 4: // switch probe image average
 			b_image_avg |= true;
 			goto _repeat_input;
 			break;
@@ -592,9 +592,13 @@ int prm_detector::get_jms_flags()
 {
 	int ndetflg = (int)_JMS_DETECT_NONE;
 	if (b_annular) ndetflg += (int)_JMS_DETECT_INTEGRATED;
-	if (b_difpat || b_difpat_avg) ndetflg += (int)_JMS_DETECT_DIFFRACTION;
-	if (b_image || b_image_avg) ndetflg += (int)_JMS_DETECT_IMAGE;
-	if (b_wave || b_waveft_avg) ndetflg += (int)_JMS_DETECT_WAVEREAL;
-	if (b_waveft || b_waveft_avg) ndetflg += (int)_JMS_DETECT_WAVEFOURIER;
+	if (b_difpat) ndetflg += (int)_JMS_DETECT_DIFFRACTION;
+	if (b_difpat_avg) ndetflg += (int)_JMS_DETECT_DIFFR_AVG;
+	if (b_image) ndetflg += (int)_JMS_DETECT_IMAGE;
+	if (b_image_avg) ndetflg += (int)_JMS_DETECT_IMAGE_AVG;
+	if (b_wave) ndetflg += (int)_JMS_DETECT_WAVEREAL;
+	if (b_wave_avg) ndetflg += (int)_JMS_DETECT_WAVER_AVG;
+	if (b_waveft) ndetflg += (int)_JMS_DETECT_WAVEFOURIER;
+	if (b_waveft_avg) ndetflg += (int)_JMS_DETECT_WAVEF_AVG;
 	return ndetflg;
 }

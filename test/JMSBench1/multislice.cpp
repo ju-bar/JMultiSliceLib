@@ -227,7 +227,7 @@ unsigned int __cdecl prepare_probe(prm_main *pprm, CJMultiSlice *pjms)
 	}
 
 	pjms->GetGridSize(nx, ny);
-	num_pix = (size_t)(nx * ny);
+	num_pix = (size_t)nx * ny;
 	sz_wave = sizeof(fcmplx) * num_pix;
 
 	if (0 == num_pix) {
@@ -499,9 +499,11 @@ unsigned int __cdecl singlethread_stem(prm_main *pprm)
 	float *det_pix_img = NULL; // pointer to result array for image patterns
 	float *dst = NULL;
 	float *src = NULL;
-	size_t sz_mem_ann = 0, sz_mem_dif = 0, sz_mem_img = 0; // memory sizes eventually allocated locally
+	float weight = 0.f;
+	size_t sz_mem_ann = 0; // memory sizes allocated locally
 	size_t num_ann = pprm->detector.v_annular.size();
 	size_t num_det_slc = 0; // number of detection planes in z
+	size_t sz_idx = 0;
 	std::string str_pix;
 
 	if (pprm->btalk) {
@@ -517,7 +519,7 @@ unsigned int __cdecl singlethread_stem(prm_main *pprm)
 	jms.SetGPUPgrLoading();
 	// jms.SetPlasmonMC(...);
 
-	if (pprm->gpu_id >= 0) {
+	if (pprm->gpu_id >= 0) { // run on GPU only
 		w.whichcode = _JMS_CODE_GPU;
 		njmserr = jms.SetCurrentGPU(pprm->gpu_id);
 		if (0 < njmserr) {
@@ -527,7 +529,8 @@ unsigned int __cdecl singlethread_stem(prm_main *pprm)
 		}
 		w.n_thread = -1;
 	}
-	else {
+	else { // run on one CPU process only
+		pprm->cpu_num = 1;
 		w.whichcode = _JMS_CODE_CPU;
 		w.n_thread = 0;
 	}
@@ -575,7 +578,7 @@ unsigned int __cdecl singlethread_stem(prm_main *pprm)
 	// prepare result containers of the prm_main object linked by the function interface
 	ierr = pprm->prepare_result_params();
 	if (0 < ierr) {
-		nerr = 13;
+		nerr = 5000 + ierr;
 		std::cerr << "Error: (singlethread_stem) failed to prepare result containers." << std::endl;
 		goto _exit;
 	}
@@ -592,45 +595,18 @@ unsigned int __cdecl singlethread_stem(prm_main *pprm)
 		}
 		memset(det_annular, 0, sz_mem_ann);
 	}
-	if ((pprm->detector.b_difpat || pprm->detector.b_difpat_avg) && num_det_slc > 0) {
-		if (!pprm->detector.b_difpat) { // no individual diffraction pattern result handler
-			// allocate a local temporary buffer to gather diffraction results
-			// local buffer: holds diffraction patterns for all detection planes for one scan position
-			sz_mem_dif = sizeof(float) * num_det_slc * pprm->sample.grid_nx * pprm->sample.grid_ny;
-			det_pix_dif = (float*)malloc(sz_mem_dif);
-			if (NULL == det_pix_dif) {
-				nerr = 11;
-				std::cerr << "Error: (singlethread_stem) failed to allocate local diffraction result buffer." << std::endl;
-				goto _exit;
-			}
-			memset(det_pix_dif, 0, sz_mem_dif);
-		}
-		else { // use result handler to gather diffraction patterns
-			det_pix_dif = (float*)pprm->stem_pix_dif.pdata;
-		}
+	if (pprm->detector.b_difpat) {
+		det_pix_dif = (float*)pprm->stem_pix_dif.pdata;
 	}
-	if ((pprm->detector.b_image || pprm->detector.b_image_avg) && num_det_slc > 0) {
-		if (!pprm->detector.b_image) { // no individual image result handler
-			// allocate a local temporary buffer to gather image results
-			// local buffer: holds image patterns for all detection planes for one scan position
-			sz_mem_img = sizeof(float) * num_det_slc * pprm->sample.grid_nx * pprm->sample.grid_ny;
-			det_pix_img = (float*)malloc(sz_mem_img);
-			if (NULL == det_pix_img) {
-				nerr = 11;
-				std::cerr << "Error: (singlethread_stem) failed to allocate local image result buffer." << std::endl;
-				goto _exit;
-			}
-			memset(det_pix_img, 0, sz_mem_img);
-		}
-		else { // use result handler to gather image patterns
-			det_pix_img = (float*)pprm->stem_pix_img.pdata;
-		}
+	if (pprm->detector.b_image) {
+		det_pix_img = (float*)pprm->stem_pix_img.pdata;
 	}
 
 	w.n_acc_data = (unsigned int)_JMS_ACCMODE_NONE;
 	w.n_repeat = pprm->scan.num_repeat;
 	w.b_foc_avg = false;
 	w.b_wave_offset = true;
+	jms.ResetAveraging(w.whichcode, 0);
 
 	// run the calculation by looping over scan points
 	if (pprm->btalk) {
@@ -676,7 +652,8 @@ unsigned int __cdecl singlethread_stem(prm_main *pprm)
 				// - {{plane 1, detector 1},{plane 2, detector 1}, ...{plane N, detector M}}
 				for (j = 0; j < num_ann; j++) { // for each detector j
 					for (i = 0; i < num_det_slc; i++) { // for each plane i
-						dst = &((float*)pprm->stem_images.pdata)[w.n_scan_idx + i * num_scan + j * num_det_slc * num_scan];
+						sz_idx = (size_t)w.n_scan_idx + (size_t)num_scan * i + (size_t)num_det_slc * num_scan * j;
+						dst = &((float*)pprm->stem_images.pdata)[sz_idx];
 						src = &w.pf_res_int[i * num_ann + j];
 						*dst = *src / w.f_wgt;
 					}
@@ -692,10 +669,6 @@ unsigned int __cdecl singlethread_stem(prm_main *pprm)
 					pprm->stem_pix_dif.shift_org(nyqx + 1, nyqy + 1, 1.f / w.f_wgt); // shift and normalize pattern
 					pprm->stem_pix_dif.save(0, "_pdif" + str_pix, "bin"); // save pattern
 				}
-				// - position averaged data -> accumulate
-				if (pprm->detector.b_difpat_avg) {
-					pprm->stem_pix_padif.add_buffer(w.pf_res_dif, w.f_wgt);
-				}
 			}
 			if (0 < (w.n_det_flags &(unsigned int)_JMS_DETECT_IMAGE)) {
 				// write data to result buffers
@@ -706,15 +679,29 @@ unsigned int __cdecl singlethread_stem(prm_main *pprm)
 					pprm->stem_pix_img.normalize(w.f_wgt / pprm->stem_pix_img.f_calc_scale); // normalize image
 					pprm->stem_pix_img.save(0, "_pimg" + str_pix, "bin"); // save image
 				}
-				// - position averaged data -> accumulate
-				if (pprm->detector.b_image_avg) {
-					pprm->stem_pix_paimg.add_buffer(w.pf_res_img, w.f_wgt);
-				}
 			}
 		} // scan x
 	} // scan y
 	//
 	// collect averaged data from jms
+	if (pprm->detector.b_image_avg) { // collect averaged probe image
+		ierr = jms.GetAvgResult(w.whichcode, _JMS_DETECT_IMAGE_AVG, (float*)pprm->stem_pix_paimg.pdata, weight, 0);
+		if (0 < ierr) {
+			nerr = 7001;
+			std::cerr << "Error (singlethread_stem): failed to retrieve averaged probe image (" << ierr << ")." << std::endl;
+			goto _exit;
+		}
+		pprm->stem_pix_paimg.f_calc_weight += weight;
+	}
+	if (pprm->detector.b_difpat_avg) { // collect averaged diffraction pattern
+		ierr = jms.GetAvgResult(w.whichcode, _JMS_DETECT_DIFFR_AVG, (float*)pprm->stem_pix_padif.pdata, weight, 0);
+		if (0 < ierr) {
+			nerr = 7012;
+			std::cerr << "Error (singlethread_stem): failed to retrieve averaged probe diffraction (" << ierr << ")." << std::endl;
+			goto _exit;
+		}
+		pprm->stem_pix_padif.f_calc_weight += weight;
+	}
 	//
 	if (pprm->btalk) {
 		std::cout << std::endl;
@@ -722,8 +709,6 @@ unsigned int __cdecl singlethread_stem(prm_main *pprm)
 
 _exit:
 	if (0 < sz_mem_ann) { free(det_annular); det_annular = NULL; sz_mem_ann = 0; }
-	if (0 < sz_mem_dif) { free(det_pix_dif); det_pix_dif = NULL; sz_mem_dif = 0; }
-	if (0 < sz_mem_img) { free(det_pix_img); det_pix_img = NULL; sz_mem_img = 0; }
 	return nerr;
 }
 

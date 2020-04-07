@@ -1680,7 +1680,6 @@ int CJProbeGen::CalculateProbeFunction(int idx, CJProbeParams* prm, int ndim, fl
 		return 1; // invalid setup
 	}
 	// the code forks into sub-functions
-	m_clock.now();
 	auto cl_start = m_clock.now();
 	switch (idx)
 	{

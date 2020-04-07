@@ -1,5 +1,8 @@
 List of changes to JMultiSliceLib
 
+2020-04-07: 0.42 JB
+- Added internal pattern averaging
+
 2020-03-05: 0.41 JB
 - Fixed a bug causing artifacts of the low-loss inelastic
   scattering code with non-square grid sizes.

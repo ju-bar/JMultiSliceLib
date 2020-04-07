@@ -96,9 +96,6 @@ protected:
 	CRng m_lrng;
 	CRng *m_prng;
 
-	// default message string for output (not initialized)
-	char m_msg[_JPL_MESSAGE_LEN];
-	
 
 public:
 	// Operators

@@ -5,8 +5,8 @@
 //
 // This defines library wrapper function around class CJMultiSlice
 //
-// Copyright (C) 2018, 2019 - Juri Barthel (juribarthel@gmail.com)
-// Copyright (C) 2018, 2019 - Forschungszentrum Jülich GmbH, 52425 Jülich, Germany
+// Copyright (C) 2018, 2020 - Juri Barthel (juribarthel@gmail.com)
+// Copyright (C) 2018, 2020 - Forschungszentrum Jülich GmbH, 52425 Jülich, Germany
 //
 /*
 This program is free software : you can redistribute it and/or modify
@@ -185,6 +185,17 @@ int __stdcall GetUnscrambleHash(unsigned int* phash)
 {
 	return JMS.GetUnscrambleHash(phash);
 }
+
+float __stdcall GetAveragingWeight(int whichcode, int iThread)
+{
+	return JMS.GetAveragingWeight(whichcode, iThread);
+}
+
+int __stdcall ResetAveraging(int whichcode, int iThread)
+{
+	return JMS.ResetAveraging(whichcode, iThread);
+}
+
 int __stdcall Cleanup(void)
 {
 	return JMS.Cleanup();
@@ -228,6 +239,16 @@ int __stdcall GetResult(int whichcode, int whichresult, float *dst, int iThread)
 	return JMS.GetResult(whichcode, whichresult, dst, iThread);
 }
 
+int __stdcall GetAvgResult(int whichcode, int whichresult, float* dst, float* wgt, int iThread)
+{
+	float weight = 0.f;
+	int nerr = JMS.GetAvgResult(whichcode, whichresult, dst, weight, iThread);
+	if (NULL != wgt) {
+		*wgt = weight;
+	}
+	return nerr;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 //
 // CPU CODE
@@ -252,6 +273,11 @@ int __stdcall CPUMultislice(int islc0, int accmode, float weight, int iThread)
 int __stdcall ClearDetMem_h(int iThread)
 {
 	return JMS.ClearDetMem_h(iThread);
+}
+
+int __stdcall ClearDetAvgMem_h(int iThread)
+{
+	return JMS.ClearDetAvgMem_h(iThread);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -303,4 +329,9 @@ int __stdcall GPUMultislice(int islc0, int accmode, float weight)
 int __stdcall ClearDetMem_d(void)
 {
 	return JMS.ClearDetMem_d();
+}
+
+int __stdcall ClearDetAvgMem_d(void)
+{
+	return JMS.ClearDetAvgMem_d();
 }

@@ -6,7 +6,7 @@
 // Copyright (C) 2018 - 2020 - Juri Barthel (juribarthel@gmail.com)
 // Copyright (C) 2018 - 2020 - Forschungszentrum Juelich GmbH, 52425 Juelich, Germany
 //
-// Verions of JMultiSlice: 0.41b (2020 - Mar - 05)
+// Verions of JMultiSlice: 0.42b (2020 - Apr - 02)
 //
 /*
 This program is free software : you can redistribute it and/or modify
@@ -120,8 +120,8 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 // VERSION NUMBERS
 #define __JMS_VERSION__			0
 #define __JMS_VERSION_SUB__		4
-#define __JMS_VERSION_SUB_SUB__	0
-#define __JMS_VERSION_BUILD__	20200220
+#define __JMS_VERSION_SUB_SUB__	2
+#define __JMS_VERSION_BUILD__	20200402
 // CODE IDs
 #define _JMS_CODE_CPU			1
 #define _JMS_CODE_GPU			2
@@ -724,9 +724,16 @@ public:
 	// clears host detector memory for a thread
 	// - thread ID is not checked
 	int ClearDetMem_h(int iThread);
+
+	// clears hist averaging detector memory for a thread
+	// - thread ID is not checked
+	int ClearDetAvgMem_h(int iThread);
 	
 	// clears device detector memory
 	int ClearDetMem_d(void);
+
+	// clears device detector memory
+	int ClearDetAvgMem_d(void);
 	
 protected:
 	// returns host memory phase grating for a slice
@@ -847,12 +854,20 @@ public:
 	// - weight = weighting factor for the accumulation of this run to previous data
 	int GPUMultislice(int islc0, int accmode, float weight = 1.0f);
 
-	// Copies detection results to provided host address
+	// Copies a set of detection results to provided host address
 	// - whichcode: flag signaling which code to prepare (_JMS_CODE_GPU or _JMS_CODE_CPU)
-	// - whichresult: flag signaling which result to retrieve, one of _JMS_DETECT_INTEGRATED, _JMS_DETECT_IMAGE, _JMS_DETECT_DIFFRACTION
+	// - whichresult: flag signaling which result to retrieve, one of _JMS_DETECT_INTEGRATED, _JMS_DETECT_IMAGE, _JMS_DETECT_DIFFRACTION, ...
 	// - dst: destination address recieving results.
 	// - iThread: thread ID of CPU code
-	int GetResult(int whichcode, int whichresult, float *dst, int iThread=0);
+	int GetResult(int whichcode, int whichresult, float *dst, int iThread = 0);
+
+	// Copies a set of averaged detection results to provided host address
+	// - whichcode: flag signaling which code to prepare (_JMS_CODE_GPU or _JMS_CODE_CPU)
+	// - whichresult: flag signaling which result to retrieve, one of _JMS_DETECT_IMAGE_AVG, _JMS_DETECT_DIFFR_AVG, ...
+	// - dst: destination address recieving results.
+	// - weight: floatvariable receiving the weight of averging
+	// - iThread: thread ID of CPU code
+	int GetAvgResult(int whichcode, int whichresult, float* dst, float& weight, int iThread = 0);
 
 	// Returns the averaging weight of a given code channel
 	// - whichcode: flag signaling which code to prepare (_JMS_CODE_GPU or _JMS_CODE_CPU)
