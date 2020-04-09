@@ -6,7 +6,7 @@
 // Copyright (C) 2018 - 2020 - Juri Barthel (juribarthel@gmail.com)
 // Copyright (C) 2018 - 2020 - Forschungszentrum Juelich GmbH, 52425 Juelich, Germany
 //
-// Verions of JMultiSlice: 0.42b (2020 - Apr - 02)
+// Verions of JMultiSlice: 0.42b (2020 - Apr - 08)
 //
 /*
 This program is free software : you can redistribute it and/or modify
@@ -655,8 +655,10 @@ protected:
 	// Posts a CUDA memory allocation problem
 	void PostCUDAMemory(size_t nrequestedbytes);
 public:
-	// Returns number of available GPU devices
+	// Returns number of available CPU devices
 	int GetCPUNum(void);
+	// Returns number of initiated CPU core objects
+	int GetJCPUcorenum(void);
 	// Returns number of available GPU devices
 	int GetGPUNum(void);
 	// Returns name of a GPU device to name (allocate 256 bytes for that)

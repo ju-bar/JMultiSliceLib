@@ -328,7 +328,7 @@ int output(prm_main *pprm)
 		int orgx = 1 + (pprm->stem_pix_padif.sample.grid_nx >> 1);
 		int orgy = 1 + (pprm->stem_pix_padif.sample.grid_ny >> 1);
 		// get normalization factor
-		normfac = 1.f / (pprm->stem_pix_padif.f_calc_weight * pprm->stem_pix_padif.f_calc_scale);
+		normfac = pprm->stem_pix_padif.f_calc_scale / pprm->stem_pix_padif.f_calc_weight;
 		// correct origin shift such that the zero beam is at (orgx, orgy)
 		ierr = pprm->stem_pix_padif.shift_org(orgx, orgy, normfac);
 		if (0 < ierr) {

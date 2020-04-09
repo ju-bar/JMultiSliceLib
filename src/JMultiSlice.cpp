@@ -2348,27 +2348,25 @@ int CJMultiSlice::GetAvgResult(int whichcode, int whichresult, float* dst, float
 		goto _Exit;
 	}
 
+	nitems = (size_t)m_nscx * m_nscy * m_ndetslc;
+
 	if ((whichcode & (int)_JMS_CODE_CPU) > 0 && iThread >= 0 && iThread < m_ncputhreads && m_ndetslc>0) {
 		if (whichresult == (int)_JMS_DETECT_IMAGE_AVG) {
-			nitems = (size_t)m_nscx * m_nscy * m_ndetslc;
 			nbytes = sizeof(float) * nitems;
 			detcur = m_h_det_img_avg + nitems * iThread;
 			memcpy(dst, detcur, nbytes);
 		}
 		if (whichresult == (int)_JMS_DETECT_DIFFR_AVG) {
-			nitems = (size_t)m_nscx * m_nscy * m_ndetslc;
 			nbytes = sizeof(float) * nitems;
-			detcur = m_h_det_dif + nitems * iThread;
+			detcur = m_h_det_dif_avg + nitems * iThread;
 			memcpy(dst, detcur, nbytes);
 		}
 		if (whichresult == (int)_JMS_DETECT_WAVER_AVG) {
-			nitems = (size_t)m_nscx * m_nscy * m_ndetslc;
 			nbytes = sizeof(fcmplx) * nitems;
 			detcur = (float*)(m_h_det_wfr_avg + nitems * iThread);
 			memcpy(dst, detcur, nbytes);
 		}
 		if (whichresult == (int)_JMS_DETECT_WAVEF_AVG) {
-			nitems = (size_t)m_nscx * m_nscy * m_ndetslc;
 			nbytes = sizeof(fcmplx) * nitems;
 			detcur = (float*)(m_h_det_wff_avg + nitems * iThread);
 			memcpy(dst, detcur, nbytes);
@@ -2378,25 +2376,21 @@ int CJMultiSlice::GetAvgResult(int whichcode, int whichresult, float* dst, float
 
 	if ((whichcode & (int)_JMS_CODE_GPU) > 0 && m_ndetslc > 0) {
 		if (whichresult == (int)_JMS_DETECT_IMAGE_AVG) {
-			nitems = (size_t)m_nscx * m_nscy * m_ndetslc;
 			nbytes = sizeof(float) * nitems;
 			detcur = m_d_det_img_avg;
 			cuerr = cudaMemcpy(dst, detcur, nbytes, cudaMemcpyDeviceToHost);
 		}
 		if (whichresult == (int)_JMS_DETECT_DIFFR_AVG) {
-			nitems = (size_t)m_nscx * m_nscy * m_ndetslc;
 			nbytes = sizeof(float) * nitems;
 			detcur = m_d_det_dif_avg;
 			cuerr = cudaMemcpy(dst, detcur, nbytes, cudaMemcpyDeviceToHost);
 		}
 		if (whichresult == (int)_JMS_DETECT_WAVER_AVG) {
-			nitems = (size_t)m_nscx * m_nscy * m_ndetslc;
 			nbytes = sizeof(float) * nitems;
 			detcur = (float*)m_d_det_wfr_avg;
 			cuerr = cudaMemcpy(dst, detcur, nbytes, cudaMemcpyDeviceToHost);
 		}
 		if (whichresult == (int)_JMS_DETECT_WAVEF_AVG) {
-			nitems = (size_t)m_nscx * m_nscy * m_ndetslc;
 			nbytes = sizeof(float) * nitems;
 			detcur = (float*)m_d_det_wff_avg;
 			cuerr = cudaMemcpy(dst, detcur, nbytes, cudaMemcpyDeviceToHost);
@@ -2434,25 +2428,25 @@ int CJMultiSlice::ResetAveraging(int whichcode, int iThread)
 	if ((whichcode&_JMS_CODE_CPU) && (NULL != m_h_weight_avg) && (iThread >= 0) && (iThread < m_ncputhreads)) {
 		m_h_weight_avg[iThread] = 0.f;
 		if ((m_imagedet & _JMS_DETECT_IMAGE_AVG) && (NULL != m_h_det_img_avg)) {
-			pchan = (void*)(&m_d_det_img_avg[iThread * nitems]);
+			pchan = (void*)(&m_h_det_img_avg[iThread * nitems]);
 			if (NULL == memset(pchan, 0, sizeof(float) * nitems)) {
 				nerr = 1; goto _exit;
 			}
 		}
 		if ((m_imagedet & _JMS_DETECT_DIFFR_AVG) && (NULL != m_h_det_dif_avg)) {
-			pchan = (void*)(&m_d_det_dif_avg[iThread * nitems]);
+			pchan = (void*)(&m_h_det_dif_avg[iThread * nitems]);
 			if (NULL == memset(pchan, 0, sizeof(float) * nitems)) {
 				nerr = 2; goto _exit;
 			}
 		}
 		if ((m_imagedet & _JMS_DETECT_WAVER_AVG) && (NULL != m_h_det_wfr_avg)) {
-			pchan = (void*)(&m_d_det_wfr_avg[iThread * nitems]);
+			pchan = (void*)(&m_h_det_wfr_avg[iThread * nitems]);
 			if (NULL == memset(pchan, 0, sizeof(fcmplx) * nitems)) {
 				nerr = 3; goto _exit;
 			}
 		}
 		if ((m_imagedet & _JMS_DETECT_WAVEF_AVG) && (NULL != m_h_det_wff_avg)) {
-			pchan = (void*)(&m_d_det_wff_avg[iThread * nitems]);
+			pchan = (void*)(&m_h_det_wff_avg[iThread * nitems]);
 			if (NULL == memset(pchan, 0, sizeof(fcmplx) * nitems)) {
 				nerr = 4; goto _exit;
 			}
@@ -2619,6 +2613,10 @@ int CJMultiSlice::GetCPUNum(void) {
 */
 int CJMultiSlice::GetCPUNum(void) {
 	return (int)std::thread::hardware_concurrency();
+}
+
+int CJMultiSlice::GetJCPUcorenum(void) {
+	return m_ncputhreads;
 }
 
 int CJMultiSlice::AllocMem_h(void ** _h_a, size_t size, char* callfn, char* arrnam, bool zero)
