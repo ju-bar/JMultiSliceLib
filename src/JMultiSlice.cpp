@@ -3133,7 +3133,7 @@ int CJMultiSlice::CPUMultislice(int islc0, int accmode, float weight, int iThrea
 		|| (m_imagedet&_JMS_DETECT_DIFFRACTION) || (m_imagedet&_JMS_DETECT_WAVEFOURIER)
 		|| (m_imagedet&_JMS_DETECT_DIFFR_AVG) || (m_imagedet&_JMS_DETECT_WAVEF_AVG));
 	bool bdet_avg = ((m_imagedet & _JMS_DETECT_IMAGE_AVG) || (m_imagedet & _JMS_DETECT_WAVER_AVG)
-		|| (m_imagedet & _JMS_DETECT_IMAGE_AVG) || (m_imagedet & _JMS_DETECT_WAVER_AVG));
+		|| (m_imagedet & _JMS_DETECT_DIFFR_AVG) || (m_imagedet & _JMS_DETECT_WAVEF_AVG));
 	if (nitems != npgitems) {
 		bsubframe = true;
 	}
