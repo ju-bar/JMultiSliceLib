@@ -55,10 +55,10 @@
 //    2.2) JMS_ObjectSliceSetup,
 //    2.3) JMS_PropagatorSetup,
 //    2.4) JMS_DetectorSetup (to be called after JMS_ObjectSliceSetup)
-// 3) 3.1) JMS_SetPhaseGratingData (for each slices)
-//    3.2) JMS_SetSliceThickness (for each slices) (required for plasmon scattering)
-// 4) JMS_SetPropagatorData (for each propagators)
-// 5) JMS_SetDetectorData (for each detectors)
+// 3) 3.1) JMS_SetPhaseGratingData (for each slice, calculation possible via CJEElaSca)
+//    3.2) JMS_SetSliceThickness (for each slice) (required for plasmon scattering)
+// 4) JMS_SetPropagatorData (for each propagator)
+// 5) JMS_SetDetectorData (for each detector)
 // 6) JMS_InitCore (once)
 // 7) JMS_SetIncidentWave (once)
 //
@@ -97,7 +97,10 @@
 
 
 #include "JMultiSlice.h"
+#include "JEElaSca.h"
 
+// *** Global Instance of CJEElaSca ***
+static CJEElaSca JELSA;
 
 // *** Global Instance of CJMultislice ***
 static CJMultiSlice JMS;

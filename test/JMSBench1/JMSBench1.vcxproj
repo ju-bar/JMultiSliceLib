@@ -176,7 +176,6 @@
     <ClCompile Include="prm_scan.cpp" />
     <ClCompile Include="prm_slice.cpp" />
     <ClCompile Include="prm_slice_file_info.cpp" />
-    <ClCompile Include="string_format.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="multislice.h" />
@@ -190,7 +189,6 @@
     <ClInclude Include="prm_scan.h" />
     <ClInclude Include="prm_slice.h" />
     <ClInclude Include="prm_slice_file_info.h" />
-    <ClInclude Include="string_format.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="input_command.txt" />

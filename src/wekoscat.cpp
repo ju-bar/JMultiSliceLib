@@ -34,7 +34,8 @@
 #include <stdlib.h>
 #include <malloc.h>
 #include <memory>
-#include <math.h>
+#include "integration.h"
+
 
 CWEKOScat::CWEKOScat() :
 	m_ssym{  "L",  "H", "He", "Li", "Be",  "B",  "C",  "N",  "O",  "F", "Ne",
@@ -46,7 +47,7 @@ CWEKOScat::CWEKOScat() :
 			"Dy", "Ho", "Er", "Tm", "Yb", "Lu", "Hf", "Ta",  "W", "Re", "Os",
 			"Ir", "Pt", "Au", "Hg", "Tl", "Pb",	"Bi", "Po", "At", "Rn",	"Fr",
 			"Ra", "Ac", "Th", "Pa",  "U", "Np", "Pu", "Am", "Cm", "Bk", "Cf" },
-	m_dv{	 0.5,  0.5,  0.5,  0.5,  0.3,  0.5,  0.5,  0.5,  0.5,  0.5,  0.5, 
+	m_dv{	 0.0,  0.5,  0.5,  0.5,  0.3,  0.5,  0.5,  0.5,  0.5,  0.5,  0.5, 
 			 0.5,  0.5,  0.4,  0.5,  0.5,  0.5,  0.5,  0.5,  0.2,  0.3,  0.5,
 			 0.5,  0.5,  0.5,  0.5,  0.5,  0.5,  0.5,  0.5,  0.5,  0.5,  0.5,
 	         0.5,  0.5,  0.5,  0.5,  0.2,  0.3,  0.5,  0.5,  0.5,  0.5,  0.5,
@@ -55,7 +56,7 @@ CWEKOScat::CWEKOScat() :
 			 0.2,  0.1,  0.2,  0.1,  0.1,  0.1,  0.1,  0.4,  0.2,  0.5,  0.4,
 			 0.5,  0.5,  0.4,  0.4,  0.4,  0.3,  0.4,  0.4,  0.4,  0.4,  0.1,
 			 0.2,  0.2,  0.3,  0.2,  0.2,  0.2,  0.2,  0.2,  0.3,  0.2,  0.3 },
-	m_dprm{ {48.75740,  4.96588, 18.24440, 18.24440, 18.24440, 18.24440}, // 0
+	m_dprm{ { 0.00000,  0.00000,  0.00000,  0.00000,  0.00000,  0.00000}, // 0
 			{48.75740,  4.96588, 18.24440, 18.24440, 18.24440, 18.24440}, // 1
 			{ 2.54216,  8.74302, 12.69098,  0.43711,  5.29446, 28.25045},
 			{ 0.68454,  3.06497,  6.23974,126.17816,131.20160,131.76538},
@@ -162,6 +163,9 @@ CWEKOScat::CWEKOScat() :
 	m_dprmeia{8.57332, 18.05901,  8.63476,  0.26777 },
 	m_dprmeib{9.57332, 25.63295, 21.09965,  3.95849 }
 {
+	m_g = 0.;
+	m_k0 = 0.;
+	m_dw = 0.;
 }
 
 CWEKOScat::~CWEKOScat()
@@ -172,7 +176,7 @@ int CWEKOScat::getweko(int z, double *a, double* b)
 {
 	if (z<_WEKOSCAT_MINZ || z>_WEKOSCAT_MAXZ) { return 1; }
 	if (NULL == a || NULL == b) { return 2; }
-	a[0] = (double)_CFFA * (double)z / (3.0 * (1.0 + m_dv[z]));
+	a[0] = _WKS_CFFA * (double)z / (3.0 * (1.0 + m_dv[z]));
 	a[1] = m_dv[z] * a[0];
 	if (b != memcpy(b, m_dprm[z], sizeof(double)*_WEKOSCAT_NPRM)) {
 		return 3;
@@ -292,7 +296,7 @@ double CWEKOScat::ri1(double bi, double bj, double g)
 	double c = 0.5772157;
 	if (g == 0.0) {
 		r = bi * log((bi + bj) / bi) + bj * log((bi + bj) / bj);
-		r *= (double)_PI;
+		r *= _WKS_PI;
 		return r;
 	}
 	double g2 = g * g;
@@ -307,7 +311,7 @@ double CWEKOScat::ri1(double bi, double bj, double g)
 	x2 = bjg2 * bj / (bi + bj);
 	x3 = bjg2;
 	r += rih1(x1, x2, x3);
-	r *= (_PI / g2);
+	r *= (_WKS_PI / g2);
 	return r;
 }
 
@@ -319,7 +323,7 @@ double CWEKOScat::ri2(double bi, double bj, double g, double u)
 		r = (bi + u2) * log((bi + bj + u2) / (bi + u2));
 		r += bj * log((bi + bj + u2) / (bj + u2));
 		r += u2 * log(u2 / (bj + u2));
-		r *= _PI;
+		r *= _WKS_PI;
 		return r;
 	}
 	double g2 = g * g;
@@ -346,7 +350,7 @@ double CWEKOScat::ri2(double bi, double bj, double g, double u)
 	x2 = bjuh * bjuh*g2 / (biuh + bjuh);
 	x3 = bjuh * bjuh*g2 / bju;
 	r += rih1(x1, x2, x3);
-	r *= (_PI / g2);
+	r *= (_WKS_PI / g2);
 	return r;
 }
 
@@ -355,16 +359,16 @@ double CWEKOScat::wekoimag(double g, double ul, double* a, double *b)
 {
 	int i = 0, j = 0, ii = 0, jj = 0;
 	double fi = 0.0;
-	double fp2 = (double)_FPI * _FPI;
+	double fp2 = _WKS_FPI * _WKS_FPI;
 	double a1[2], b1[_WEKOSCAT_NPRM];
 	double u2 = ul * ul;
 	for (i = 0; i < 2; i++) { a1[i] = a[i] * fp2; }
-	for (i = 0; i < _WEKOSCAT_NPRM; i++) { b1[i] = b1[i] / fp2; }
+	for (i = 0; i < (int)_WEKOSCAT_NPRM; i++) { b1[i] = b[i] / fp2; }
 	double g2 = g * g;
 	double dewa = exp(-0.5*ul*g2);
-	for (j = 0; j < _WEKOSCAT_NPRM; j++) {
+	for (j = 0; j < (int)_WEKOSCAT_NPRM; j++) {
 		jj = (int)((double)j / 3.);
-		for (i = 0; i < _WEKOSCAT_NPRM; i++) {
+		for (i = 0; i < (int)_WEKOSCAT_NPRM; i++) {
 			ii = (int)((double)i / 3.);
 			fi += ( a1[jj] * a1[ii]
 					*( dewa * ri1(b1[i],b1[j],g) 
@@ -374,6 +378,130 @@ double CWEKOScat::wekoimag(double g, double ul, double* a, double *b)
 	return fi;
 }
 
+double CWEKOScat::wekoscar1(double s)
+{
+	return weko(m_a, m_b, s);
+}
+
+double CWEKOScat::wekomug(double theta, double phi)
+{
+	double vap = 0.;
+	double ct = std::cos(theta);
+	double st = std::sin(theta);
+	double cp = std::cos(phi);
+	// q = scattering vector length of Q in the ewald sphere
+	// Q = (qx, qy, qz) = K' - K
+	// qx = k * sin(theta) * cos(phi)
+	// qy = k * sin(theta) * sin(phi)
+	// qz = k * (cos(theta) - 1)
+	// k = | K | = wekok
+	double k = m_k0;
+	double twok = k + k;
+	// q = Sqrt[2 k ^ 2 (1 - Cos[q])]
+	double q = k * std::sqrt(2. - 2. * ct);
+	// g = length of some reciprocal space vector G = (gx, gy, gz)
+	// with gx = g, gy = 0, gz = 0 (obda)
+	double g = m_g;
+	// qg = length of the difference vector Q - G
+	double qg = std::sqrt(g * g + twok * k - twok * (k * ct + g * cp * st));
+	double biso = m_dw; // biso value
+	double sg = 0.5 * g;
+	double sq = 0.5 * q;
+	double sqg = 0.5 * qg;
+	double fq = wekoscar1(sq);
+	double fqg = wekoscar1(sqg);
+	// Debye-Waller factors values
+	double ag = std::exp(-biso * sg * sg);
+	double aq = std::exp(-biso * sq * sq);
+	double aqg = std::exp(-biso * sqg * sqg);
+	vap = fq * fqg * (ag - aq * aqg) * st;
+	return vap;
+}
+
+double CWEKOScat::wekomugap(double theta, double phi)
+{
+	double vap = 0.;
+	double ct = std::cos(theta);
+	double st = std::sin(theta);
+	double cp = std::cos(phi);
+	// q = scattering vector length of Q in the ewald sphere
+	// Q = (qx, qy, qz) = K' - K
+	// qx = k * sin(theta) * cos(phi)
+	// qy = k * sin(theta) * sin(phi)
+	// qz = k * (cos(theta) - 1)
+	// k = | K | = wekok
+	double k = m_k0;
+	double twok = k + k;
+	// q = Sqrt[2 k ^ 2 (1 - Cos[q])]
+	double q = k * std::sqrt(2. - 2. * ct);
+	// g = length of some reciprocal space vector G = (gx, gy, gz)
+	// with gx = g, gy = 0, gz = 0 (obda)
+	double g = m_g;
+	// qg = length of the difference vector Q - G
+	double qg = std::sqrt(g * g + twok * k - twok * (k * ct + g * cp * st));
+	double sgmax = m_dw * 0.5; // aperture radius on the scale of s = g / 2
+	double sg = 0.5 * g;
+	double sq = 0.5 * q;
+	double sqg = 0.5 * qg;
+	double fq = wekoscar1(sq);
+	double fqg = wekoscar1(sqg);
+	// aperture values
+	double ag = 1.;
+	double aq = 1.;
+	double aqg = 1.;
+	if (sg >= sgmax) ag = 0.;
+	if (sq >= sgmax) aq = 0.;
+	if (sqg >= sgmax) aqg = 0.;
+	vap = fq * fqg * (ag - aq * aqg) * st;
+	return vap;
+}
+
+double CWEKOScat::wekoabs(double g, double dw, double* a, double* b, double k0)
+{
+	double aff = 0.;
+	double si0 = 0., si1 = 0., pi0 = 0., pi1 = 0.;
+	// copy parameters to module members to be used by the integrator
+	memcpy(m_a, a, sizeof(double) * 2);
+	memcpy(m_b, b, sizeof(double) * _WEKOSCAT_NPRM);
+	m_g = g;
+	m_dw = dw;
+	m_k0 = k0;
+	// set the integration range
+	si0 = 0.; si1 = _WKS_PI; // theta (0 ... Pi)
+	pi0 = 0.; pi1 = _WKS_PI; // phi (0 ... Pi)
+	// call the grid integrator on 128 x 64 pixels
+	// !  theta with quadratic sampling, phi with linear sampling
+	// !  phi on the half side only (symmteric) therefore:    * 2
+	aff = dsgrid2d<CWEKOScat>(&CWEKOScat::wekomug, si0, si1, pi0, pi1, 2.0, 1.0, 128, 64, *this) * 2.0;
+	return aff;
+}
+
+double CWEKOScat::wekoabsap(double g, double ap, double* a, double* b, double k0)
+{
+	double aff = 0.;
+	double si0 = 0., si1 = 0., pi0 = 0., pi1 = 0.;
+	if (g < ap) {
+		// copy parameters to module members to be used by the integrator
+		memcpy(m_a, a, sizeof(double) * 2);
+		memcpy(m_b, b, sizeof(double) * _WEKOSCAT_NPRM);
+		m_g = g;
+		m_dw = ap;
+		m_k0 = k0;
+		// set the integration range
+		si0 = 0.; si1 = _WKS_PI; // theta (0 ... Pi)
+		pi0 = 0.; pi1 = _WKS_PI; // phi (0 ... Pi)
+		// call the grid integrator on 128 x 64 pixels
+		// !  theta with quadratic sampling, phi with linear sampling
+		// !  phi on the half side only (symmteric) therefore:    * 2
+		aff = dsgrid2d<CWEKOScat>(&CWEKOScat::wekomugap, si0, si1, pi0, pi1, 2.0, 1.0, 128, 64, *this) * 2.0;
+	}
+	return aff;
+}
+
+double CWEKOScat::relcorr(double ekv)
+{
+	return (_WKS_E0KV + ekv) / _WKS_E0KV;
+}
 
 double CWEKOScat::getdwf(double g, double dw, bool dwflg)
 {
@@ -386,13 +514,13 @@ double CWEKOScat::wekoscar(double g, double dw, int z, double akv, bool dwflg)
 {
 	if (z<_WEKOSCAT_MINZ || z>_WEKOSCAT_MAXZ) { return 0.0; }
 	double ff = 0.0, fa = 0.0;
-	double rc = (_EEL0KEV + akv) / _EEL0KEV;
+	double rc = relcorr(akv);
 	double dwf = getdwf(g, dw, dwflg);
 	double sa = 0.050 * g;  // s = g / 2 [A]
 	double a[2], b[_WEKOSCAT_NPRM];
 	if (0 == getweko(z, a, b)) {
 		fa = weko(a, b, sa); // ff in [A]
-		ff = 0.1 * fa * rc * _FPI * dwf; // to [nm] with rel. corr. DWF and factor 4*Pi (used by EMS)
+		ff = 0.1 * fa * rc * _WKS_FPI * dwf; // to [nm] with rel. corr. DWF and factor 4*Pi (used by EMS)
 	}
 	return ff;
 }
@@ -403,22 +531,29 @@ dcmplx CWEKOScat::wekosca(double g, double dw, int z, double akv, bool dwflg, bo
 	dcmplx dff = dcmplx(0, 0);
 	if (z<_WEKOSCAT_MINZ || z>_WEKOSCAT_MAXZ) { return dff; }
 	double ff = 0.0, fa = 0.0;
-	double rc = (_EEL0KEV + akv) / _EEL0KEV;
+	double rc = relcorr(akv);
 	double dwf = getdwf(g, dw, dwflg);
 	double sa = 0.050 * g;  // s = g / 2 [A]
 	double a[2], b[_WEKOSCAT_NPRM];
 	if (0 == getweko(z, a, b)) {
 		fa = weko(a, b, sa); // ff in [A]
-		ff = 0.1 * fa * rc * _FPI * dwf; // to [nm] with rel. corr. DWF and factor 4*Pi (used by EMS)
+		ff = 0.1 * fa * rc * _WKS_FPI * dwf; // to [nm] with rel. corr. DWF and factor 4*Pi (used by EMS)
 		dff.real(ff);
 	}
-	if (absflg) {
+	if (absflg && dwflg && dw > _WKS_EPS && ff > _WKS_EPS) { // calculate absorptive form factor for the elastic channel due to TDS
 		double fi = 0.0;
 		// wave number in [A^-1] 0.506774 [A^-1 * kV^-1]
-		double k0 = (double)_WEKOSCAT_K0PA * sqrt((2. * _EEL0KEV + akv) * akv); // 2 * Pi*k !andere k - Notation hier : Aufpassen!
-		double ga = 0.1 * g * _TPI;
-		double ua = sqrt(dw * _WEKOSCAT_R8PI2A);
+		double k0 = _WKS_K0PA * sqrt((2. * _WKS_E0KV + akv) * akv); // 2 * Pi*k !andere k - Notation hier : Aufpassen!
+		double ga = 0.1 * g * _WKS_TPI;
+		double ua = sqrt(dw * _WKS_R8PI2A);
 		fi = 0.1 * rc * rc * wekoimag(ga, ua, a, b) / k0;
+		dff.imag(fi);
+	}
+	if (absflg && !dwflg && g < dw) { // calculate absorptive form factor due to a band-width limiting aperture
+		double fi = 0.0;
+		// wave number in [A^-1] 0.506774 [A^-1 * kV^-1]
+		double k0 = _WKS_K0PA * sqrt((2. * _WKS_E0KV + akv) * akv); // 2 * Pi*k !andere k - Notation hier : Aufpassen!
+		fi = 0.1 * rc * rc * wekoabsap(0.1 * g, 0.1 * dw, a, b, k0 / _WKS_TPI) * k0;
 		dff.imag(fi);
 	}
 	return dff;

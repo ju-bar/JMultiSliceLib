@@ -79,7 +79,12 @@ public:
 	prm_scan scan;
 	prm_detector detector;
 
+protected:
+
+	mutable std::mutex guard; // threading guard used for some data accumulation functions
+
 	// member functions
+public:
 
 	// Initializes the result data buffer from object parameters
 	int init_buffer(void);

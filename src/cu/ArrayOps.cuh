@@ -146,6 +146,10 @@ __global__ void CPowKernel(float *out_1, cuComplex *in_1, unsigned int size);
 // - use this to calculate probability distributions from wave
 __global__ void CPowScaKernel(float *out_1, cuComplex *in_1, float sca, unsigned int size);
 
+// adds the complex array absolute square with scale to the output: out_1[i] += in_1[i]*conjg(in_1[i]) * sca
+// - use this to calculate probability distributions from wave
+__global__ void AddCPowScaKernel(float* out_1, cuComplex* in_1, float sca, unsigned int size);
+
 // copies from in_1 to out_1 using a cyclic 2d shift of sh0 and sh1 positive along dimensions n0 and n1
 // - out_1 -> shifted output data
 // - in_1 -> input data
@@ -168,18 +172,20 @@ __global__ void MulPhasePlate00Kernel(cuComplex *out_1, cuComplex *in_1, float *
 // - dz = defocus * wavelength / 2 [nm^2]
 __global__ void MulPhasePlate01Kernel(cuComplex *out_1, cuComplex *in_1, float *in_2, float *in_3, float dx, float dy, float dz, unsigned int size);
 
-// calculates the total sum of a float array using a reduction scheme: out_1[blockIdx.x] = SUM( in_1[i] , i=1 ... N-1)
-template <unsigned int blockSize> __global__ void FAddReduceKernel(float *out_1, float *in_1, unsigned int size);
+//// calculates the total sum of a float array using a reduction scheme: out_1[blockIdx.x] = SUM( in_1[i] , i=1 ... N-1)
+//template <unsigned int blockSize> __global__ void FAddReduceKernel(float *out_1, float *in_1, unsigned int size);
+//
+//// calculates the total sum of a float array using a reduction scheme: out_1[blockIdx.x] = SUM( in_1[imask] , imask=1 ... NMASK-1)
+//// but using an access mask defining which i is to be used of in_1.
+//// It is assumed that the indices in mask are not causing overflow in in_1.
+//template <unsigned int blockSize> __global__ void MaskFAddReduceKernel(float *out_1, int* mask, float *in_1, unsigned int size);
+//
+//// calculates the total dot product of two float arrays using a reduction scheme: out_1[blockIdx.x] = SUM( in_1[imask]*in_2[imask] , imask=1 ... NMASK-1)
+//// but using an access mask defining which i is to be used of in_1 and in_2.
+//// It is assumed that the indices in mask are not causing overflow in in_1 and in_2.
+//template <unsigned int blockSize> __global__ void MaskFDotReduceKernel(float *out_1, int* mask, float *in_1, float *in_2, unsigned int size);
 
-// calculates the total sum of a float array using a reduction scheme: out_1[blockIdx.x] = SUM( in_1[imask] , imask=1 ... NMASK-1)
-// but using an access mask defining which i is to be used of in_1.
-// It is assumed that the indices in mask are not causing overflow in in_1.
-template <unsigned int blockSize> __global__ void MaskFAddReduceKernel(float *out_1, int* mask, float *in_1, unsigned int size);
 
-// calculates the total dot product of two float arrays using a reduction scheme: out_1[blockIdx.x] = SUM( in_1[imask]*in_2[imask] , imask=1 ... NMASK-1)
-// but using an access mask defining which i is to be used of in_1 and in_2.
-// It is assumed that the indices in mask are not causing overflow in in_1 and in_2.
-template <unsigned int blockSize> __global__ void MaskFDotReduceKernel(float *out_1, int* mask, float *in_1, float *in_2, unsigned int size);
 
 // -----------------------------------------------------------------------------
 // API helper functions
@@ -263,6 +269,9 @@ cudaError_t ArrayOpCPow(float *out_1, cuComplex *in_1, ArrayOpStats1 stats);
 // calculates out_1[i] = in_1[i] * conjg(in_1[i]) * sca  on device 
 cudaError_t ArrayOpCPowSca(float *out_1, cuComplex *in_1, float sca, ArrayOpStats1 stats);
 
+// calculates out_1[i] += in_1[i] * conjg(in_1[i]) * sca  on device 
+cudaError_t ArrayOpAddCPowSca(float* out_1, cuComplex* in_1, float sca, ArrayOpStats1 stats);
+
 // calculates out_1[(j+sh1)%n1][(i+sh0)%n0] = in_1[j][i] on device
 cudaError_t ArrayOpCShift2d(cuComplex *out_1, cuComplex *in_1, unsigned int sh0, unsigned int sh1, unsigned int n0, unsigned int n1, ArrayOpStats1 stats);
 
@@ -286,15 +295,15 @@ cudaError_t ArrayOpMulPP01(cuComplex *out_1, cuComplex *in_1, float *in_2, float
 
 
 
-// calculates the sum of a float array on device: out_1 = SUM( in_1[i] )
-// - CPU_threshold determines from which number of items on CPU summation will be carried out, set 0 to do all on GPU
-cudaError_t ArrayOpFSum(float &out_1, float * in_1, ArrayOpStats1 stats, int CPU_threshold = 0);
-
-// calculates the sum of a float array on device using a mask: out_1 = SUM( in_1[imask] )_imask[i]
-// - set stats.uSize to the size of the mask array
-// - set stats.nBlockSize to as much as many threads you want, it will be capped to 1024.
-// - CPU_threshold determines from which number of items on CPU summation will be carried out, set 0 to do all on GPU
-cudaError_t ArrayOpMaskFSum(float &out_1, int * mask, float * in_1, ArrayOpStats1 stats, int CPU_threshold = 0);
+//// calculates the sum of a float array on device: out_1 = SUM( in_1[i] )
+//// - CPU_threshold determines from which number of items on CPU summation will be carried out, set 0 to do all on GPU
+//cudaError_t ArrayOpFSum(float &out_1, float * in_1, ArrayOpStats1 stats, int CPU_threshold = 0);
+//
+//// calculates the sum of a float array on device using a mask: out_1 = SUM( in_1[imask] )_imask[i]
+//// - set stats.uSize to the size of the mask array
+//// - set stats.nBlockSize to as much as many threads you want, it will be capped to 1024.
+//// - CPU_threshold determines from which number of items on CPU summation will be carried out, set 0 to do all on GPU
+//cudaError_t ArrayOpMaskFSum(float &out_1, int * mask, float * in_1, ArrayOpStats1 stats, int CPU_threshold = 0);
 
 // calculates the dot product of two float arrays on device using a mask: out_1 = SUM( in_1[imask]*in_2[imask] )_imask[i]
 // - set stats.uSize to the size of the mask array
@@ -302,12 +311,17 @@ cudaError_t ArrayOpMaskFSum(float &out_1, int * mask, float * in_1, ArrayOpStats
 // - use this to calculate integrated detector results with mask and detector sensitivity (in_2) from a intensity distrib. (in_1)
 // - CPU_threshold determines from which number of items on CPU summation will be carried out, set 0 to do all on GPU
 cudaError_t ArrayOpMaskFDot(float &out_1, int * mask, float * in_1, float * in_2, ArrayOpStats1 stats, int CPU_threshold = 0);
+// change additional masked dot product to eliminate cpowkernel
+cudaError_t ArrayOpMaskFDot(float& out_1, int* mask, float2* in_1, float* in_2, ArrayOpStats1 stats, int CPU_threshold = 0);
+cudaError_t ArrayOpFDot(float& out_1, float* in_1, float* in_2, ArrayOpStats1 stats, int CPU_threshold = 0);
+cudaError_t ArrayOpFDot(float& out_1, float2* in_1, float* in_2, ArrayOpStats1 stats, int CPU_threshold = 0);
+// end change
 
 // calculates out_1 = SUM( in_1[i]*conjg( in_1[i] ) ) * sca on device
 // - CPU_threshold determines from which number of items on CPU summation will be carried out, set 0 to do all on GPU
-cudaError_t ArrayOpCPowSum(float &out_1, cuComplex *in_1, float sca, ArrayOpStats1 stats, int CPU_threshold = 0);
+cudaError_t ArrayOpCPowSum(float &out_1, float2 *in_1, float sca, ArrayOpStats1 stats, int CPU_threshold = 0);
 
 // calculates out_1 = SUM( in_1[i]*conjg( in_1[i] ) * in_2[i] ) * sca on device
 // - CPU_threshold determines from which number of items on CPU summation will be carried out, set 0 to do all on GPU
-cudaError_t ArrayOpCPowSumFMul(float &out_1, cuComplex *in_1, float *in_2, float sca, ArrayOpStats1 stats, int CPU_threshold = 0);
+cudaError_t ArrayOpCPowSumFMul(float &out_1, float2 *in_1, float *in_2, float sca, ArrayOpStats1 stats, int CPU_threshold = 0);
 

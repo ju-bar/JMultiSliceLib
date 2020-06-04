@@ -172,7 +172,7 @@ void CJPlasmonMC::ScatteringMC(float dt, unsigned int num_sca_max, unsigned int 
 	sca_qy = 0.f;
 	if (m_meanfreepath <= 0.f || m_q_e <= 0.f || m_q_c < m_q_e) return;
 	// calculate a poissonian random number(limited to max.allowed excitation level)
-	num_sca = __min((unsigned int)PoissonRand(dt / m_meanfreepath), num_sca_max);
+	num_sca = std::min((unsigned int)PoissonRand(dt / m_meanfreepath), num_sca_max);
 	if (num_sca > 0) {
 		float pmc = 0.f;
 		float qmc = 0.f;

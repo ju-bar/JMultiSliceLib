@@ -265,6 +265,15 @@ public:
 	
 	// returns the symbol of the aberration of index idx in abrr_symbol
 	int GetAberrationSymbol(int idx, std::string * abrr_symbol);
+
+	// returns the unit of the aberration for convenient input and the scale factor of the unit to nanometers (internal unit) (e.g. "mm" & 1.0E+6)
+	void GetAberrationUnit(int idx, std::string& unit, float& scale);
+
+	// returns the polynomial order of the aberation phase term
+	int GetAberrationTermOrder(int idx);
+
+	// returns the rotational symmetry of the aberration phase term
+	int GetAberrationTermSymmetry(int idx);
 	
 	// returns the number of probe functions (max. index + 1) supported by the module
 	int GetMaxProbeFunction(void);

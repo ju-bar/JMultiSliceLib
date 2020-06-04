@@ -28,6 +28,7 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 #include "NatureConstants.h"
 #include <time.h>
 #include <math.h>
+#include <algorithm>
 //#include <random>
 //#include <stdlib.h>
 //#include <fstream>
@@ -105,7 +106,7 @@ CJProbeParams::CJProbeParams(const CJProbeParams & src)
 	m_fspread_kernel_width = src.m_fspread_kernel_width;
 	m_fspread_kernel_samples = src.m_fspread_kernel_samples;
 	int nacsrc = 2*(const_cast <CJProbeParams*>(&src)->GetAberrationNum());
-	int naccpy = __min(nacsrc, nac);
+	int naccpy = std::min(nacsrc, nac);
 	memcpy(m_abrr_coeff, src.m_abrr_coeff, sizeof(float)*naccpy);
 }
 
@@ -120,7 +121,7 @@ void CJProbeParams::operator=(const CJProbeParams &other)
 {
 	int nac = 2 * m_abrr_num; // number of supported aberration coefficients
 	int nacsrc = 2 * (const_cast <CJProbeParams*>(&other)->GetAberrationNum()); // number of supported coefficients of the other object
-	int naccpy = __min(nacsrc, nac); // number of coefficients to copy
+	int naccpy = std::min(nacsrc, nac); // number of coefficients to copy
 	m_wl = other.m_wl;
 	m_alpha = other.m_alpha;
 	m_alpha_rs = other.m_alpha_rs;
@@ -281,7 +282,7 @@ CJProbeGen::CJProbeGen()
 	// set the aberration symbols
 	char stmp[8];
 	for (int j = 0; j < m_abrr_num; j++) {
-		sprintf_s(stmp, 8, "a%i%i", m_abrr_widx[2 * j], m_abrr_widx[2 * j + 1]);
+		snprintf(stmp, 8, "a%i%i", m_abrr_widx[2 * j], m_abrr_widx[2 * j + 1]);
 		m_abrr_symbol.push_back(stmp);
 	}
 
@@ -358,6 +359,31 @@ int CJProbeGen::GetAberrationSymbol(int idx, std::string * abrr_symbol)
 	}
 	*abrr_symbol = m_abrr_symbol[idx];
 	return 0;
+}
+
+int CJProbeGen::GetAberrationTermOrder(int idx)
+{
+	if (idx < 0 || idx >= m_abrr_num) return 0;
+	return m_abrr_widx[2 * idx];
+}
+
+int CJProbeGen::GetAberrationTermSymmetry(int idx)
+{
+	if (idx < 0 || idx >= m_abrr_num) return 0;
+	return m_abrr_widx[1 + 2 * idx];
+}
+
+void CJProbeGen::GetAberrationUnit(int idx, std::string& unit, float& scale)
+{
+	unit = "nm"; scale = 1.f;
+	if (idx < 0 || idx >= m_abrr_num) return;
+	int n = GetAberrationTermOrder(idx);
+	if (n >= 4 && n <= 5) {
+		unit = "um"; scale = 1000.f;
+	}
+	if (n >= 6) {
+		unit = "mm"; scale = 1000.f;
+	}
 }
 
 int CJProbeGen::GetProbeFunctionName(int idx, std::string * func_name)
@@ -487,7 +513,7 @@ float CJProbeGen::AberrationFunction(float qx, float qy, float wl, int nabrr, fl
 	int i = 0, j = 0, k = 0, k2 = 0, l = 0, n = 0, m = 0;
 	int nol = (int)(_JPG_ABERRATION_ORDER_MAX)+1;
 	int nol2 = (int)(_JPG_ABERRATION_ORDER_MAX) * 2 + 1;
-	int nab = __min(nabrr, m_abrr_num); // limit applied list length to what is supported
+	int nab = std::min(nabrr, m_abrr_num); // limit applied list length to what is supported
 	float* wfield = NULL;
 	float* wabs = NULL;
 	float sgnprm[4] = { 1.f,0.f,-1.f,0.f };
@@ -810,8 +836,8 @@ int CJProbeGen::CalculateProbeIntensityCoh(CJProbeParams* prm, int ndim, float s
 	jfft.SetDataC(wav); // copy data to fft module
 	jfft.IFT(); // make an inverse fft
 	jfft.GetDataPow(pdata); // copy the result to the output array
-	wpow = GetTotalIntensity(ndim*ndim, pdata); // get total probe intensity
-	ScaleIntensity(1.f/wpow, ndim * ndim, pdata); // normalize to total intensity 1
+	wpow = GetTotalIntensity((size_t)ndim*ndim, pdata); // get total probe intensity
+	ScaleIntensity(1.f/wpow, (size_t)ndim*ndim, pdata); // normalize to total intensity 1
 	jfft.Deinit(); // de-init the fft module
 	free(wav); // free memory of wave helper
 	free(qn); // free memory of q hash
@@ -850,7 +876,7 @@ int CJProbeGen::CalculateProbeIntensityPSC(CJProbeParams* prm, int ndim, float s
 	if (fabs(srcw) < 0.001f) { // extremely small or invalid source size
 		lprm.m_source_shape = 0; // turn the source convolution off
 	}
-	int srct = __max(0, __min(_JPG_SOURCE_TYPE_MAX, lprm.m_source_shape)); // source type, limited to supported range
+	int srct = std::max(0, std::min((int)_JPG_SOURCE_TYPE_MAX, lprm.m_source_shape)); // source type, limited to supported range
 	float btx = lprm.m_btx * 0.001f / lprm.m_wl; // beam tilt X: mrad -> 1/nm
 	float bty = lprm.m_bty * 0.001f / lprm.m_wl; // beam tilt Y: mrad -> 1/nm
 	float qlim = lprm.m_alpha * 0.001f / lprm.m_wl; // aperture size: mrad -> 1/nm
@@ -913,8 +939,8 @@ int CJProbeGen::CalculateProbeIntensityPSC(CJProbeParams* prm, int ndim, float s
 		free(krn); // free memory of the kernel
 	}
 	// Normalize the data
-	ptot = GetTotalIntensity(ndim*ndim, pdata);
-	ScaleIntensity(1.f / ptot, ndim*ndim, pdata);
+	ptot = GetTotalIntensity((size_t)ndim*ndim, pdata);
+	ScaleIntensity(1.f / ptot, (size_t)ndim*ndim, pdata);
 	jfft.Deinit();
 	free(wav); // free memory of wave helper
 	free(qn); // free memory of q hash
@@ -955,7 +981,7 @@ int CJProbeGen::CalculateProbeIntensityPTC(CJProbeParams* prm, int ndim, float s
 	if (fabs(fsw) < 0.01f) { // extremely small or invalid focus spread
 		lprm.m_fspread_kernel_samples = 1; // turn the focus spread convolution off
 	}
-	int fsnum = __max(1, lprm.m_fspread_kernel_samples);
+	int fsnum = std::max(1, lprm.m_fspread_kernel_samples);
 	float fsrw = fabs(lprm.m_fspread_kernel_width); // relative width of the focus spread kernel
 	float btx = lprm.m_btx * 0.001f / lprm.m_wl; // beam tilt X: mrad -> 1/nm
 	float bty = lprm.m_bty * 0.001f / lprm.m_wl; // beam tilt Y: mrad -> 1/nm
@@ -1028,13 +1054,13 @@ int CJProbeGen::CalculateProbeIntensityPTC(CJProbeParams* prm, int ndim, float s
 		jfft.SetDataC(wav); // copy data to fft module
 		jfft.IFT(); // make an inverse fft
 		jfft.GetDataPow(probe); // copy the result to the intermediate buffer
-		for (size_t ls = 0; ls < ndim*ndim; ls++) { // accumulate the probe to the ouput array (not normalized)
+		for (size_t ls = 0; ls < (size_t)ndim*ndim; ls++) { // accumulate the probe to the ouput array (not normalized)
 			pdata[ls] += (fswgt*probe[ls]); // add probe intensities with focal kernel weight to pdata
 		}
 	}
 	// Normalize the probe intensity
-	ptot = GetTotalIntensity(ndim*ndim, pdata);
-	ScaleIntensity(1.f / ptot, ndim*ndim, pdata); // with this call pdata contains the final result
+	ptot = GetTotalIntensity((size_t)ndim*ndim, pdata);
+	ScaleIntensity(1.f / ptot, (size_t)ndim*ndim, pdata); // with this call pdata contains the final result
 	jfft.Deinit();
 	free(probe); // free memory of the intermediate probe buffer
 	free(tmp3); // free memory of the temp buffer
@@ -1078,12 +1104,12 @@ int CJProbeGen::CalculateProbeIntensity(CJProbeParams *prm, int ndim, float s, f
 	if (fabs(srcw) < 0.001f) { // extremely small or invalid source size
 		lprm.m_source_shape = 0; // turn the source convolution off
 	}
-	int srct = __max(0, __min(_JPG_SOURCE_TYPE_MAX, lprm.m_source_shape)); // source type, limited to supported range
+	int srct = std::max(0, std::min((int)_JPG_SOURCE_TYPE_MAX, lprm.m_source_shape)); // source type, limited to supported range
 	float fsw = lprm.m_fspread_width;
 	if (fabs(fsw) < 0.01f) { // extremely small or invalid focus spread
 		lprm.m_fspread_kernel_samples = 1; // turn the focus spread convolution off
 	}
-	int fsnum = __max(1, lprm.m_fspread_kernel_samples);
+	int fsnum = std::max(1, lprm.m_fspread_kernel_samples);
 	float fsrw = fabs(lprm.m_fspread_kernel_width); // relative width of the focus spread kernel
 	float btx = lprm.m_btx * 0.001f / lprm.m_wl; // beam tilt X: mrad -> 1/nm
 	float bty = lprm.m_bty * 0.001f / lprm.m_wl; // beam tilt Y: mrad -> 1/nm
@@ -1156,7 +1182,7 @@ int CJProbeGen::CalculateProbeIntensity(CJProbeParams *prm, int ndim, float s, f
 		jfft.SetDataC(wav); // copy data to fft module
 		jfft.IFT(); // make an inverse fft
 		jfft.GetDataPow(probe); // copy the result to the intermediate buffer
-		for (size_t ls = 0; ls < ndim*ndim; ls++) { // accumulate the probe to the ouput array (not normalized)
+		for (size_t ls = 0; ls < (size_t)ndim*ndim; ls++) { // accumulate the probe to the ouput array (not normalized)
 			pdata[ls] += (fswgt*probe[ls]); // add probe intensities with focal kernel weight to pdata
 		}
 	}
@@ -1178,8 +1204,8 @@ int CJProbeGen::CalculateProbeIntensity(CJProbeParams *prm, int ndim, float s, f
 		free(krn); // free memory of the kernel
 	}
 	// Normalize the probe intensity
-	ptot = GetTotalIntensity(ndim*ndim, pdata);
-	ScaleIntensity(1.f / ptot, ndim*ndim, pdata); // with this call pdata contains the final result
+	ptot = GetTotalIntensity((size_t)ndim*ndim, pdata);
+	ScaleIntensity(1.f / ptot, (size_t)ndim*ndim, pdata); // with this call pdata contains the final result
 	jfft.Deinit();
 	free(probe); // free memory of the intermediate probe buffer
 	free(tmp3); // free memory of the temp buffer
@@ -1470,7 +1496,7 @@ int CJProbeGen::SetAmorph(int ndim, float s, bool bForce)
 			return 2;
 		}
 		// calculate on new array
-		nitems = ndim * ndim;
+		nitems = (size_t)ndim * ndim;
 		m_amorph_samp = s;
 		ndim2 = (ndim - (ndim % 2)) >> 1; // nyquist pixel index
 		float fd = (float)(1. / pow(_JPG_AMORPH_SCATANG1,2));
@@ -1512,7 +1538,7 @@ int CJProbeGen::SetAmorph(int ndim, float s, bool bForce)
 		jfft.FT(); // Fourier Transform
 		jfft.Scale(1.f / (float)ndim); // rescale
 		// 4) multiply by atff -> (fcmplx* obj)
-		jfft.MultiplyReal(atff);
+		jfft.MultiplyF(atff);
 		// 5) inverse Fourier transform
 		jfft.IFT(); // Inverse Fourier Transform
 		jfft.Scale(1.f / (float)ndim); // rescale
@@ -1569,7 +1595,7 @@ int CJProbeGen::CalculateRonchigram(CJProbeParams* prm, int ndim, float s, float
 	if (fabs(fsw) < 0.01f) { // extremely small or invalid focus spread
 		lprm.m_fspread_kernel_samples = 1; // turn the focus spread convolution off
 	}
-	int fsnum = __max(1, lprm.m_fspread_kernel_samples);
+	int fsnum = std::max(1, lprm.m_fspread_kernel_samples);
 	float fsrw = fabs(lprm.m_fspread_kernel_width); // relative width of the focus spread kernel
 	float btx = lprm.m_btx * 0.001f / lprm.m_wl; // beam tilt X: mrad -> 1/nm
 	float bty = lprm.m_bty * 0.001f / lprm.m_wl; // beam tilt Y: mrad -> 1/nm
@@ -1660,7 +1686,7 @@ int CJProbeGen::CalculateRonchigram(CJProbeParams* prm, int ndim, float s, float
 		}
 	}
 	// Normalize the probe intensity
-	ScaleIntensity(1.f / psum, ndim*ndim, pdata); // with this call pdata contains the final result
+	ScaleIntensity(1.f / psum, (size_t)ndim*ndim, pdata); // with this call pdata contains the final result
 	jfft.Deinit();
 	free(probe); // free memory of the intermediate probe buffer
 	free(tmp3); // free memory of the temp buffer

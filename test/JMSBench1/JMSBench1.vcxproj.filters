@@ -33,9 +33,6 @@
     <ClCompile Include="prm_slice.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="string_format.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="prm_probe.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -69,9 +66,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="prm_slice.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="string_format.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="prm_probe.h">

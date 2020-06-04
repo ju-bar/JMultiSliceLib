@@ -6,7 +6,7 @@
 // Copyright (C) 2018 - 2020 - Juri Barthel (juribarthel@gmail.com)
 // Copyright (C) 2018 - 2020 - Forschungszentrum Juelich GmbH, 52425 Juelich, Germany
 //
-// Verions of JMultiSlice: 0.42b (2020 - Apr - 08)
+// Verions of JMultiSlice: 0.44b (2020 - June - 02)
 //
 /*
 This program is free software : you can redistribute it and/or modify
@@ -80,9 +80,9 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 //    2.2) JMS_ObjectSliceSetup,
 //    2.3) JMS_PropagatorSetup,
 //    2.4) JMS_DetectorSetup (to be called after JMS_ObjectSliceSetup)
-// 3) 3.1) JMS_SetPhaseGratingData (for each slices)
-//    3.2) JMS_SetSliceThickness (for each slices) (required for plasmon scattering)
-// 4) JMS_SetPropagatorData (for each propagators)
+// 3) 3.1) JMS_SetPhaseGratingData (for each slice, calculation possible via CJEElaSca)
+//    3.2) JMS_SetSliceThickness (for each slice) (required for plasmon scattering)
+// 4) JMS_SetPropagatorData (for each propagator)
 // 5) JMS_SetDetectorData (for each detectors)
 // 6) JMS_InitCore (once)
 // 7) JMS_SetIncidentWave (once)
@@ -120,8 +120,8 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 // VERSION NUMBERS
 #define __JMS_VERSION__			0
 #define __JMS_VERSION_SUB__		4
-#define __JMS_VERSION_SUB_SUB__	2
-#define __JMS_VERSION_BUILD__	20200402
+#define __JMS_VERSION_SUB_SUB__	4
+#define __JMS_VERSION_BUILD__	20200602
 // CODE IDs
 #define _JMS_CODE_CPU			1
 #define _JMS_CODE_GPU			2
@@ -149,11 +149,13 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 #define _JMS_DETECT_WAVEF_AVG	256  // flag average reciprocal-space wave-function detection
 // OTHER PARAMETERS
 #define _JMS_MESSAGE_LEN		2048 // max. length of message strings
-#define _JMS_RELAPERTURE		(2./3.) // relative size of band-width limit
 #define _JMS_FFTW_PLANFLAG		FFTW_MEASURE // used FFTW planner flag, on typical sizes FFTW_MEASURE perfoms best, whereas FFTW_PATIENT requires much more initialization time
 #define _JMS_SUMMATION_BUFFER	0x1000	// number of temporary buffer items for summation
 #define _JMS_SUMMATION_BTF_THR	32	// min. number of items for a butterfly to work, otherwise fallback to straight sum
 									// Using numbers larger than 100 may lead to increased computation time.
+
+constexpr double _JMS_RELAPERTURE = 0.666666666666667; // relative band-width limit of propagators
+
 //
 // global functions
 
@@ -651,7 +653,7 @@ public:
 
 protected:
 	// Posts a CUDA error message to the standard error console
-	void PostCUDAError(char* smsg, cudaError code);
+	void PostCUDAError(const char* smsg, cudaError code);
 	// Posts a CUDA memory allocation problem
 	void PostCUDAMemory(size_t nrequestedbytes);
 public:
@@ -704,7 +706,7 @@ protected:
 	// - callfn: calling function name (for error report)
 	// - arrnam: array usage (for error report)
 	// - zeroe: flag causing the routine to preset the array with zeroes
-	int AllocMem_h(void ** _h_a, size_t size, char* callfn, char* arrnam, bool zero=false);
+	int AllocMem_h(void ** _h_a, size_t size, const char* callfn, const char* arrnam, bool zero=false);
 
 	// Allocates device memory to pointer _d_a
 	// - _d_a: returned device memory address
@@ -712,7 +714,7 @@ protected:
 	// - callfn: calling function name (for error report)
 	// - arrnam: array usage (for error report)
 	// - zeroe: flag causing the routine to preset the array with zeroes
-	int AllocMem_d(void ** _d_a, size_t size, char* callfn, char* arrnam, bool zero = false);
+	int AllocMem_d(void ** _d_a, size_t size, const char* callfn, const char* arrnam, bool zero = false);
 
 	// Deallocate host memory registered for address _h_a
 	// - _h_a: host memory address to free (will be nulled afterwards)
@@ -773,12 +775,18 @@ protected:
 	
 	// returns the dot product of two vectors on device memory
 	float DotProduct_d(float *in_1, float *in_2, size_t len, int nBlockSize);
-	
+	// change alternative dot product working from complex data directly
+	float DotProduct_d(float2* in_1, float* in_2, size_t len, int nBlockSize);
+	// end change
+
 	// returns the masked dot product of two vectors on host memory
 	float MaskedDotProduct_h(int *mask, float *in_1, float *in_2, size_t lenmask);
 
 	// returns the masked dot product of two vectors on device memory
 	float MaskedDotProduct_d(int *mask, float *in_1, float *in_2, size_t lenmask, int nBlockSize);
+	// change alternative dot product for detector readout, working on complex data
+	float MaskedDotProduct_d(int* mask, float2* in_1, float* in_2, size_t lenmask, int nBlockSize);
+	// end change
 	
 	// performs diffraction detector readouts for CPU thread in given slice
 	int ReadoutDifDet_h(int iSlice, int iThread, float weight = 1.0f);

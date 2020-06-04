@@ -153,6 +153,9 @@ public:
 
 	// returns an int detection flag set for CJMultiSlice
 	int get_jms_flags(void);
+	
+	// returns the maximum detection angle of the angular detectors in mrad
+	float get_annular_betamax(void);
 
 };
 

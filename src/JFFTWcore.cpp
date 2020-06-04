@@ -334,7 +334,7 @@ int CJFFTWcore::CShift2d(int nsh0, int nsh1)
 	return 0;
 }
 
-int CJFFTWcore::MultiplyReal(float * src)
+int CJFFTWcore::MultiplyF(float * src)
 {
 	if (m_nstatus < 1) {
 		cerr << "Error(JFFTWcore): Cannot multiply data, not initialized." << endl;

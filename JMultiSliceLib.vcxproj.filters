@@ -28,6 +28,33 @@
     <ClCompile Include="src\rng.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\Atoms.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\AtomSite.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\JEElaSca.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\M3D.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\prime_numbers.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\string_format.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Structure.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\TextFileOps.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\V3D.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\cu\ArrayOps.cuh">
@@ -67,6 +94,42 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\rng.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Atoms.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\AtomSite.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\JEElaSca.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\M3D.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\prime_numbers.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\string_format.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Structure.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\TextFileOps.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\V3D.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\cu\reduction.cuh">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\cu\scapot.cuh">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\integration.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -147,6 +210,9 @@
     <None Include="backup\JMSLib_SRC_Backup_200407.zip">
       <Filter>Backup</Filter>
     </None>
+    <None Include="backup\JMSLib_SRC_Backup_200604.zip">
+      <Filter>Backup</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Text Include="Changes.txt" />
@@ -183,6 +249,9 @@
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="src\cu\ArrayOps.cu">
+      <Filter>Source Files</Filter>
+    </CudaCompile>
+    <CudaCompile Include="src\cu\scapot.cu">
       <Filter>Source Files</Filter>
     </CudaCompile>
   </ItemGroup>

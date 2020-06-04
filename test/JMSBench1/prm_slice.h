@@ -2,8 +2,8 @@
 #include "fcomplex.h"
 #include "params.h"
 #include "prm_slice_file_info.h"
-//#include "prm_structure.h"
 #include "JMultiSlice.h"
+#include "Structure.h"
 
 class prm_slice :
 	public params
@@ -23,6 +23,7 @@ public:
 public:
 
 	prm_slice_file_info header; // header
+	CStructure st; // structure data of this slice (atom types and positions)
 
 protected:
 	
@@ -45,6 +46,15 @@ public:
 
 	// load ems slice data from file sfile (assuming header information has been loaded previously)
 	int load_ems_data(std::string sfile);
+
+	// load ems slice atomic structure table from an open input file stream
+	int load_ems_itab(std::ifstream* pfs, unsigned int header_version);
+
+	// saves ems slice information to a file (header, structure, and data)
+	int save_ems(std::string sfile);
+
+	// saves the structure table to an output file stream
+	int save_ems_itab(std::ofstream* pfs);
 
 	// data interface
 
@@ -93,10 +103,15 @@ public:
 	unsigned int get_variant_num(void);
 
 	// returns the offset byte of slice data in the slice file
-	unsigned long long get_file_data_offset(void);
+	unsigned long long get_file_data_offset(unsigned int header_version);
 
 	// returns the offset byte of structure data in the slice file
 	unsigned long long get_file_structure_offset(void);
+
+protected:
+
+	// returns the number of bytes required for the structure data in the slice file
+	unsigned long long get_file_structure_size(unsigned int header_version);
 
 };
 

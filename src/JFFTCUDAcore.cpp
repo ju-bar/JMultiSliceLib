@@ -28,6 +28,7 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 //
 //#include "stdafx.h"
 #include "JFFTCUDAcore.h"
+#include <cstring>
 //
 using namespace std;
 //
@@ -38,13 +39,15 @@ inline int imod(int a, int b) {
 	return ret;
 }
 
-CJFFTCUDAcore::CJFFTCUDAcore()
+CJFFTCUDAcore::CJFFTCUDAcore() : m_scufftdllname("")
 {
 	m_nstatus = 0;
 	m_ndim = 0;
 	m_pdims = NULL;
 	m_pcw = NULL;
-	m_plan = NULL;
+	m_fw_plan = NULL;
+	//m_bw_plan = NULL;
+	m_cuerrLast = cudaSuccess;
 }
 
 
@@ -53,7 +56,7 @@ CJFFTCUDAcore::~CJFFTCUDAcore()
 	Deinit();
 }
 
-void CJFFTCUDAcore::PostCUDAError(char* smsg, cudaError code)
+void CJFFTCUDAcore::PostCUDAError(const char* smsg, cudaError code)
 {
 	if (code > 0) {
 		cerr << "Error: " << smsg << ", code: " << code << endl;
@@ -78,12 +81,14 @@ void CJFFTCUDAcore::PostCUDAError(char* smsg, cudaError code)
 
 void CJFFTCUDAcore::Deinit(void)
 {
-	if (m_plan != NULL) m_cufftresLast = cufftDestroy(m_plan);
+	if (m_fw_plan != NULL) m_cufftresLast = cufftDestroy(m_fw_plan);
+	//if (m_bw_plan != NULL) m_cufftresLast = cufftDestroy(m_bw_plan);
 	if (m_pdims !=NULL) free(m_pdims);
 	if (m_pcw != NULL) cudaFree(m_pcw);
 	m_pdims = NULL;
 	m_pcw = NULL;
-	m_plan = NULL;
+	m_fw_plan = NULL;
+	//m_bw_plan = NULL;
 	m_nstatus = 0;
 	m_ndim = 0;
 }
@@ -125,38 +130,50 @@ int CJFFTCUDAcore::Init(int ndim, int * pdims)
 			m_pdims[i] = pdims[i]; // store dimension length
 			nd = nd*m_pdims[i]; // multiply to total number of items
 		}
-		//// - set active device
-		//if (0 < SetCUDADevice(ndev)) {
-		//	cout << "Error(JFFTCUDAcore): Failed to initialize, code: " << m_cuerrLast << endl;
-		//	return 2;
-		//}
 		// - allocate new transformation array
 		m_cuerrLast = cudaMalloc((void**)&m_pcw, sizeof(cufftComplex)*nd);
 		if (cudaSuccess != m_cuerrLast) {
 			PostCUDAError("(JFFTCUDAcore::Init): Failed to allocate transformation array", m_cuerrLast);
 			return 3;
 		}
-		//// - prepare new transformation plan
-		//m_cufftresLast = cufftSetCompatibilityMode(m_plan, CUFFT_COMPATIBILITY_FFTW_PADDING);
-		//if (CUFFT_SUCCESS != m_cufftresLast) {
-		//	cout << "Error(JFFTCUDAcore): Failed to set fftw compatibility mode for plan, code: " << m_cufftresLast << endl;
+		//// - allocate callback structure on device
+		//m_cuerrLast = cudaMalloc((void**)&m_d_forwardCallbackParams, sizeof(fftCallbackParams));
+		//if (cudaSuccess != m_cuerrLast) {
+		//	PostCUDAError("(JFFTCUDAcore::Init): Failed to allocate forward callback parameters", m_cuerrLast);
 		//	return 4;
 		//}
+		// - create forward plan, can also be used as backward plan if called in the same way (no callbacks)
 		switch (ndim) {
 		case 1:
-			m_cufftresLast = cufftPlan1d(&m_plan, m_pdims[0], CUFFT_C2C, 1);
+			m_cufftresLast = cufftPlan1d(&m_fw_plan, m_pdims[0], CUFFT_C2C, 1);
 			break;
 		case 2:
-			m_cufftresLast = cufftPlan2d(&m_plan, m_pdims[1], m_pdims[0], CUFFT_C2C);
+			m_cufftresLast = cufftPlan2d(&m_fw_plan, m_pdims[1], m_pdims[0], CUFFT_C2C);
 			break;
 		case 3:
-			m_cufftresLast = cufftPlan3d(&m_plan, m_pdims[2], m_pdims[1], m_pdims[0], CUFFT_C2C);
+			m_cufftresLast = cufftPlan3d(&m_fw_plan, m_pdims[2], m_pdims[1], m_pdims[0], CUFFT_C2C);
 			break;
 		}
 		if (CUFFT_SUCCESS != m_cufftresLast) {
-			cerr << "Error(JFFTCUDAcore::Init): Failed to initialize plan, code: " << m_cufftresLast << endl;
+			cerr << "Error(JFFTCUDAcore::Init): Failed to initialize forward plan, code: " << m_cufftresLast << endl;
 			return 5;
 		}
+		//// - create backward plan
+		//switch (ndim) {
+		//case 1:
+		//	m_cufftresLast = cufftPlan1d(&m_bw_plan, m_pdims[0], CUFFT_C2C, 1);
+		//	break;
+		//case 2:
+		//	m_cufftresLast = cufftPlan2d(&m_bw_plan, m_pdims[1], m_pdims[0], CUFFT_C2C);
+		//	break;
+		//case 3:
+		//	m_cufftresLast = cufftPlan3d(&m_bw_plan, m_pdims[2], m_pdims[1], m_pdims[0], CUFFT_C2C);
+		//	break;
+		//}
+		//if (CUFFT_SUCCESS != m_cufftresLast) {
+		//	cerr << "Error(JFFTCUDAcore::Init): Failed to initialize backward plan, code: " << m_cufftresLast << endl;
+		//	return 5;
+		//}
 		// - determine optimum cuda block size for linear multiplications
 		m_aos1dMult.uSize = nd;
 		if (0 < GetOptimizedMultStats(&m_aos1dMult.uSize, &m_aos1dMult.nBlockSize, &m_aos1dMult.nGridSize)) {
@@ -208,13 +225,84 @@ int CJFFTCUDAcore::SetCUDADevice(int ndev)
 /* ----------------------------------------------------------------------------- */
 
 
+//int CJFFTCUDAcore::FT(cuComplex* cb_ld_data, cuComplex* cb_st_data)
+//{
+//	static cufftCallbackStoreC h_fwStoreCallback = NULL;
+//	static cufftCallbackLoadC h_fwLoadCallback = NULL;
+//	static cudaStream_t fwCallbackCopyStream;
+//	static cudaStream_t fwStream;
+//	__device__ cufftCallbackStoreC StoreCallback = MultCStoreCallback;
+//	__device__ cufftCallbackLoadC LoadCallback = MultCLoadCallback;
+//
+//	if (m_nstatus < 1) {
+//		cerr << "Error(JFFTCUDAcore::FT): Cannot transform, not initialized." << endl;
+//		return 1;
+//	}
+//	if (h_fwStoreCallback == NULL) {
+//		m_cuerrLast = cudaStreamCreate(&fwCallbackCopyStream);
+//		m_cuerrLast = cudaStreamCreate(&fwStream);
+//		if (cudaSuccess != m_cuerrLast) {
+//			PostCUDAError("(JFFTCUDAcore::FT): Failed to create streams for forward callback parameter copy", m_cuerrLast);
+//			return 4;
+//		}
+//		m_cufftresLast = cufftSetStream(m_fw_plan, fwStream);
+//		if (CUFFT_SUCCESS != m_cufftresLast) {
+//			cerr << "Error(JFFTCUDAcore::FT): Enabling forward store FFT stream failed, code: " << m_cufftresLast << endl;
+//			return 5;
+//		}
+//		m_cuerrLast = cudaMemcpyFromSymbol(&h_fwStoreCallback, StoreCallback, sizeof(h_fwStoreCallback));
+//		if (cudaSuccess != m_cuerrLast) {
+//			PostCUDAError("(JFFTCUDAcore::FT): Failed to copy forward store callback address", m_cuerrLast);
+//			return 6;
+//		}
+//		m_cufftresLast = cufftXtSetCallback(m_fw_plan, (void**)&h_fwStoreCallback, CUFFT_CB_ST_COMPLEX, (void**)&m_d_forwardCallbackParams);
+//		if (CUFFT_SUCCESS != m_cufftresLast) {
+//			cerr << "Error(JFFTCUDAcore::FT): Set forward store callback failed, code: " << m_cufftresLast << endl;
+//			return 7;
+//		}
+//	}
+//
+//	if (h_fwLoadCallback == NULL) {
+//		m_cuerrLast = cudaMemcpyFromSymbol(&h_fwLoadCallback, LoadCallback, sizeof(h_fwLoadCallback));
+//		if (cudaSuccess != m_cuerrLast) {
+//			PostCUDAError("(JFFTCUDAcore::FT): Failed to copy forward load callback address", m_cuerrLast);
+//			return 8;
+//		}
+//		m_cufftresLast = cufftXtSetCallback(m_fw_plan, (void**)&h_fwLoadCallback, CUFFT_CB_LD_COMPLEX, (void**)&m_d_forwardCallbackParams);
+//		if (CUFFT_SUCCESS != m_cufftresLast) {
+//			cerr << "Error(JFFTCUDAcore::FT): Set forward load callback failed, code: " << m_cufftresLast << endl;
+//			return 9;
+//		}
+//	}
+//
+//	m_cufftresLast = cufftExecC2C(m_fw_plan, m_pcw, m_pcw, CUFFT_FORWARD);
+//	fftCallbackParams callbackParams;
+//	callbackParams.load = cb_ld_data;
+//	callbackParams.store = cb_st_data;
+//	m_cuerrLast = cudaMemcpyAsync(m_d_forwardCallbackParams, &callbackParams, sizeof(fftCallbackParams), cudaMemcpyDefault, fwCallbackCopyStream);
+//	if (cudaSuccess != m_cuerrLast) {
+//		PostCUDAError("(JFFTCUDAcore::FT): Failed to initialize copy of callback data", m_cuerrLast);
+//		return 3;
+//	}
+//	if (CUFFT_SUCCESS != m_cufftresLast) {
+//		cerr << "Error(JFFTCUDAcore::FT): Forward transformation failed, code: " << m_cufftresLast << endl;
+//		return 2;
+//	}
+//	m_cuerrLast = cudaDeviceSynchronize();
+//	if (cudaSuccess != m_cuerrLast) {
+//		PostCUDAError("(JFFTCUDAcore::FT): Failed to snychronize device", m_cuerrLast);
+//		return 3;
+//	}
+//	return 0;
+//}
+
 int CJFFTCUDAcore::FT(void)
 {
 	if (m_nstatus < 1) {
 		cerr << "Error(JFFTCUDAcore::FT): Cannot transform, not initialized." << endl;
 		return 1;
 	}
-	m_cufftresLast = cufftExecC2C(m_plan, m_pcw, m_pcw, CUFFT_FORWARD);
+	m_cufftresLast = cufftExecC2C(m_fw_plan, m_pcw, m_pcw, CUFFT_FORWARD);
 	if (CUFFT_SUCCESS != m_cufftresLast) {
 		cerr << "Error(JFFTCUDAcore::FT): Forward transformation failed, code: " << m_cufftresLast << endl;
 		return 2;
@@ -234,7 +322,7 @@ int CJFFTCUDAcore::IFT(void)
 		cerr << "Error(JFFTCUDAcore::IFT): Cannot transform, not initialized." << endl;
 		return 1;
 	}
-	m_cufftresLast = cufftExecC2C(m_plan, m_pcw, m_pcw, CUFFT_INVERSE);
+	m_cufftresLast = cufftExecC2C(m_fw_plan, m_pcw, m_pcw, CUFFT_INVERSE);
 	if (CUFFT_SUCCESS != m_cufftresLast) {
 		cerr << "Error(JFFTCUDAcore::IFT): Inverse transformation failed, code: " << m_cufftresLast << endl;
 		return 2;
@@ -254,7 +342,7 @@ int CJFFTCUDAcore::FT_d(cufftComplex * src)
 		cerr << "Error(JFFTCUDAcore::FT_d): Cannot transform, not initialized." << endl;
 		return 1;
 	}
-	m_cufftresLast = cufftExecC2C(m_plan, src, src, CUFFT_FORWARD);
+	m_cufftresLast = cufftExecC2C(m_fw_plan, src, src, CUFFT_FORWARD);
 	if (CUFFT_SUCCESS != m_cufftresLast) {
 		cerr << "Error(JFFTCUDAcore::FT_d): Forward transformation failed, code: " << m_cufftresLast << endl;
 		return 2;
@@ -274,7 +362,7 @@ int CJFFTCUDAcore::IFT_d(cufftComplex * src)
 		cerr << "Error(JFFTCUDAcore::IFT_d): Cannot transform, not initialized." << endl;
 		return 1;
 	}
-	m_cufftresLast = cufftExecC2C(m_plan, src, src, CUFFT_INVERSE);
+	m_cufftresLast = cufftExecC2C(m_fw_plan, src, src, CUFFT_INVERSE);
 	if (CUFFT_SUCCESS != m_cufftresLast) {
 		cerr << "Error(JFFTCUDAcore::IFT_d): Inverse transformation failed, code: " << m_cufftresLast << endl;
 		return 2;
@@ -557,11 +645,18 @@ int CJFFTCUDAcore::GetBlockSize(void)
 
 size_t CJFFTCUDAcore::GetFFTMemUsage(void) {
 	size_t nResult = 0;
+	size_t nMemFFT = 0;
 	if (m_nstatus > 0) {
-		m_cufftresLast = cufftGetSize(m_plan, &nResult);
+		m_cufftresLast = cufftGetSize(m_fw_plan, &nMemFFT);
 		if (m_cufftresLast != CUFFT_SUCCESS) {
-			cerr << "Error(JFFTCUDAcore): Failed to determine cufft memory requirement, code: " << m_cufftresLast << endl;
+			cerr << "Error(JFFTCUDAcore): Failed to determine forward cufft memory requirement, code: " << m_cufftresLast << endl;
 		}
+		nResult += nMemFFT;
+		/*m_cufftresLast = cufftGetSize(m_bw_plan, &nMemFFT);
+		if (m_cufftresLast != CUFFT_SUCCESS) {
+			cerr << "Error(JFFTCUDAcore): Failed to determine backward cufft memory requirement, code: " << m_cufftresLast << endl;
+		}
+		nResult += nMemFFT;*/
 	}
 	return nResult;
 }
@@ -706,6 +801,11 @@ int CJFFTCUDAcore::SetDataIm_d(float * src)
 		return 3;
 	}
 	return 0;
+}
+
+cuComplex* CJFFTCUDAcore::GetData(void)
+{
+	return m_pcw;
 }
 
 int CJFFTCUDAcore::GetDataC(fcmplx * dst)

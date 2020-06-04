@@ -18,7 +18,7 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 */
 #pragma once
 #include <iostream>
-#include <math.h>
+#include <cmath>
 #include <complex>
 //
 // declare basic complex data type

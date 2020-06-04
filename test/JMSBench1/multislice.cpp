@@ -28,34 +28,220 @@
 #include "string_format.h"
 
 
-void __cdecl jms_worker_init(jmsworker *pworker)
+jmsworker::jmsworker()
 {
-	if (pworker) {
-		pworker->b_active = false;
-		pworker->b_cancel = false;
-		pworker->b_foc_avg = false;
-		pworker->b_wave_offset = true;
-		pworker->f_dx = 0.f;
-		pworker->f_dy = 0.f;
-		pworker->f_dz = 0.f;
-		pworker->f_fkw = 2.f;
-		pworker->f_fs = 0.f;
-		pworker->f_wgt = 0.f;
-		pworker->id_thread = std::thread::id();
-		pworker->n_acc_data = _JMS_ACCMODE_NONE;
-		pworker->n_det_flags = _JMS_DETECT_NONE;
-		pworker->n_err = 0;
-		pworker->n_fkern_num = 7;
-		pworker->n_gpu = -1;
-		pworker->n_repeat = 1;
-		pworker->n_scan_idx = 0;
-		pworker->n_state = WS_IDLE;
-		pworker->n_thread = -1;
-		pworker->pf_res_dif = NULL;
-		pworker->pf_res_img = NULL;
-		pworker->pf_res_int = NULL;
-	}
+	b_active = false;
+	b_cancel = false;
+	b_foc_avg = false;
+	b_wave_offset = true;
+	whichcode = 0;
+	f_dx = 0.f;
+	f_dy = 0.f;
+	f_dz = 0.f;
+	f_fkw = 2.f;
+	f_fs = 0.f;
+	f_wgt = 0.f;
+	id_thread = std::thread::id();
+	n_acc_data = _JMS_ACCMODE_NONE;
+	n_det_flags = _JMS_DETECT_NONE;
+	n_err = 0;
+	n_fkern_num = 7;
+	n_gpu = -1;
+	n_repeat = 1;
+	n_scan_idx = 0;
+	n_scan_ix = 0;
+	n_scan_iy = 0;
+	n_state = MS_WS_IDLE;
+	n_thread = -1;
+	pf_res_dif = NULL;
+	pf_res_img = NULL;
+	pf_res_int = NULL;
+	pjms = NULL;
 }
+
+jmsworker::~jmsworker()
+{
+
+}
+
+// ----------------------------------------------------------------------------
+//
+// class jms_calc_queue
+//
+// ----------------------------------------------------------------------------
+
+jms_calc_queue::jms_calc_queue()
+{
+	m_state = 0;
+	m_q = 0;
+	m_len_q = 0;
+	m_num_tasks_open = 0;
+	m_num_tasks_solved = 0;
+	m_num_tasks_failed = 0;
+}
+
+jms_calc_queue::~jms_calc_queue()
+{
+	if (NULL != m_q) { delete[] m_q; }
+}
+
+int jms_calc_queue::init(size_t len_q)
+{
+	int nerr = 0;
+
+	if (NULL != m_q) {
+		delete[] m_q;
+		m_q = NULL;
+		m_state = 0;
+		m_len_q = 0;
+		m_num_tasks_open = 0;
+		m_num_tasks_solved = 0;
+		m_num_tasks_failed = 0;
+	}
+
+	if (len_q == 0) {
+		// finish without tasks
+		goto _exit;
+	}
+
+	m_q = new jmsworker[len_q];
+	if (NULL == m_q) {
+		nerr = 1;
+		std::cerr << "Error (jms_calc_queue::init): Failed to initialize queue of length " << len_q << "." << std::endl;
+		goto _exit;
+	}
+	m_num_tasks_solved = 0;
+	m_num_tasks_failed = 0;
+	m_num_tasks_open = len_q;
+	m_len_q = len_q;
+	m_state = 1;
+
+_exit:
+	return nerr;
+}
+
+int jms_calc_queue::set_task(size_t idx, jmsworker task)
+{
+	int nerr = 0;
+	if (idx >= m_len_q) {
+		nerr = 1;
+		std::cerr << "Error (jms_calc_queue::set_task): Invalid task index (" << idx << ") for current queue of length " << m_len_q << "." << std::endl;
+		goto _exit;
+	}
+	m_q[idx] = task;
+_exit:
+	return nerr;
+}
+
+bool jms_calc_queue::empty(void)
+{
+	return (0 == open());
+}
+
+size_t jms_calc_queue::open(void)
+{
+	return m_num_tasks_open;
+}
+
+size_t jms_calc_queue::solved(void)
+{
+	return m_num_tasks_solved;
+}
+
+size_t jms_calc_queue::failed(void)
+{
+	return m_num_tasks_failed;
+}
+
+size_t jms_calc_queue::total(void)
+{
+	return m_len_q;
+}
+
+size_t jms_calc_queue::request(void)
+{
+	size_t itask = 0;
+	if (!empty()) {
+		std::lock_guard<std::mutex> lock(guard);
+		for (itask = 0; itask < m_len_q; itask++) {
+			if (m_q[itask].n_state == MS_WS_IDLE) {
+				m_q[itask].n_state = MS_WS_INIT;
+				m_num_tasks_open--;
+				break;
+			}
+		}
+		return itask;
+	}
+	return NULL;
+}
+
+// get specific task parameters
+int jms_calc_queue::get_task(size_t idx, jmsworker& task_copy)
+{
+	if (idx < m_len_q) {
+		if (m_q[idx].n_state == MS_WS_INIT) {
+			task_copy = m_q[idx];
+			return 0;
+		}
+	}
+	return 1;
+}
+
+// set task calculation state
+int jms_calc_queue::set_task_calculate(size_t idx)
+{
+	if (idx < m_len_q) {
+		if (m_q[idx].n_state == MS_WS_INIT) {
+			m_q[idx].n_state = MS_WS_CALCULATE;
+			return 0;
+		}
+	}
+	return 1;
+}
+
+// set task solved state
+int jms_calc_queue::set_task_solved(size_t idx)
+{
+	if (idx < m_len_q) {
+		if (m_q[idx].n_state == MS_WS_CALCULATE) {
+			m_q[idx].n_state = MS_WS_FINISHED;
+			m_num_tasks_solved++;
+			return 0;
+		}
+	}
+	return 1;
+}
+
+// set task cancel state
+int jms_calc_queue::set_task_cancel(size_t idx)
+{
+	if (idx < m_len_q) {
+		if (m_q[idx].n_state == MS_WS_CALCULATE) {
+			m_q[idx].n_state = MS_WS_CANCELLED;
+			return 0;
+		}
+	}
+	return 1;
+}
+
+// set task error state
+int jms_calc_queue::set_task_error(size_t idx)
+{
+	if (idx < m_len_q) {
+		if (m_q[idx].n_state == MS_WS_CALCULATE) {
+			m_q[idx].n_state = MS_WS_ERROR;
+			m_num_tasks_failed++;
+			return 0;
+		}
+	}
+	return 1;
+}
+
+
+
+
+
+
 
 unsigned int __cdecl prepare_slices(prm_main *pprm, CJMultiSlice *pjms)
 {
@@ -275,7 +461,7 @@ _exit:
 
 
 
-unsigned int __cdecl run_multislice(void* pParam)
+unsigned int __cdecl run_multislice(jmsworker* pw)
 {
 	int nerr = 0; // routine error code
 	int njmserr = 0; // jms error code
@@ -293,16 +479,14 @@ unsigned int __cdecl run_multislice(void* pParam)
 	float fk_step = 0.f; // focal kernel step
 	float f_x = 0.f, f_y = 0.f, f_z = 0.f; // positions in nm
 	std::string scode = "GPU";
-	jmsworker* pw = NULL;
-	if (NULL == pParam) {
+	if (NULL == pw) {
 		nerr = 1;
 		goto _exit;
 	}
 	// worker state init
-	pw = (jmsworker*)pParam;
 	pw->b_active = true;
 	pw->b_cancel = false;
-	pw->n_state = WS_INIT;
+	pw->n_state = MS_WS_CALCULATE;
 	pw->n_err = 0;
 	pw->str_err = "";
 	if (NULL == pw->pjms) {
@@ -370,7 +554,6 @@ unsigned int __cdecl run_multislice(void* pParam)
 		// *** probe offset
 		//
 		if (pw->b_wave_offset) { // apply wave function offsets
-			pw->n_state = WS_OFFSET_PROBE;
 			f_z = 0.f; // init probe z shift
 			if (pw->b_foc_avg) { // add focal kernel z shift
 				f_z = fk_0 + fk_step * (float)iz;
@@ -395,8 +578,6 @@ unsigned int __cdecl run_multislice(void* pParam)
 		}
 		//
 		// *** multislice
-		//
-		pw->n_state = WS_MULTISLICE;
 		//
 		if (pw->whichcode == _JMS_CODE_CPU) {
 			njmserr = pw->pjms->CPUMultislice(0, nacc, f_wgt_cur, ithread);
@@ -424,7 +605,6 @@ unsigned int __cdecl run_multislice(void* pParam)
 		goto _exit;
 	}
 	//
-	pw->n_state = WS_READOUT;
 	if (pw->pjms->GetDetetionSliceNum() > 0) { // there is detection in general
 		if ((pw->n_det_flags & (unsigned int)_JMS_DETECT_INTEGRATED) && (pw->pjms->GetDetNum() > 0)) {
 			// integerating detector readout
@@ -460,19 +640,168 @@ unsigned int __cdecl run_multislice(void* pParam)
 
 _exit: // final state
 	if (pw->b_cancel) { // set cancelled state
-		pw->n_state = WS_CANCELLED;
+		pw->n_state = MS_WS_CANCELLED;
 	}
 	else {
 		if (0 < nerr) { // set finished state
-			pw->n_state = WS_ERROR;
+			pw->n_state = MS_WS_ERROR;
 		}
 		else {
-			pw->n_state = WS_FINISHED;
+			pw->n_state = MS_WS_FINISHED;
 		}
 	}
 	pw->b_active = false;
 	return nerr;
 }
+
+
+
+unsigned int __cdecl worker_multislice(int gpu_id, int cpu_id, prm_main* pprm, CJMultiSlice* pjms, jms_calc_queue* pq)
+{
+	unsigned int nerr = 0, ierr = 0; // routine error code
+	int whichcode = 0;
+	jmsworker w; // current worker data
+	size_t itask = 0; // task id
+	size_t num_ann = 0; // number of integrating annular detectors
+	size_t num_det_slc = 0; // number of detection planes in z
+	size_t num_scan = 0; // total number of scan points
+	size_t sz_idx = 0; // buffer index
+	size_t sz_mem_ann = 0; // memory sizes allocated locally
+	size_t i = 0, j = 0; // indices
+	unsigned int nyqx = 0, nyqy = 0; // grid nyquist numbers
+	float weight = 0.f; // result weight
+	float* det_annular = NULL; // pointer to result array for integrating detectors
+	float* det_pix_dif = NULL; // pointer to result array for diffraction patterns
+	float* det_pix_img = NULL; // pointer to result array for image patterns
+	float* dst = NULL;
+	float* src = NULL;
+	std::string str_pix = "";
+	if (NULL == pprm) return 1;
+	if (NULL == pjms) return 2;
+	if (NULL == pq) return 3;
+	num_ann = pprm->detector.v_annular.size();
+	num_det_slc = (size_t)pjms->GetDetetionSliceNum();
+	num_scan = (size_t)pprm->scan.nx * pprm->scan.ny;
+	nyqx = pprm->sample.grid_nx >> 1;
+	nyqy = pprm->sample.grid_ny >> 1;
+	if (cpu_id >= 0) whichcode = _JMS_CODE_CPU;
+	if (gpu_id >= 0) whichcode = _JMS_CODE_GPU;
+	if (0 == whichcode) return 4;
+	// prepare local result arrays
+	if (pprm->detector.b_annular && num_ann > 0 && num_det_slc > 0) {
+		// local buffer: holds data of all detectors and all detection planes for one scan position
+		sz_mem_ann = sizeof(float) * num_det_slc * num_ann;
+		det_annular = (float*)malloc(sz_mem_ann);
+		if (NULL == det_annular) {
+			nerr = 10;
+			goto _exit;
+		}
+		memset(det_annular, 0, sz_mem_ann);
+	}
+	if (pprm->detector.b_difpat) {
+		det_pix_dif = (float*)pprm->stem_pix_dif.pdata;
+	}
+	if (pprm->detector.b_image) {
+		det_pix_img = (float*)pprm->stem_pix_img.pdata;
+	}
+	pjms->ResetAveraging(whichcode, cpu_id);
+	while (!pq->empty()) {
+		itask = pq->request();
+		ierr = pq->get_task(itask, w);
+		if (0 == ierr) {
+			w.whichcode = whichcode;
+			w.n_gpu = gpu_id;
+			w.n_thread = cpu_id;
+			w.pf_res_int = det_annular;
+			w.pf_res_dif = det_pix_dif;
+			w.pf_res_img = det_pix_img;
+			w.id_thread = std::this_thread::get_id();
+			pq->set_task_calculate(itask);
+			ierr = run_multislice(&w); // run the multislice
+			if (ierr == 0 && w.n_state!=MS_WS_CANCELLED) {
+				//
+				// results per scan point
+				// - STEM images of integrated detectors
+				if (0 < (w.n_det_flags & (unsigned int)_JMS_DETECT_INTEGRATED)) {
+					// write data to result buffer
+					// as image series over thickness for each detector
+					// - {{plane 1, detector 1},{plane 2, detector 1}, ...{plane N, detector M}}
+					for (j = 0; j < num_ann; j++) { // for each detector j
+						for (i = 0; i < num_det_slc; i++) { // for each plane i
+							sz_idx = (size_t)w.n_scan_idx + (size_t)num_scan * i + (size_t)num_det_slc * num_scan * j;
+							dst = &((float*)pprm->stem_images.pdata)[sz_idx];
+							src = &w.pf_res_int[i * num_ann + j];
+							*dst = *src / w.f_wgt; // write result to pixel
+						}
+					}
+				}
+				// - STEM images of integrated detectors
+				if (0 < (w.n_det_flags & (unsigned int)_JMS_DETECT_DIFFRACTION)) {
+					// write data to result buffers
+					// as image series over thickness
+					// - position dependent data -> push to disk
+					if (pprm->detector.b_difpat) {
+						str_pix = format("_px%03d_py%03d", w.n_scan_ix, w.n_scan_iy); // format pixel string
+						pprm->stem_pix_dif.shift_org(nyqx + 1, nyqy + 1, 1.f / w.f_wgt); // shift and normalize pattern
+						pprm->stem_pix_dif.save(0, "_dif" + str_pix, "bin"); // save pattern
+					}
+				}
+				if (0 < (w.n_det_flags & (unsigned int)_JMS_DETECT_IMAGE)) {
+					// write data to result buffers
+					// as image series over thickness
+					// - position dependent data -> push to disk
+					if (pprm->detector.b_image) {
+						str_pix = format("_px%03d_py%03d", w.n_scan_ix, w.n_scan_iy); // format pixel string
+						pprm->stem_pix_img.normalize(w.f_wgt / pprm->stem_pix_img.f_calc_scale); // normalize image
+						pprm->stem_pix_img.save(0, "_img" + str_pix, "bin"); // save image
+					}
+				}
+				//
+				pq->set_task_solved(itask); // solved
+			}
+			else {
+				pq->set_task_error(itask); // error
+			}
+		}
+	}
+	//
+	// collect averaged data from jms
+	if (pprm->detector.b_image_avg) { // collect averaged probe image
+		size_t sz = pprm->stem_pix_paimg.get_data_bytes();
+		float* buf = (float*)malloc(sz);
+		ierr = pjms->GetAvgResult(whichcode, _JMS_DETECT_IMAGE_AVG, buf, weight, cpu_id);
+		if (0 < ierr) {
+			nerr = 60;
+			goto _exit;
+		}
+		ierr = pprm->stem_pix_paimg.add_buffer(buf, weight);
+		if (0 < ierr) {
+			nerr = 61;
+			goto _exit;
+		}
+		free(buf);
+	}
+	if (pprm->detector.b_difpat_avg) { // collect averaged diffraction pattern
+		size_t sz = pprm->stem_pix_padif.get_data_bytes();
+		float* buf = (float*)malloc(sz);
+		ierr = pjms->GetAvgResult(whichcode, _JMS_DETECT_DIFFR_AVG, buf, weight, cpu_id);
+		if (0 < ierr) {
+			nerr = 80;
+			goto _exit;
+		}
+		ierr = pprm->stem_pix_padif.add_buffer(buf, weight);
+		if (0 < ierr) {
+			nerr = 81;
+			goto _exit;
+		}
+		free(buf);
+	}
+	//
+_exit:
+	if (0 < sz_mem_ann) { free(det_annular); det_annular = NULL; sz_mem_ann = 0; }
+	return nerr;
+}
+
 
 
 unsigned int __cdecl singlethread_stem(prm_main *pprm)
@@ -485,7 +814,6 @@ unsigned int __cdecl singlethread_stem(prm_main *pprm)
 	int njmserr = 0;
 	CJMultiSlice jms;
 	jmsworker w;
-	jms_worker_init(&w);
 	unsigned int num_scan = 1;
 	unsigned int ix = 0, iy = 0, idx = 0; // scan indices
 	unsigned int ix0 = 0, ix1 = pprm->scan.nx, iy0 = 0, iy1 = pprm->scan.ny; // scan range
@@ -505,11 +833,14 @@ unsigned int __cdecl singlethread_stem(prm_main *pprm)
 	size_t num_det_slc = 0; // number of detection planes in z
 	size_t sz_idx = 0;
 	std::string str_pix;
+	long long cl_0 = 0, cl_1 = 0;
 
 	if (pprm->btalk) {
 		std::cout << std::endl;
 		std::cout << "  Initializing single-thread STEM simulation ..." << std::endl;
 	}
+
+	cl_0 = pprm->clock.getmsec();
 
 	w.pjms = &jms;
 
@@ -517,7 +848,7 @@ unsigned int __cdecl singlethread_stem(prm_main *pprm)
 	jms.SetGridSize(pprm->sample.grid_nx, pprm->sample.grid_ny);
 	jms.SetSupercellSize(pprm->sample.grid_a0, pprm->sample.grid_a1, pprm->sample.grid_a2);
 	jms.SetGPUPgrLoading();
-	// jms.SetPlasmonMC(...);
+	jms.SetPlasmonMC((bool)(pprm->sample.lis_exc_max > 0), pprm->sample.lis_qe, pprm->sample.lis_qc, pprm->sample.lis_mfp, pprm->sample.lis_exc_max);
 
 	if (pprm->gpu_id >= 0) { // run on GPU only
 		w.whichcode = _JMS_CODE_GPU;
@@ -613,9 +944,9 @@ unsigned int __cdecl singlethread_stem(prm_main *pprm)
 		std::cout << std::endl;
 	}
 	//
-	for (iy = iy0; iy < iy1; iy++) { // slow loop over scan rows
+	for (iy = pprm->scan.sub_iy0; iy <= pprm->scan.sub_iy1; iy++) { // slow loop over scan rows
 		//
-		for (ix = ix0; ix < ix1; ix++) { // fast loop through each scan row
+		for (ix = pprm->scan.sub_ix0; ix <= pprm->scan.sub_ix1; ix++) { // fast loop through each scan row
 			//
 			idx = ix + iy * pprm->scan.nx; // index of the pixel in the scan image
 			//
@@ -667,7 +998,7 @@ unsigned int __cdecl singlethread_stem(prm_main *pprm)
 				if (pprm->detector.b_difpat) {
 					str_pix = format("_px%03d_py%03d", ix, iy); // format pixel string
 					pprm->stem_pix_dif.shift_org(nyqx + 1, nyqy + 1, 1.f / w.f_wgt); // shift and normalize pattern
-					pprm->stem_pix_dif.save(0, "_pdif" + str_pix, "bin"); // save pattern
+					pprm->stem_pix_dif.save(0, "_dif" + str_pix, "bin"); // save pattern
 				}
 			}
 			if (0 < (w.n_det_flags &(unsigned int)_JMS_DETECT_IMAGE)) {
@@ -677,7 +1008,7 @@ unsigned int __cdecl singlethread_stem(prm_main *pprm)
 				if (pprm->detector.b_image) {
 					str_pix = format("_px%03d_py%03d", ix, iy); // format pixel string
 					pprm->stem_pix_img.normalize(w.f_wgt / pprm->stem_pix_img.f_calc_scale); // normalize image
-					pprm->stem_pix_img.save(0, "_pimg" + str_pix, "bin"); // save image
+					pprm->stem_pix_img.save(0, "_img" + str_pix, "bin"); // save image
 				}
 			}
 		} // scan x
@@ -703,8 +1034,11 @@ unsigned int __cdecl singlethread_stem(prm_main *pprm)
 		pprm->stem_pix_padif.f_calc_weight += weight;
 	}
 	//
+	cl_1 = pprm->clock.getmsec();
 	if (pprm->btalk) {
 		std::cout << std::endl;
+		std::cout << std::endl;
+		std::cout << "  Multislice calculation finished in " << std::setprecision(6) << 0.001f * (cl_1 - cl_0) << " s." << std::endl;
 	}
 
 _exit:
@@ -715,8 +1049,205 @@ _exit:
 
 unsigned int __cdecl multithread_stem(prm_main *pprm)
 {
-	unsigned int nerr = 0;
-	std::cout << "Multi-threaded STEM simulation is not yet implemented." << std::endl;
-//_exit:
+	if (NULL == pprm) {
+		std::cerr << "Error (multithread_stem): invalid parameter interface." << std::endl;
+		return 666;
+	}
+
+	unsigned int nerr = 0, ierr = 0;
+	int njmserr = 0, whichcode = 0, uoff = -1, ncpu = 0;
+	unsigned int num_scan = 1;
+	unsigned int num_finished = 0, num_failed = 0;
+	unsigned int ix = 0, iy = 0, idx = 0; // scan indices
+	unsigned int ix0 = 0, ix1 = pprm->scan.nx, iy0 = 0, iy1 = pprm->scan.ny; // scan range
+	unsigned int i = 0, j = 0;
+	unsigned int nyqx = pprm->sample.grid_nx >> 1, nyqy = pprm->sample.grid_ny >> 1; // image nyquist numbers
+	float scan_rot_sin = 0.f, scan_rot_cos = 1.f;
+	float scan_step_x = pprm->scan.get_step_x();
+	float scan_step_y = pprm->scan.get_step_y();
+	float weight = 0.f;
+	float perc_solved = 0.f, perc_solved_delta = 0.1f, perc_solved_prev = 0.f;
+	size_t num_ann = pprm->detector.v_annular.size();
+	size_t num_det_slc = 0; // number of detection planes in z
+	size_t sz_idx = 0;
+	std::string str_pix;
+	long long cl_0 = 0, cl_1 = 0;
+	CJMultiSlice jms;
+	jms_calc_queue q;
+	jmsworker w; // jms worker stats template
+	std::thread* pthread = NULL;
+
+	cl_0 = pprm->clock.getmsec();
+	
+	if (pprm->btalk) {
+		std::cout << std::endl;
+		std::cout << "  Initializing multi-thread STEM simulation ..." << std::endl;
+	}
+
+	// prepare task template
+	w.pjms = &jms;
+	jms.SetHighTension(pprm->probe.ekv);
+	jms.SetGridSize(pprm->sample.grid_nx, pprm->sample.grid_ny);
+	jms.SetSupercellSize(pprm->sample.grid_a0, pprm->sample.grid_a1, pprm->sample.grid_a2);
+	jms.SetGPUPgrLoading();
+	jms.SetPlasmonMC((bool)(pprm->sample.lis_exc_max > 0), pprm->sample.lis_qe, pprm->sample.lis_qc, pprm->sample.lis_mfp, pprm->sample.lis_exc_max);
+
+	whichcode = 0;
+	w.n_thread = -1;
+	if (pprm->gpu_id >= 0) { // run on GPU only
+		whichcode += _JMS_CODE_GPU;
+		njmserr = jms.SetCurrentGPU(pprm->gpu_id);
+		if (0 < njmserr) {
+			nerr = 1;
+			std::cerr << "Error (multithread_stem): failed to set GPU #" << pprm->gpu_id << ". (" << njmserr << ")" << std::endl;
+			goto _exit;
+		}
+	}
+	ncpu = std::max(0, pprm->cpu_num);
+	if (pprm->gpu_id < 0 && ncpu == 0) { 
+		ncpu = 1; // fall back to one cpu thread
+	}
+	if (ncpu > 0) {
+		whichcode += _JMS_CODE_CPU;
+	}
+
+	if (pprm->scan.nx > 0 && pprm->scan.ny > 0) {
+		num_scan = (pprm->scan.sub_ix1 - pprm->scan.sub_ix0 + 1) * (pprm->scan.sub_iy1 - pprm->scan.sub_iy0 + 1);
+		scan_rot_sin = sin(pprm->scan.rotation);
+		scan_rot_cos = cos(pprm->scan.rotation);
+	}
+	else {
+		nerr = 2;
+		std::cerr << "Error (multithread_stem): invalid number of active scan points (" << (pprm->scan.sub_ix1 - pprm->scan.sub_ix0 + 1) << ", " << (pprm->scan.sub_iy1 - pprm->scan.sub_iy0 + 1) << ")." << std::endl;
+		goto _exit;
+	}
+
+	// prepare transmission functions
+	ierr = prepare_slices(pprm, &jms);
+	if (0 < ierr) {
+		nerr = 1000 + ierr;
+		std::cerr << "Error (multithread_stem): failed to prepare transmission functions (" << ierr << ")." << std::endl;
+		goto _exit;
+	}
+
+	// prepare detectors
+	ierr = prepare_detectors(pprm, &jms);
+	if (0 < ierr) {
+		nerr = 2000 + ierr;
+		std::cerr << "Error (multithread_stem): failed to prepare detectors (" << ierr << ")." << std::endl;
+		goto _exit;
+	}
+	num_det_slc = (unsigned int)jms.GetDetetionSliceNum();
+	w.n_det_flags = pprm->detector.get_jms_flags();
+
+	// prepare cores
+	ierr = prepare_cores(pprm, &jms);
+	if (0 < ierr) {
+		nerr = 3000 + ierr;
+		std::cerr << "Error (multithread_stem): failed to calculation cores (" << ierr << ")." << std::endl;
+		goto _exit;
+	}
+
+	// prepare probe
+	ierr = prepare_probe(pprm, &jms);
+	if (0 < ierr) {
+		nerr = 4000 + ierr;
+		std::cerr << "Error (multithread_stem): failed to prepare probe (" << ierr << ")." << std::endl;
+		goto _exit;
+	}
+
+	// prepare result containers of the prm_main object linked by the function interface
+	ierr = pprm->prepare_result_params();
+	if (0 < ierr) {
+		nerr = 5000 + ierr;
+		std::cerr << "Error (multithread_stem): failed to prepare result containers." << std::endl;
+		goto _exit;
+	}
+
+	w.n_acc_data = (unsigned int)_JMS_ACCMODE_NONE;
+	w.n_repeat = pprm->scan.num_repeat;
+	w.b_foc_avg = false;
+	w.b_wave_offset = true;
+
+	// initialize queue
+	ierr = q.init((size_t)num_scan);
+	if (0 < ierr) {
+		nerr = 6000 + ierr;
+		std::cerr << "Error (multithread_stem): failed to initialize task queue." << std::endl;
+		goto _exit;
+	}
+	// prepare the tasks
+	for (iy = pprm->scan.sub_iy0; iy <= pprm->scan.sub_iy1; iy++) { // slow loop over scan rows
+		//
+		w.n_scan_iy = iy;
+		//
+		for (ix = pprm->scan.sub_ix0; ix <= pprm->scan.sub_ix1; ix++) { // fast loop through each scan row
+			//
+			idx = ix + iy * pprm->scan.nx; // index of the pixel in the scan image
+			//
+			// set physical scan pixel position (grid coordinates)
+			w.f_dx = pprm->scan.offset_x + scan_rot_cos * scan_step_x * (float)ix - scan_rot_sin * scan_step_y * (float)iy;
+			w.f_dy = pprm->scan.offset_y + scan_rot_cos * scan_step_y * (float)iy + scan_rot_sin * scan_step_x * (float)ix;
+			w.f_dz = 0.f;
+			//
+			// set indices
+			w.n_scan_idx = idx;
+			w.n_scan_ix = ix;
+			//
+			// copy to queue
+			ierr = q.set_task(idx, w);
+			if (0 < ierr) {
+				nerr = 6100 + ierr;
+				std::cerr << "Error (multithread_stem): failed to set task data in queue at index (" << idx << ")." << std::endl;
+				goto _exit;
+			}
+			//
+		} // scan x
+	} // scan y
+	//
+	// start the calculation workers (threads)
+	if (pprm->gpu_id >= 0) { // start a gpu thread
+		pthread = new std::thread(worker_multislice, pprm->gpu_id, uoff, pprm, &jms, &q);
+	}
+	if (ncpu > 0) { // start cpu threads
+		for (int ithread = 0; ithread < ncpu; ithread++) {
+			pthread = new std::thread(worker_multislice, uoff, ithread, pprm, &jms, &q);
+		}
+	}
+	//
+	// manage the thread queue progress
+	if (pprm->btalk) {
+		std::cout << std::endl;
+		std::cout << "  Multislice progress: " << format("%5.1f", 0.0) << "%     \r";
+	}
+	num_finished = (unsigned int)q.solved() + (unsigned int)q.failed();
+	while (num_finished < num_scan) { // still calculations running, threads running asynchonously
+		if (pprm->btalk) {
+			perc_solved = 100.f * (float)num_finished / num_scan;
+			if (perc_solved - perc_solved_prev >= perc_solved_delta) {
+				std::cout << "  Multislice progress: " << format("%5.1f", perc_solved) << "%     \r";
+				perc_solved_prev = perc_solved;
+			}
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(5));
+		num_finished = (unsigned int)q.solved() + (unsigned int)q.failed();
+	}
+	if (pprm->btalk) {
+		std::cout << "  Multislice progress: " << format("%5.1f", 100.0) << "%       " << std::endl;
+	}
+	if (q.failed() > 0) {
+		nerr = 7061;
+		std::cerr << "Error (multithread_stem): " << q.failed() << " of " << q.total() << " calculation tasks failed." << std::endl;
+		goto _exit;
+	}
+	
+	//
+	cl_1 = pprm->clock.getmsec();
+	if (pprm->btalk) {
+		std::cout << std::endl;
+		std::cout << "  Multislice calculation finished in " << std::setprecision(6) << 0.001f * (cl_1 - cl_0) << " s." << std::endl;
+	}
+
+_exit:
 	return nerr;
 }

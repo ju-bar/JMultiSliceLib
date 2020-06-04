@@ -30,19 +30,31 @@
 #include "prm_main.h"
 #include "JMultiSlice.h"
 
-#ifndef __WORKER_STATES
-#define __WORKER_STATES
-#define WS_IDLE			0
-#define WS_INIT			1
-#define WS_OFFSET_PROBE	2
-#define WS_MULTISLICE	3
-#define WS_READOUT		4
-#define WS_ERROR		99
-#define WS_FINISHED		100
-#define WS_CANCELLED	98
+#ifndef __MS_WORKER_STATES
+#define __MS_WORKER_STATES
+#define MS_WS_IDLE			0
+#define MS_WS_INIT			1
+#define MS_WS_CALCULATE		2
+#define MS_WS_OFFSET_PROBE	3
+#define MS_WS_MULTISLICE	4
+#define MS_WS_READOUT		5
+#define MS_WS_ERROR			99
+#define MS_WS_FINISHED		100
+#define MS_WS_CANCELLED		98
 #endif
 
-struct jmsworker {
+class jmsworker {
+public:
+
+	// standard constructor
+	jmsworker();
+
+	// standard destructor
+	~jmsworker();
+
+	// member variables
+public:
+
 	bool b_wave_offset; // flags application of wave function shifts
 	bool b_foc_avg; // apply explicit focal averaging
 	bool b_active; // flags that the thread is still running
@@ -54,6 +66,8 @@ struct jmsworker {
 	int n_repeat; // number of repeats for accumulation
 	int n_err; // error code
 	unsigned int n_scan_idx; // scan pixel index
+	unsigned int n_scan_ix; // scan pixel columns index
+	unsigned int n_scan_iy; // scan pixel row index
 	unsigned int n_acc_data; // data accumulation mode: 0 -> init with zero, 1 -> keep previous result
 	unsigned int n_det_flags; // detection flags (see _JMS_DETECT_* in JMultislice.h)
 	unsigned int n_fkern_num; // size of the focal convolution kernel (default: 7)
@@ -71,8 +85,73 @@ struct jmsworker {
 	CJMultiSlice *pjms; // pointer to multislice module
 };
 
-// initialize jmsworker data
-void __cdecl jms_worker_init(jmsworker *pworker);
+
+class jms_calc_queue
+{
+public:
+
+	// standard constructor
+	jms_calc_queue();
+
+	// destructor
+	~jms_calc_queue();
+
+	// member variables
+
+protected:
+
+	unsigned int m_state; // queue state (0 = not ready, 1 = ready)
+	jmsworker* m_q; // task queue
+	size_t m_len_q; // number of queue tasks
+	size_t m_num_tasks_open; // number of open tasks (those with state = 0)
+	size_t m_num_tasks_solved; // number of open tasks (those with state = 3)
+	size_t m_num_tasks_failed; // number of failed tasks (those with state = 5)
+	mutable std::mutex guard;
+
+	// member functions
+
+public:
+
+	// initializes the queue with a length of len_q tasks
+	int init(size_t len_q);
+
+	// sets the task data with index idx using data from jmsworker w
+	int set_task(size_t idx, jmsworker task);
+
+	// returns true if there are no open tasks to distribute
+	bool empty(void);
+
+	// return sthe number of open tasks
+	size_t open(void);
+
+	// returns the number of solved tasks
+	size_t solved(void);
+
+	// returns the number of failed tasks
+	size_t failed(void);
+
+	// returns the total number of tasks
+	size_t total(void);
+
+	// returns a pointer to a task for a requesting thread
+	size_t request(void);
+
+	// get specific task parameters
+	int get_task(size_t idx, jmsworker& task_copy);
+
+	// set task calculation state
+	int set_task_calculate(size_t idx);
+
+	// set task solved state
+	int set_task_solved(size_t idx);
+
+	// set task cancel state
+	int set_task_cancel(size_t idx);
+
+	// set task error state
+	int set_task_error(size_t idx);
+};
+
 
 // prepare object transmission functions of a CJMultiSlice object
 // assumes that phase gratings are ready in the sample.v_slc list of pprm
@@ -91,8 +170,12 @@ unsigned int __cdecl prepare_probe(prm_main *pprm, CJMultiSlice *pjms);
 
 
 // Multislice calling interfaces
-// provide pParams pointing to a jmsworker object
-unsigned int __cdecl run_multislice(void* pParam);
+
+// single multislice call with one set of worker data
+unsigned int __cdecl run_multislice(jmsworker* pw);
+
+// cycling multislice calls with queued worker data
+unsigned int __cdecl worker_multislice(int gpu_id, int cpu_id, prm_main* pprm, CJMultiSlice* pjms, jms_calc_queue* pq);
 
 
 // runs a single thread STEM simulation on CPU or GPU

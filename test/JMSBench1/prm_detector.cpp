@@ -46,7 +46,7 @@ prm_annular::prm_annular()
 	det = NULL;
 }
 
-prm_annular::prm_annular(const prm_annular &src)
+prm_annular::prm_annular(const prm_annular &src) : params(src)
 {
 	name = src.name;
 	beta_inner = src.beta_inner;
@@ -527,19 +527,19 @@ int prm_detector::setup_pixelated()
 		case 0: // jump out and use this list
 			break;
 		case 1: // switch scanned diffraction
-			b_difpat |= true;
+			b_difpat ^= true;
 			goto _repeat_input;
 			break;
 		case 2: // switch PACBED
-			b_difpat_avg |= true;
+			b_difpat_avg ^= true;
 			goto _repeat_input;
 			break;
 		case 3: // switch scanned probe images
-			b_image |= true;
+			b_image ^= true;
 			goto _repeat_input;
 			break;
 		case 4: // switch probe image average
-			b_image_avg |= true;
+			b_image_avg ^= true;
 			goto _repeat_input;
 			break;
 		default:
@@ -601,4 +601,17 @@ int prm_detector::get_jms_flags()
 	if (b_waveft) ndetflg += (int)_JMS_DETECT_WAVEFOURIER;
 	if (b_waveft_avg) ndetflg += (int)_JMS_DETECT_WAVEF_AVG;
 	return ndetflg;
+}
+
+
+float prm_detector::get_annular_betamax()
+{
+	float betamax = 0.f;
+	size_t ndet = v_annular.size();
+	if (ndet > 0) {
+		for (size_t idet = 0; idet < ndet; idet++) {
+			betamax = std::max(betamax, v_annular[idet].beta_outer);
+		}
+	}
+	return betamax;
 }

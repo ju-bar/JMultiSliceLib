@@ -29,6 +29,7 @@
 #include <iomanip>
 #include <fstream>
 #include <vector>
+#include <algorithm>
 #include "perfclock.h"
 #include "string_format.h"
 
@@ -71,6 +72,10 @@ public:
 	// reads input from file stream to a buffer with byte swap depending on member in_byte_swap
 	// num_items determines the number of items of size sz_item contained by buf
 	bool file_read_buf(std::ifstream *pfs, char * buf, size_t sz_item, size_t num_items);
+
+	// writes output to file stream from a buffer
+	// num_items determines the number of items of size sz_item contained by buf
+	bool file_write_buf(std::ofstream* pfs, char* buf, size_t sz_item, size_t num_items);
 
 	// generates a file name of a series with numerical index (idx)
 	// concateneting prefix (pre), a string made of (digits) digits

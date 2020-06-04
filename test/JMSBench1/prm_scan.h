@@ -54,6 +54,10 @@ public:
 	unsigned int nx; // number of samples taken along the fast scan direction
 	unsigned int ny; // number of samples taken along the slow scan direction
 	unsigned int num_repeat; // number of calculation repeats per scan position
+	unsigned int sub_ix0; // sub-frame column start index (default 0)
+	unsigned int sub_iy0; // sub-frame row start index (default 0)
+	unsigned int sub_ix1; // sub-frame column stop index (default nx-1)
+	unsigned int sub_iy1; // sub-frame row stop index (default ny-1)
 
 public:
 
@@ -72,6 +76,9 @@ public:
 
 	// user input and setup of the scan sampling
 	int setup_sampling(void);
+
+	// user input and setup of a sub-frame for scanning
+	int setup_subframe(void);
 
 	// user input and setup of the beam position (scan frame offset)
 	int setup_beam_position(void);

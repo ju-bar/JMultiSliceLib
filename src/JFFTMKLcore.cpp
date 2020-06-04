@@ -40,6 +40,7 @@ inline int imod(int a, int b) {
 
 CJFFTMKLcore::CJFFTMKLcore()
 {
+	m_descr = 0;
 	m_mkl_status = 0;
 	m_nstatus = 0;
 	m_ndim = 0;
@@ -124,13 +125,19 @@ int CJFFTMKLcore::Init(int ndim, int * pdims)
 			return 3;
 		}
 		// - prepare new transformation plan
-		m_mkl_status = DftiCreateDescriptor(&m_descr, DFTI_SINGLE, DFTI_COMPLEX, ndim, pinidims);
+		if (ndim > 1) { // mor ethan 1 d
+			m_mkl_status = DftiCreateDescriptor(&m_descr, DFTI_SINGLE, DFTI_COMPLEX, ndim, pinidims);
+		}
+		else { // 1 d
+			m_mkl_status = DftiCreateDescriptor(&m_descr, DFTI_SINGLE, DFTI_COMPLEX, 1, pinidims[0]);
+		}
 		if (m_mkl_status > 0 && !DftiErrorClass(m_mkl_status, DFTI_NO_ERROR)) {
 			cerr << "Error(JFFTMKLcore): Failed to create fft descriptor." << endl;
 			cerr << "-> MKL: " << DftiErrorMessage(m_mkl_status) << endl;
 			if (NULL != pinidims) { free(pinidims); }
 			return 4;
 		}
+			
 		//
 		m_mkl_status = DftiCommitDescriptor(m_descr);
 		if (m_mkl_status > 0 && !DftiErrorClass(m_mkl_status, DFTI_NO_ERROR)) {
@@ -316,7 +323,28 @@ int CJFFTMKLcore::CShift2d(int nsh0, int nsh1)
 	return 0;
 }
 
-int CJFFTMKLcore::MultiplyReal(float * src)
+int CJFFTMKLcore::AddC(fcmplx* src)
+{
+	if (m_nstatus < 1) {
+		cerr << "Error(JFFTMKLcore): Cannot add data, not initialized." << endl;
+		return 1;
+	}
+	if (src == NULL) // error: invalid source pointer
+		return 2;
+	size_t nd = GetDataSize();
+	//fcmplx * pcdst = reinterpret_cast<fcmplx*>(m_pcw);
+	//fcmplx * pcsrc = src;
+	for (size_t i = 0; i < nd; i++) {
+		m_pcw[i] += src[i];
+		//re1 = m_pcw[i][0]; im1 = m_pcw[i][1];
+		//m_pcw[i][0] = re1*src[i].real() - im1*src[i].imag();
+		//m_pcw[i][1] = im1*src[i].real() + re1*src[i].imag();
+	}
+	return 0;
+}
+
+
+int CJFFTMKLcore::MultiplyF(float * src)
 {
 	if (m_nstatus < 1) {
 		cerr << "Error(JFFTMKLcore): Cannot multiply data, not initialized." << endl;
@@ -443,6 +471,11 @@ int CJFFTMKLcore::MultiplySub2dC(fcmplx * src, int nsub0, int nsub1)
 int CJFFTMKLcore::GetStatus(void)
 {
 	return m_nstatus;
+}
+
+fcmplx* CJFFTMKLcore::GetData(void)
+{
+	return m_pcw;
 }
 
 int CJFFTMKLcore::GetDimension(void)

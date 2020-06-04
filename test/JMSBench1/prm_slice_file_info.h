@@ -32,7 +32,7 @@
 #include "params.h"
 
 #define SLICENAME_MAX				40
-#define SLICEPARAMS_EXTHDRVER		2012071101 // 2010112301
+#define SLICEPARAMS_EXTHDRVER		2020052801 // 2012071101 // 2010112301
 #define SLICEPARAMS_IFORM			1 // = COMPLEX REAL SPACE DATA
 #define ENDIANTEST_MAX				0x00002000
 
@@ -174,6 +174,7 @@ public:
 	~prm_slice_file_info();
 
 	// member data
+	unsigned int ver; // header version
 	unsigned int grid_x; // grid size x
 	unsigned int grid_y; // grid size y
 	unsigned int num_var; // number of variants
@@ -195,7 +196,11 @@ public:
 	void clear();
 
 	// load ems slice file header and store information in members
-	int load_ems_header(std::string sfile);
+	int load_ems_header(std::ifstream* pfs);
+
+	// write ems slice file header to an output file stream
+	// - before calling this, make sure to set ALL member values correctly, also data_type, data_offset, structure_offset
+	int save_ems_header(std::ofstream* pfs);
 
 protected:
 

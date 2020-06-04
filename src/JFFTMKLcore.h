@@ -79,13 +79,15 @@ public:
 	int Conjugate(void); // applies complex conjugate to the data
 	int Scale(float sca); // scales the data
 	int CShift2d(int nsh0, int nsh1); // applies cyclic shifts along both array dimensions
-	int MultiplyReal(float * src); // multiply with a list of real values of the same size
+	int AddC(fcmplx* src); // add complex values
+	int MultiplyF(float * src); // multiply with a list of real values of the same size
 	int MultiplyC(float * src); // multiply complex values given as re,im aligned list
 	int MultiplyC(fcmplx * src); // multiply complex values
 	int MultiplySub2dC(float * src, int nsub0, int nsub1); // multiply complex values given as re,im aligned list from an array of different size. Periodic wrap around applied.
 	int MultiplySub2dC(fcmplx * src, int nsub0, int nsub1); // multiply complex values given as re,im aligned list from an array of different size. Periodic wrap around applied.
 	// Data transfer interface:
 	int GetStatus(void); // returns the core status
+	fcmplx* GetData(void); // returns the address of the internal buffer (Warning: Do not change the allocation state!)
 	int GetDimension(void); // return the number of core data dimensions
 	int GetDimSize(int * pdims); // returns the size along each dimensions
 	size_t GetDataSize(void); // returns total number of data items involved in the transformation

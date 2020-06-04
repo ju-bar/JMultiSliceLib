@@ -32,6 +32,7 @@ prm_main::prm_main()
 	cpu_num = 0;
 	cpu_num_max = 0;
 	str_out_file = "";
+	tem_mode = (int)(_PRM_TEM_MODE_STEM);
 }
 
 
@@ -181,11 +182,11 @@ int prm_main::setup_cpu(void)
 			ncpu = cpu_num;
 		}
 		// limit to reasonable range
-		ncpu = __min((int)(cpu_num_max - 1), __max(0, ncpu));
+		ncpu = std::min((int)(cpu_num_max - 1), std::max(0, ncpu));
 	}
 	else { // fallback to default (0 or 1)
 		// limit to reasonable range
-		ncpu = __min((int)cpu_num_max, __max(0, ncpu));
+		ncpu = std::min((int)cpu_num_max, std::max(0, ncpu));
 	}
 	if (btalk) {
 		if (ncpu <= 0) {
@@ -231,7 +232,7 @@ int prm_main::setup_file_output(void)
 int prm_main::setup_sample(void)
 {
 	int nerr = 0, ierr = 0;
-
+	float k_max = 0.f;
 	sample.set_ctrl(*this);
 	
 	if (btalk || binteractive) {
@@ -248,7 +249,45 @@ int prm_main::setup_sample(void)
 	// switch input forms
 	switch (sample.input_form)
 	{
-	case (SAMPLE_INF_SLI):
+	//
+	case (SAMPLE_INF_CEL): // input by atomic structure data files
+		// load atomic structure data
+		ierr = sample.load_structure();
+		if (ierr != 0) {
+			nerr = SAMPLE_INF_CEL * 10 + 1;
+			goto exit;
+		}
+		// setup orientation & final cell size
+		// * to be implemented later ... *
+		sample.st_Used = sample.st_Input; // use the input cell now
+		// write some data needed from other parameter objects to the sample object
+		sample.grid_a0 = sample.st_Used.m_vCellSize.x;
+		sample.grid_a1 = sample.st_Used.m_vCellSize.y;
+		sample.grid_a2 = sample.st_Used.m_vCellSize.z;
+		sample.grid_ekv = probe.ekv;
+		// setup grid (x,y)
+		k_max = 0.001f * detector.get_annular_betamax() / probe.get_wl(); // angle (mrad) -> to k (1/nm) in small angle approximation
+		ierr = sample.setup_grid(k_max);
+		if (ierr != 0) {
+			nerr = SAMPLE_INF_CEL * 10 + 4;
+			goto exit;
+		}
+		// setup grid (z) (slices)
+		ierr = sample.setup_slices();
+		if (ierr != 0) {
+			nerr = SAMPLE_INF_CEL * 10 + 5;
+			goto exit;
+		}
+		// setup parameters and options for calculation of potentials and transmission functions
+		ierr = sample.setup_slc_calc();
+		if (ierr != 0) {
+			nerr = SAMPLE_INF_CEL * 10 + 6;
+			goto exit;
+		}
+		//
+		break;
+	//
+	case (SAMPLE_INF_SLI): // input by object transmission functions / slice files
 		// get number of slice files -> number of slices
 		if (0 == sample.find_sli_files()) {
 			nerr = SAMPLE_INF_SLI * 10 + 1;
@@ -261,6 +300,7 @@ int prm_main::setup_sample(void)
 			goto exit;
 		}
 		break;
+	//
 	default:
 		nerr = 99;
 		goto exit;
@@ -357,7 +397,8 @@ int prm_main::setup_detector(void)
 		goto exit;
 	}
 
-	// TODO: setup other detection schemes
+	// * TODO * //
+	// setup other detection schemes
 
 exit:
 	if (nerr == 0 && binteractive && detector.v_str_ctrl.size() > 0) { // append detector input control to main control
@@ -408,9 +449,17 @@ _repeat_input:
 		nerr = 400 + ierr;
 		goto _exit;
 	}
-	ierr = scan_tmp.setup_repeats();
+	// set to default sub-frame
+	scan_tmp.sub_ix1 = scan_tmp.nx - 1;
+	scan_tmp.sub_iy1 = scan_tmp.ny - 1;
+	ierr = scan_tmp.setup_subframe();
 	if (0 < ierr) {
 		nerr = 500 + ierr;
+		goto _exit;
+	}
+	ierr = scan_tmp.setup_repeats();
+	if (0 < ierr) {
+		nerr = 600 + ierr;
 		goto _exit;
 	}
 
@@ -438,6 +487,51 @@ _exit:
 }
 
 
+int prm_main::setup_qepopt(void)
+{
+	int nerr = 0;
+	if (scan.num_repeat < 100) {
+		std::cout << std::endl;
+		std::cout << "Warning: You are about to setup additional options for calculations" << std::endl;
+		std::cout << "         within the QEP model with a low number of statistical" << std::endl;
+		std::cout << "         samples (" << scan.num_repeat << ")." << std::endl;
+		std::cout << "         QEP = Quantum Excitations of Phonons" << std::endl;
+		std::cout << "         Forbes et al., Phys.Rev.B 82, 104103 (2010)" << std::endl;
+	}
+	//sample.set_ctrl(*this);
+	//// do something here
+	//if (nerr == 0 && binteractive && sample.v_str_ctrl.size() > 0) { // append scan input control to main control
+	//	v_str_ctrl = sample.v_str_ctrl;
+	//}
+	//if (!binteractive) { // erase control input copy
+	//	sample.v_str_ctrl.clear();
+	//}
+	return nerr;
+}
+
+
+int prm_main::setup_lis(void)
+{
+	int nerr = 0;
+	if (scan.num_repeat < 100) {
+		std::cout << std::endl;
+		std::cout << "Warning: You are about to setup the low-loss inelastic scattering" << std::endl;
+		std::cout << "         Monte-Carlo procedure with a low number of statistical" << std::endl;
+		std::cout << "         samples per scan position (" << scan.num_repeat << ")." << std::endl;
+		std::cout << "         Barthel et al., Phys. Rev. B 101, 184109 (2020)." << std::endl;
+	}
+	sample.set_ctrl(*this);
+	nerr = sample.setup_lis();
+	if (nerr == 0 && binteractive && sample.v_str_ctrl.size() > 0) { // append scan input control to main control
+		v_str_ctrl = sample.v_str_ctrl;
+	}
+	if (!binteractive) { // erase control input copy
+		sample.v_str_ctrl.clear();
+	}
+	return nerr;
+}
+
+
 int prm_main::prepare_sample_pgr(void)
 {
 	int nerr = 0, ierr = 0;
@@ -449,10 +543,12 @@ int prm_main::prepare_sample_pgr(void)
 			std::cout << std::endl;
 			std::cout << "  Calculating object transmission functions ..." << std::endl;
 		}
-		// TODO: implement atomic structure input options
-		nerr = 2;
-		std::cerr << "Error: (prepare_sample_pgr) atomic structure input currently not supported." << std::endl;
-		goto _exit;
+		ierr = sample.calculate_pgr(cpu_num, gpu_id);
+		if (0 < ierr) {
+			nerr = 2;
+			std::cerr << "Error: (prepare_sample_pgr) failed to calculate object transmission functions (" << ierr << ")." << std::endl;
+			goto _exit;
+		}
 		break;
 	case SAMPLE_INF_SLI:
 		if (btalk || binteractive) {
@@ -462,12 +558,12 @@ int prm_main::prepare_sample_pgr(void)
 		ierr = sample.load_sli_file_data();
 		if (0 < ierr) {
 			nerr = 10;
-			std::cerr << "Error: (prepare_sample_pgr) failed to load phase gratings from files (" << ierr << ")." << std::endl;
+			std::cerr << "Error: (prepare_sample_pgr) failed to load object transmission functions from files (" << ierr << ")." << std::endl;
 		}
 		break;
 	default:
 		nerr = 1;
-		std::cerr << "Error: (prepare_sample_pgr) invalid input option for phase gratings (" << sample.input_form << ")." << std::endl;
+		std::cerr << "Error: (prepare_sample_pgr) invalid input option for object transmission functions (" << sample.input_form << ")." << std::endl;
 		goto _exit;
 	}
 

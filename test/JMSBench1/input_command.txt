@@ -1,8 +1,12 @@
 List of input commands to be set in the control file
 
 Commands are given by a keyword followed by lines of
-keyword specific input data.
+keyword specific input data. 
+Commands must appear in direct sequency together with their data lines.
+The order in which different commands are listed in the file is not fixed.
 
+
+1) Computation setup
 
 set_gpu_id
 <int>
@@ -16,17 +20,54 @@ set_cpu_num
 	Set the number of CPU threads to be used.
 
 
+
+2) Output
+
 set_output_file
 
 	Set the prefix of the output file names.
 
 
+
+3) Sample data
+
 set_sample_input_form
 <int>
 	
 	Set the type of sample data input:
-	<1> structure file (CIF, CEL) *not supported yet*
+	<1> structure file (CEL, CIF, XTL) *not fully implemented yet*
 	<2> slice file (SLI)
+
+
+set_structure_file_format
+<int>
+
+	Set the input format of atomic structure data:
+	<1> CEL file
+	<2> CIF file *not implemented yet*
+	<3> XTL file *not implemented yet*
+
+
+set_structure_file_name
+<string>
+
+	Set the name of the structure file to be loaded.
+
+
+set_structure_slices_equidistant
+<int>
+
+	Set the number of equidistant slices taken from the atomic structure model.
+
+
+set_slc_grid_samples
+<int> <int>
+
+	Set the number of the 2-d grid samples (pixels) used to calculate object
+	transmission functions.	Numbers with low prime factors should be preferred.
+	Larger numbers allow the calculation of higher scattering angles, but
+	increase computation time.
+	theta_max = number-of-samples * lambda / cell-size / 3
 
 
 set_slc_file_name
@@ -35,6 +76,49 @@ set_slc_file_name
 	Set the prefix of slice file names. Full file names
 	will be created by adding "_###.sli", where ### represents
 	a 3 digit number of file series indices.
+
+
+set_slc_mod_thermal
+<int>
+
+	Sets the model to simulate the effect of thermal motion of atoms.
+	<0> none
+	<1> Debye-Waller factors Exp( - B * k^2 / 4 )
+	<2> Quantum Excitation of Phonons (QEP) with the Einstein model of
+	    thermal motion (Forbes et al., Phys. Rev. B 82, 104103 (2010).)
+
+
+set_slc_var_num
+<int>
+
+	Sets the number of thermal states to calculate. This only applies
+	with set_slc_mod_thermal <2>.
+
+
+set_slc_mod_absorb
+<int>
+
+	Sets the model to calculate absorptive form factors.
+	<0> none
+	<1> fix fraction of elastic form factors (Hashimoto et. al.)
+	<2> with set_slc_mod_thermal <1>: loss in the elastic channel due
+	      to TDS (Hall & Hirsch)
+		with set_slc_mod_thermal <0 or 2>: loss due to scattering beyond
+		  the calculation band-width limit (Hall & Hirsch)
+
+
+set_slc_abs_fac
+<float>
+
+	Sets the strength of absorptive form factors, relative to elastic
+	form factors. This only applies with set_slc_mod_absorb <1>.
+
+
+set_slc_save
+<int>
+
+	Switches on that calculated object transmission functions are
+	saved to files. Uses the file name set by set_slc_file_name.
 
 
 set_sample_thickness_max
@@ -58,6 +142,9 @@ set_sample_tilt
 	relative to the optics axis in mrad.
 
 
+
+4) Microscope, probe and imaging parameters
+
 set_probe_ekv
 <float>
 
@@ -65,10 +152,44 @@ set_probe_ekv
 
 
 set_probe_convergence
-<float>
+<float> <float> <float> <float>
 
-	Set the convergence semi-angle of the electron probe in mrad.
+	Set the convergence semi-angle of the electron probe in mrad with the
+	first value. The first value is mandatory, values 2, 3, and 4 are
+	optional and specify
+	(2) edge smoothness	relative to the aperture radius (0.0 - 1.0),
+	(3) anisotropy relative to the aperture radius (0.0 - 0.5), and
+	(4) direction of anisotropy (large axis) relative to grid x axis in deg.
 
+
+set_probe_aberration
+<int> <float> <float>
+
+	Sets an aberration coefficient. The aberration is identified by an index
+	specified by the first value. The two components (x,y) of the aberration
+	coeffcient are specified by the second and third value in nanometers.
+	List of aberration indices:
+	   1 = image shift (C_0,1)
+	   2 = defocus (C_1,0, C1)
+	   3 = two-fold astigmatism (C_1,2, A1)
+	   4 = coma (C_2,1, 3*B2)
+	   5 = three-fold astigmatism (C_2,3, A2)
+	   6 = spherical aberration (C_3,0, C3, CS)
+	   7 = star aberration (C_3,2, 4*S3)
+	   8 = four-fold astigmatism (C_3,4, A3)
+	   9 = coma (5th order) (C_4,1, 5*B4)
+      10 = three-lobe aberration (C_4,3, 5*D4)
+	  11 = five-fold astigmatism (C_4,5, A4)
+	  12 = spherical aberration (6th order) (C_5,0, C5)
+	  13 = star aberration (5th order) (C_5,2, 6*S5)
+	  14 = rosette aberration (C_5,4, 6*R5)
+	  15 = six-fold astigmatism (C_5,6, A5)
+	  ...
+	  Aberrations up to the 7th order (C_7,b) are supported. 
+
+
+
+5) Detectors
 
 set_det_annular
 <float> <float> <float> <float> <string>
@@ -102,6 +223,9 @@ set_det_paimg
 	probe positions of the scan.
 
 
+
+6) Scanning
+
 set_scan_sampling
 <int> <int>
 
@@ -128,6 +252,16 @@ set_scan_beam_pos
 	origin of the calculation frame (sample bounding box) in nm.
 
 
+set_scan_sub_frame
+<int> <int> <int> <int>
+
+	Set a scan sub-frame to run in terms of integer scan positions
+	of the frame defined by set_scan_beam_pos, set_scan_frame_size,
+	and set_scan_sampling. The first pair of indices defines the
+	lower left corner and the second pair of indices defines the
+	upper right corner of a rectangular sub-frame.
+
+
 set_num_repeat
 <int>
 
@@ -139,6 +273,8 @@ set_num_repeat
 	image simulations require a much larger amount of averaging with
 	a few hundred or even thousand repetitions.
 
+
+7) Simulation of additional effects
 
 set_lis
 <int> <float> <float> <float>

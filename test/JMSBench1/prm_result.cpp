@@ -47,11 +47,11 @@ prm_result::prm_result()
 }
 
 
-prm_result::prm_result(const prm_result &src)
+prm_result::prm_result(const prm_result &src) : params(src)
 {
 	prm_result* psrc = const_cast <prm_result*>(&src);
 
-	set_ctrl(src); // copy base class member
+	//set_ctrl(src); // copy base class member
 
 	data_type = src.data_type;
 	det_type = src.det_type;
@@ -140,8 +140,9 @@ int prm_result::add_buffer(float* src, float weight)
 	if (weight == 0.f) return 0;
 	float* dst = (float*)pdata;
 	size_t num_float = sz_data / sizeof(float);
+	std::lock_guard<std::mutex> lock(guard); // threading guard
 	for (size_t i = 0; i < num_float; i++) {
-		dst[i] = dst[i] + weight * src[i];
+		dst[i] = dst[i] + src[i];
 	}
 	f_calc_weight += weight;
 	return 0;
@@ -162,6 +163,10 @@ int prm_result::normalize(float weight)
 
 int prm_result::save(unsigned int idx_chan, std::string str_suffix, std::string str_format)
 {
+	// * TODO * //
+	// Add a parameter to control whether the data should be added to an existing file.
+	// Also partial data storing might be an option of different processes generate
+	// different parts of a result, e.g. by using sub-frame scanning.
 	int nerr = 0;
 	int ifmt = 0;
 	size_t dim_num = v_dim.size(); // number of data dimensions
@@ -342,7 +347,7 @@ size_t prm_result::get_pos_index(std::vector<unsigned int> v_pos)
 	if (num_dim > 0) {
 		unsigned int ndpln = 1;
 		for (unsigned int idim = 0; idim < num_dim; idim++) {
-			pos += v_pos[idim] * ndpln;
+			pos += (size_t)v_pos[idim] * ndpln;
 			ndpln *= v_dim[idim];
 		}
 	}
@@ -418,7 +423,7 @@ int prm_result::shift_org(int orgx, int orgy, float fac)
 	}
 	// allocate a local buffer for shift indices + setup the shifts
 	if (NULL == pshift_hash) {
-		sz_shift_hash = sizeof(unsigned int) * (size_t)(float_num * items_num);
+		sz_shift_hash = sizeof(unsigned int) * (size_t)float_num * items_num;
 		pshift_hash = (unsigned int*)malloc(sz_shift_hash);
 		if (NULL == pshift_hash) {
 			nerr = 4;

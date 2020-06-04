@@ -4,9 +4,6 @@ List of next steps and wishes for JMultiSliceLib
 	* target for linking to Fortran
 	* test the interface
 - Test functionality of the wave function accumulation and readout interface
-- Implement compiler flags to exclude the CUDA code
 - Calculating plane and vortex wave functions
-- Calculating object transmission functions from structure files, including structure data I/O
+- Support more atomic structure data I/O formats
 - Calculation of transition potentials for inelastic scattering
-- Add a test folder with test programs
-- Find cause for irreproducible crashes occurring from time to time.

@@ -49,6 +49,7 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 #include <cuda_runtime.h>
 #include <cufft.h>
 #include "cu\ArrayOps.cuh"
+//#include "cu\FFTCallbacks.cuh"
 //#include <windows.h>
 //
 #ifndef JFFTCUDACORE_H
@@ -62,6 +63,7 @@ class CJFFTCUDAcore
 public:
 	CJFFTCUDAcore();
 	~CJFFTCUDAcore();
+	
 protected:
 	cudaError m_cuerrLast; // last cuda error code
 	cufftResult m_cufftresLast; // last cuda fft result
@@ -69,11 +71,15 @@ protected:
 	int m_nstatus; // core status: 0: not initialized, 1: initialized
 	int m_ndim; // core plan number of dimensions: <=0: invalid, 1: 1d, 2: 2d, 3: 3d, >=4: invalid
 	int* m_pdims; // core plan size of the array
-	cufftHandle m_plan; // core plan object
+	// change added separate plans for forward and backward fft for different callback handling, add pointer to callback parameters
+	cufftHandle m_fw_plan; // core forward plan object
+	//cufftHandle m_bw_plan; // core inverse plan object
+	//fftCallbackParams* m_d_forwardCallbackParams;
+	// end change
 	cufftComplex* m_pcw; // core complex working array
 	ArrayOpStats1 m_aos1dMult; // stats for 1d cuda array complex multiplication operation
 
-	void PostCUDAError(char* smsg, cudaError code); // post cuda error to cerr
+	void PostCUDAError(const char* smsg, cudaError code); // post cuda error to cerr
 
 	
 public:
@@ -87,9 +93,13 @@ public:
 
 	// Transformation operation interface:
 
-	// forward FFT with the current plan and data in the core
+	//// forward FFT with the current forward plan and data in the core
+	//// using load and store callbacks with data provided by cb_ld_data and cb_st_data
+	//int FT(cuComplex* cb_ld_data, cuComplex* cb_st_data);
+
+	// forward FFT with the current forward plan and data in the core
 	int FT(void);
-	// inverse FFT with the current plan and data in the core
+	// inverse FFT with the current inverse plan and data in the core
 	int IFT(void); 
 	// forward FFT with the current plan and device data src
 	int FT_d(cufftComplex * src);
@@ -138,6 +148,8 @@ public:
 	int SetDataRe(float * src);
 	// sets data (0,im) from host
 	int SetDataIm(float * src);
+	// returns the device address of the core buffer (only for accessing data, do not change the allocation state)
+	cuComplex* GetData(void);
 	// gets data to host, assuming float re,im aligned destination items
 	int GetDataC(fcmplx * dst);
 	// gets data to host, assuming float (real) destination items

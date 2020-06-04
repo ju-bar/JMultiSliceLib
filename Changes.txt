@@ -1,5 +1,24 @@
 List of changes to JMultiSliceLib
 
+2020-06-02: 0.44 JB
+- Added code to calculate object transmission functions from
+  atomic structure data (single thread & multi thread)
+  (CPU and GPU)
+- Added code to handle atomic structure data with file I/O.
+- Tested the code for calculating object transmission
+  functions.
+
+2020-04-23: 0.43 JB & EW
+- Modified integration on GPU by reduction running directly on
+  wave function data (EW)
+- Modified detector readout on GPU to adopt on detection setup
+  and either use precalculated power or direct integration from
+  wave function data, for integarting and imaging detectors.
+- pre-implemented FFT callbacks in the forward FT. The callbacks
+  are not used yet, because this is only supported on Linux64
+  with the static cufft library. Maybe we activate this later, 
+  if Nvidia releases a static library for all operating systems.
+
 2020-04-07: 0.42 JB
 - Added internal pattern averaging
 

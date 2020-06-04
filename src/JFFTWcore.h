@@ -79,7 +79,7 @@ public:
 	int Conjugate(void); // applies complex conjugate to the data
 	int Scale(float sca); // scales the data
 	int CShift2d(int nsh0, int nsh1); // applies cyclic shifts along both array dimensions
-	int MultiplyReal(float * src); // multiply with a list of real values of the same size
+	int MultiplyF(float * src); // multiply with a list of real values of the same size
 	int MultiplyC(float * src); // multiply complex values given as re,im aligned list
 	int MultiplyC(fcmplx * src); // multiply complex values
 	int MultiplyC(fftwf_complex * src); // multiply complex values

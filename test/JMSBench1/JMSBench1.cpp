@@ -30,6 +30,7 @@
 #include "prm_main.h"
 #include "multislice.h"
 #include "JMultiSliceLib.h"
+#include "Structure.h"
 
 
 int parseoptions(prm_main *pprm, int argc, char* argv[])
@@ -114,16 +115,18 @@ int init(prm_main *pprm)
 
 	if (pprm->btalk) {
 		std::cout << std::endl;
-		std::cout << "  +------------------------------------------+  " << std::endl;
-		std::cout << "  |                                          |  " << std::endl;
-		std::cout << "  |   JMSBench1 - version 1.0 - 2020-02-19   |  " << std::endl;
-		std::cout << "  |                                          |  " << std::endl;
-		std::cout << "  |   by J. Barthel                          |  " << std::endl;
-		std::cout << "  |      ju.barthel@fz-juelich.de            |  " << std::endl;
-		std::cout << "  |      Forschungszentrum Juelich GmbH      |  " << std::endl;
-		std::cout << "  |      52425 Juelich, Germany              |  " << std::endl;
-		std::cout << "  |                                          |  " << std::endl;
-		std::cout << "  +------------------------------------------+  " << std::endl;
+		std::cout << "  +--------------------------------------------------+  " << std::endl;
+		std::cout << "  |                                                  |  " << std::endl;
+		std::cout << "  |       JMSBench1 - version 1.1 - 2020-06-03       |  " << std::endl;
+		std::cout << "  |                                                  |  " << std::endl;
+		std::cout << "  |       J. Barthel (ju.barthel@fz-juelich.de)      |  " << std::endl;
+		std::cout << "  |       Forschungszentrum Juelich GmbH             |  " << std::endl;
+		std::cout << "  |       52425 Juelich, Germany                     |  " << std::endl;
+		std::cout << "  |                                                  |  " << std::endl;
+		std::cout << "  |       Barthel, Ultramic. 193 (2018) 1 - 11       |  " << std::endl;
+		std::cout << "  |       https://er-c.org/barthel/drprobe/          |  " << std::endl;
+		std::cout << "  |                                                  |  " << std::endl;
+		std::cout << "  +--------------------------------------------------+  " << std::endl;
 		std::cout << std::endl;
 	}
 
@@ -223,39 +226,88 @@ int setup(prm_main *pprm)
 		std::cerr << "Failed to setup output file name. Falling back to default 'output'." << std::endl;
 		pprm->str_out_file = "output";
 	}
+	
+	// - Simulation (TEM or STEM) *currently STEM only*
+
+	if (_PRM_TEM_MODE_CTEM == pprm->tem_mode) {
+		/*
+		// - CTEM beam
+		ierr = pprm->setup_beam();
+		if (0 < ierr) {
+			nerr = 2000 + ierr;
+			std::cerr << "Failed to setup beam data. Unable to calculate." << std::endl;
+			goto exit;
+		}
+		*/
+	}
+
+	if (_PRM_TEM_MODE_STEM == pprm->tem_mode) {
+		// - STEM probe
+		ierr = pprm->setup_probe();
+		if (0 < ierr) {
+			nerr = 2000 + ierr;
+			std::cerr << "Failed to setup probe data. Unable to calculate." << std::endl;
+			goto exit;
+		}
+
+		// - STEM detectors
+		ierr = pprm->setup_detector();
+		if (0 < ierr) {
+			nerr = 3000 + ierr;
+			std::cerr << "Failed to setup detectors. Unable to calculate." << std::endl;
+			goto exit;
+		}
+	}
 
 	// - Sample
 	ierr = pprm->setup_sample();
 	if (0 < ierr) {
-		nerr = 2000 + ierr;
+		nerr = 4000 + ierr;
 		std::cerr << "Failed to setup sample data. Unable to calculate." << std::endl;
 		goto exit;
 	}
 
-	// - Simulation (TEM or STEM) *currently STEM only*
-
-	// - Probe
-	ierr = pprm->setup_probe();
-	if (0 < ierr) {
-		nerr = 3000 + ierr;
-		std::cerr << "Failed to setup probe data. Unable to calculate." << std::endl;
-		goto exit;
+	if (_PRM_TEM_MODE_STEM == pprm->tem_mode) {
+		// - STEM scanning
+		ierr = pprm->setup_scan();
+		if (0 < ierr) {
+			nerr = 5000 + ierr;
+			std::cerr << "Failed to setup scan. Unable to calculate." << std::endl;
+			goto exit;
+		}
 	}
 
-	// - Detectors
-	ierr = pprm->setup_detector();
-	if (0 < ierr) {
-		nerr = 4000 + ierr;
-		std::cerr << "Failed to setup detectors. Unable to calculate." << std::endl;
-		goto exit;
+	if (_PRM_TEM_MODE_CTEM == pprm->tem_mode) {
+		/*
+		// - CTEM imaging
+		ierr = pprm->setup_imaging();
+		if (0 < ierr) {
+			nerr = 5000 + ierr;
+			std::cerr << "Failed to setup beam data. Unable to calculate." << std::endl;
+			goto exit;
+		}
+		// - CTEM detector
+		ierr = pprm->setup_camera();
+		if (0 < ierr) {
+			nerr = 6000 + ierr;
+			std::cerr << "Failed to setup beam data. Unable to calculate." << std::endl;
+			goto exit;
+		}
+		*/
 	}
 
-	// - Scanning
-	ierr = pprm->setup_scan();
+	//// - additional QEP options, such as separation of thermal diffuse scattering from the elastic channel
+	//ierr = pprm->setup_qepopt();
+	//if (0 < ierr) {
+	//	nerr = 9000 + ierr;
+	//	std::cerr << "Failed to setup QEP options." << std::endl;
+	//}
+
+	// - Low-Loss inelastic scattering
+	ierr = pprm->setup_lis();
 	if (0 < ierr) {
-		nerr = 5000 + ierr;
-		std::cerr << "Failed to setup scan. Unable to calculate." << std::endl;
-		goto exit;
+		nerr = 9000 + ierr;
+		std::cerr << "Failed to setup low-loss inelastic scattering Monte-Carlo (turned off)." << std::endl;
 	}
 	
 exit:
@@ -273,15 +325,14 @@ int calculate(prm_main *pprm)
 		goto exit;
 	}
 
-	// calculate phase gratings
+	// load/calculate phase gratings
 	nerr = pprm->prepare_sample_pgr();
 	if (0 < nerr) goto exit;
-
 
 	// determine multislice calculation scheme
 	if ((pprm->gpu_id >= 0 && pprm->cpu_num == 0) ||
 		(pprm->gpu_id < 0 && pprm->cpu_num == 1)) {
-		// pure gpu calculation (no multi-threading)
+		// single thread calculation
 		nerr = singlethread_stem(pprm);
 	}
 	else {
@@ -393,7 +444,7 @@ exit:
 int main(int argc, char* argv[])
 {
 	int nerr = 0, ierr = 0;
-	
+	CStructure st;
 	prm_main prm;
 
 	// process command line options

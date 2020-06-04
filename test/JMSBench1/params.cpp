@@ -98,6 +98,15 @@ bool params::file_read_buf(std::ifstream *pfs, char * buf, size_t sz_item, size_
 	return true;
 }
 
+bool params::file_write_buf(std::ofstream* pfs, char* buf, size_t sz_item, size_t num_items)
+{
+	std::streamsize sz = (std::streamsize)sz_item * num_items;
+	if (!pfs->is_open()) return false;
+	pfs->write(buf, sz);
+	if (pfs->bad()) return false;
+	return true;
+}
+
 std::string params::generate_ser_file_name(std::string pre, unsigned int idx, unsigned int digits, std::string suf)
 {
 	std::stringstream ss;
@@ -108,10 +117,10 @@ std::string params::generate_ser_file_name(std::string pre, unsigned int idx, un
 
 int params::read_param(int ipos, std::string * pstr, std::string * prm)
 {
-	std::size_t lipos = (std::size_t)(ipos >= 0 ? ipos : 0);
-	std::size_t lcpos = lipos;
-	std::size_t lmpos = 0;
-	std::size_t lsep = 0;
+	size_t lipos = (std::size_t)(ipos >= 0 ? ipos : 0);
+	size_t lcpos = lipos;
+	size_t lmpos = 0;
+	size_t lsep = 0;
 	std::string str_sep = ", ";
 	if (NULL == pstr) {
 		return -1;
@@ -146,7 +155,7 @@ int params::read_param(int ipos, std::string * pstr, std::string * prm)
 			lcpos = lsep;
 		}
 	}
-	return (int)lcpos; // return position which the possible begin of a new parameter or eos
+	return (int)lcpos; // return position which is the possible begin of a new parameter or eos
 }
 
 

@@ -167,9 +167,15 @@
     <Text Include="ToDo.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\Atoms.h" />
+    <ClInclude Include="src\AtomSite.h" />
     <ClInclude Include="src\cu\ArrayOps.cuh" />
+    <ClInclude Include="src\cu\reduction.cuh" />
+    <ClInclude Include="src\cu\scapot.cuh" />
     <ClInclude Include="src\fcomplex.h" />
     <ClInclude Include="src\fftw\include\fftw3.h" />
+    <ClInclude Include="src\integration.h" />
+    <ClInclude Include="src\JEElaSca.h" />
     <ClInclude Include="src\JFFTCUDAcore.h" />
     <ClInclude Include="src\JFFTMKLcore.h" />
     <ClInclude Include="src\JFFTWcore.h" />
@@ -177,11 +183,20 @@
     <ClInclude Include="src\JMultiSliceLib.h" />
     <ClInclude Include="src\JPlasmonMC.h" />
     <ClInclude Include="src\JProbeGen.h" />
+    <ClInclude Include="src\M3D.h" />
     <ClInclude Include="src\NatureConstants.h" />
+    <ClInclude Include="src\prime_numbers.h" />
     <ClInclude Include="src\rng.h" />
+    <ClInclude Include="src\string_format.h" />
+    <ClInclude Include="src\Structure.h" />
+    <ClInclude Include="src\TextFileOps.h" />
+    <ClInclude Include="src\V3D.h" />
     <ClInclude Include="src\wekoscat.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\Atoms.cpp" />
+    <ClCompile Include="src\AtomSite.cpp" />
+    <ClCompile Include="src\JEElaSca.cpp" />
     <ClCompile Include="src\JFFTCUDAcore.cpp" />
     <ClCompile Include="src\JFFTMKLcore.cpp" />
     <ClCompile Include="src\JFFTWcore.cpp" />
@@ -189,11 +204,18 @@
     <ClCompile Include="src\JMultiSliceLib.cpp" />
     <ClCompile Include="src\JPlasmonMC.cpp" />
     <ClCompile Include="src\JProbeGen.cpp" />
+    <ClCompile Include="src\M3D.cpp" />
+    <ClCompile Include="src\prime_numbers.cpp" />
     <ClCompile Include="src\rng.cpp" />
+    <ClCompile Include="src\string_format.cpp" />
+    <ClCompile Include="src\Structure.cpp" />
+    <ClCompile Include="src\TextFileOps.cpp" />
+    <ClCompile Include="src\V3D.cpp" />
     <ClCompile Include="src\wekoscat.cpp" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="src\cu\ArrayOps.cu" />
+    <CudaCompile Include="src\cu\scapot.cu" />
   </ItemGroup>
   <ItemGroup>
     <None Include="backup\JMSLib_PRJ_Backup_181112.zip" />
@@ -215,6 +237,7 @@
     <None Include="backup\JMSLib_SRC_Backup_191217.zip" />
     <None Include="backup\JMSLib_SRC_Backup_200113.zip" />
     <None Include="backup\JMSLib_SRC_Backup_200407.zip" />
+    <None Include="backup\JMSLib_SRC_Backup_200604.zip" />
     <None Include="CUDA EULA.pdf" />
     <None Include="Intel-Simplified-Software-License.pdf" />
     <None Include="README.md" />

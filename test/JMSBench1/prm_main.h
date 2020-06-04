@@ -24,9 +24,17 @@
 ----------------------------------------------------------------------- */
 
 #pragma once
+
 #include "params.h"
 #include "prm_result.h"
 #include "JMultiSliceLib.h"
+
+#ifndef __PRM_MAIN_H
+#define __PRM_MAIN_H
+
+#define _PRM_TEM_MODE_NUM		2 // number of tem application modes
+#define _PRM_TEM_MODE_CTEM		0 // conventional TEM mode with parallel beam illumination
+#define _PRM_TEM_MODE_STEM		1 // scanning TEM mode with convergent beam illumination
 
 class prm_main :
 	public params
@@ -39,6 +47,7 @@ public:
 public:	
 	int gpu_id; // GPU id, >=0 is valid
 	int cpu_num; // CPU number of threads
+	int tem_mode; // TEM application mode (0: CTEM, 1: STEM)
 	unsigned int cpu_num_max; // maximum number of supported CPU threads
 	std::string str_out_file; // output file name prefix
 	prm_sample sample; // sample data
@@ -78,6 +87,12 @@ public:
 	// user input and setup of probe scanning
 	int setup_scan(void);
 
+	// user input and setup of QEP options
+	int setup_qepopt(void);
+
+	// user input and setup of low-loss inelastic scattering (run after setup_sample and setup_scan)
+	int setup_lis(void);
+
 	// prepare transmission functions (phase gratings) from current sample setup
 	int prepare_sample_pgr(void);
 
@@ -85,3 +100,4 @@ public:
 	int prepare_result_params(void);
 };
 
+#endif // ifndef __PRM_MAIN_H

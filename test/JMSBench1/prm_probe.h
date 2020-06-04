@@ -48,6 +48,12 @@ public:
 
 	float alpha; // probe convergence angle in mrad
 
+	float alpha_edge_smooth; // probe forming aperture edge smoothness relative to alpha
+
+	float alpha_aniso_amp; // probe forming aperture radius anisotropy relative to alpha
+
+	float alpha_aniso_dir; // probe forming aperture radius anisotropy orientation (of large axis) relative to grid x axis in degrees
+
 	float size; // effective probe size in nm (HWHM)
 
 	float focus_spread; // effective focus spread in nm (1/e half width)
@@ -80,7 +86,7 @@ public:
 	// copies all data from psrc to this object
 	void copy_data_from(prm_probe *psrc);
 
-	// copies the objects aberrations to buffer buf
+	// copies the list of aberration coefficients to buffer buf
 	// returns an error code (0 = success)
 	// /!\ Take care to provide buf with sufficient memory to hold sizeof(float) * 2 * num_aberrations bytes.
 	int copy_aberrations_to(float *buf);
@@ -91,12 +97,19 @@ public:
 	// user input and setup of the probe-forming aperture
 	int setup_aperture(void);
 
-	// user input and setup of aberrations
-	int setup_aberrations(void);
-
 	// prepares the aberration list for num pair of aberration coefficients (x,y)
 	// returns the number of aberrations ready to store
 	unsigned int prepare_aberrations(unsigned int num);
+
+	// prints the current aberration setup
+	void print_setup_aberrations(int notation, CJProbeGen* ppg);
+
+	// gets aberration input from user, apply either cartesian (notation==0) or polar (notation==1) form
+	int input_aberration_coefficient(int idx, int notation, CJProbeGen* ppg);
+
+	// user input and setup of aberrations
+	int setup_aberrations(void);
+
 
 	// Transfers values to a CJProbeParams object
 	int get_jpg_params(CJProbeParams *pjpp);

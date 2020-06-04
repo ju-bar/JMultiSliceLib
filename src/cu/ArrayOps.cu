@@ -24,6 +24,9 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 #include <stdio.h>
 #include <cooperative_groups.h>
 #include "ArrayOps.cuh"
+// change include modular cuda reduction templates
+#include "reduction.cuh"
+// end change
 
 namespace cg = cooperative_groups;
 
@@ -323,6 +326,16 @@ __global__ void CPowScaKernel(float *out_1, cuComplex *in_1, float sca, unsigned
 	}
 }
 
+// adds complex array absolute square with scale to the output array: out_1[i] += in_1[i]*conjg(in_1[i]) * sca
+// - use this to accumulate probability distributions from wave
+__global__ void AddCPowScaKernel(float* out_1, cuComplex* in_1, float sca, unsigned int size)
+{
+	unsigned int idx = threadIdx.x + blockIdx.x * blockDim.x;
+	if (idx < size) {
+		out_1[idx] += (sca * (in_1[idx].x * in_1[idx].x + in_1[idx].y * in_1[idx].y));
+	}
+}
+
 // copies from in_1 to out_1 using a cyclic 2d shift of sh0 and sh1 positive along dimensions n0 and n1
 __global__ void CShift2dKernel(cuComplex *out_1, cuComplex *in_1, unsigned int sh0, unsigned int sh1, unsigned int n0, unsigned int n1) {
 	unsigned int idx = threadIdx.x + blockIdx.x * blockDim.x; // source index from thread id
@@ -428,449 +441,449 @@ __global__ void MulPhasePlate01Kernel(cuComplex *out_1, cuComplex *in_1, float *
 //   ...
 //     | (K-1,M-1,0) ... (K-1,M-1,N-1) & (K-1,M-1,N) ... (K-1,M-1,2N-1) | | |
 
-// calculates the total sum of a float array using a reduction scheme: out_1[blockIdx.x] = SUM( in_1[i] , i=1 ... N-1)
-// launch this with half the number of blocks (gridSize) since we load strided by 2 * blockSize
-// setup:
-//      threads = (n < maxThreads * 2) ? nextPow2((n + 1) / 2) : maxThreads;
-//      blocks  = (n + (threads * 2 - 1)) / (threads * 2);
-//      smemSize = (threads <= 32) ? 2 * threads * sizeof(float) : threads * sizeof(float);
-// call FAddReduceKernel<threads><<<blocks,threads,smemSize>>>(out,in,n);
-template <unsigned int blockSize> __global__ void FAddReduceKernel(float *out_1, float *in_1, unsigned int size)
-{
-	// declare and initialize
-	// Handle to thread block group
-	cg::thread_block cta = cg::this_thread_block();
-	extern __shared__ float sdata[]; // ? unclear how the size of this is set, it should be blockSize
-	unsigned int tid = threadIdx.x; // thread index
-	unsigned int i = blockIdx.x*(blockSize * 2) + tid; // 2 x stride index 1 (initial)
-	unsigned int j = i + blockSize; // 2x stride index 2 (initial)
-	unsigned int gridSize = blockSize * 2 *gridDim.x; // offset to the next grid
-	float mySum = 0.f;
-	sdata[tid] = 0.f; // init cache for each thread
-	// load initial data and first level of reduction
-	// with this loop each of the blockSize threads in the current block will access
-	// - two elements i and j per grid add them up
-	// - then the same elements i and j of the next grid will be added also
-	// - the added results will end up in shared memory sdata[tid] for each thread %tid%
-	while(i < size) { // make sure not to read out of array bounds
-		mySum += in_1[i];
-		if (j < size) { // ensure to avoid out of bound for strided access
-			mySum += in_1[j];
-		}
-		i += gridSize; // stride to next grid
-		j = i + blockSize; // address to second half of the block
-	}
-	sdata[tid] = mySum;
-	cg::sync(cta); // finish loading for all threads
-	// reduce on shared memory
-	// Note: more higher levels could be inserted if future compute classes allow more threads per block
-	// unroll cascade for #thread >=512
-	if (blockSize >= 1024) { // adds second 256 items to first 256 using threads 0 - 255
-		if (tid < 512) {
-			sdata[tid] = mySum = mySum + sdata[tid + 512];
-		}
-		cg::sync(cta);
-	}
-	// unroll cascade for #thread >=512
-	if (blockSize >= 512) { // adds second 256 items to first 256 using threads 0 - 255
-		if (tid < 256) {
-			sdata[tid] = mySum = mySum + sdata[tid + 256];
-		} 
-		cg::sync(cta);
-	}
-	// unroll cascade for #threads >= 256
-	if (blockSize >= 256) { // adds second 128 items to first 128 using threads 0 - 127
-		if (tid < 128) {
-			sdata[tid] = mySum = mySum + sdata[tid + 128];
-		} 
-		cg::sync(cta);
-	}
-	// unroll cascade for #threads >= 128
-	if (blockSize >= 128) { // adds second 64 items to first 64 using threads 0 - 63
-		if (tid <   64) {
-			sdata[tid] = mySum = mySum + sdata[tid + 64];
-		}
-		cg::sync(cta);
-	}
-	//
-	//// simpler code that also works, but without warp
-	//// unroll SIMD synchroneous reductions within a warp
-	//if ( tid < 32 )
-	//{
-	//	if (blockSize >= 64) sdata[tid] += sdata[tid + 32];
-	//	__syncthreads();
-	//	if (blockSize >= 32) sdata[tid] += sdata[tid + 16];
-	//	__syncthreads();
-	//	if (blockSize >= 16) sdata[tid] += sdata[tid + 8];
-	//	__syncthreads();
-	//	if (blockSize >= 8) sdata[tid] += sdata[tid + 4];
-	//	__syncthreads();
-	//	if (blockSize >= 4) sdata[tid] += sdata[tid + 2];
-	//	__syncthreads();
-	//	if (blockSize >= 2) sdata[tid] += sdata[tid + 1];
-	//	__syncthreads();
-	//}
-	//
-#if (__CUDA_ARCH__ >= 300 )
-	if (tid < 32)
-	{
-		cg::coalesced_group active = cg::coalesced_threads();
-
-		// Fetch final intermediate sum from 2nd warp
-		if (blockSize >= 64) mySum += sdata[tid + 32];
-		// Reduce final warp using shuffle
-		for (int offset = warpSize / 2; offset > 0; offset /= 2)
-		{
-			mySum += active.shfl_down(mySum, offset);
-		}
-	}
-#else
-	// fully unroll reduction within a single warp
-	if ((blockSize >= 64) && (tid < 32))
-	{
-		sdata[tid] = mySum = mySum + sdata[tid + 32];
-	}
-
-	cg::sync(cta);
-
-	if ((blockSize >= 32) && (tid < 16))
-	{
-		sdata[tid] = mySum = mySum + sdata[tid + 16];
-	}
-
-	cg::sync(cta);
-
-	if ((blockSize >= 16) && (tid <  8))
-	{
-		sdata[tid] = mySum = mySum + sdata[tid + 8];
-	}
-
-	cg::sync(cta);
-
-	if ((blockSize >= 8) && (tid <  4))
-	{
-		sdata[tid] = mySum = mySum + sdata[tid + 4];
-	}
-
-	cg::sync(cta);
-
-	if ((blockSize >= 4) && (tid <  2))
-	{
-		sdata[tid] = mySum = mySum + sdata[tid + 2];
-	}
-
-	cg::sync(cta);
-
-	if ((blockSize >= 2) && (tid <  1))
-	{
-		sdata[tid] = mySum = mySum + sdata[tid + 1];
-	}
-
-	cg::sync(cta);
-#endif
-	// this block is reduced to one value, write it to output
-	if (tid == 0) out_1[blockIdx.x] = mySum;
-}
-
-
-// calculates the total sum of a float array using a reduction scheme: out_1[blockIdx.x] = SUM( in_1[imask] , imask=1 ... NMASK-1)
-// but using an access mask defining which i is to be used of in_1.
-// It is assumed that the indices in mask are not causing overflow in in_1.
-// launch this with half the number of blocks (gridSize) since we load strided by 2 * blockSize
-// setup:
-//      threads = (nmask < maxThreads * 2) ? nextPow2((nmask + 1) / 2) : maxThreads;
-//      blocks  = (n + (threads * 2 - 1)) / (threads * 2);
-//      smemSize = (threads <= 32) ? 2 * threads * sizeof(float) : threads * sizeof(float);
-// call MaskFAddReduceKernel<threads><<<blocks,threads,smemSize>>>(out,mask,in,nmask);
-template <unsigned int blockSize> __global__ void MaskFAddReduceKernel(float *out_1, int* mask, float *in_1, unsigned int size)
-{
-	// declare and initialize
-	// Handle to thread block group
-	cg::thread_block cta = cg::this_thread_block();
-	extern __shared__ float sdata[]; // ? unclear how the size of this is set, it should be blockSize
-	unsigned int tid = threadIdx.x; // thread index
-	unsigned int i = blockIdx.x*(blockSize * 2) + tid; // 2 x stride index 1 (initial)
-	unsigned int j = i + blockSize; // 2x stride index 2 (initial)
-	unsigned int imask = 0;
-	unsigned int gridSize = blockSize * 2 * gridDim.x; // offset to the next grid
-	float mySum = 0.f;
-	sdata[tid] = 0.f; // init cache for each thread
-					  // load initial data and first level of reduction
-					  // with this loop each of the blockSize threads in the current block will access
-					  // - two elements i and j per grid add them up
-					  // - then the same elements i and j of the next grid will be added also
-					  // - the added results will end up in shared memory sdata[tid] for each thread %tid%
-	while (i < size) { // make sure not to read out of array bounds
-		imask = (unsigned)mask[i]; // get the first array index from mask
-		mySum += in_1[imask]; // add
-		if (j < size) { // ensure to avoid out of bound for strided access
-			imask = (unsigned)mask[j]; // get the second array index from mask
-			mySum += in_1[imask]; // add
-		}
-		i += gridSize; // stride to next grid
-		j = i + blockSize; // address to second half of the block
-	}
-	sdata[tid] = mySum; // store in shared memory
-	cg::sync(cta); // finish loading for all threads
-				   // reduce on shared memory
-				   // Note: more higher levels could be inserted if future compute classes allow more threads per block
-				   // unroll cascade for #thread >=512
-	if (blockSize >= 1024) { // adds second 256 items to first 256 using threads 0 - 255
-		if (tid < 512) {
-			sdata[tid] = mySum = mySum + sdata[tid + 512];
-		}
-		cg::sync(cta);
-	}
-	// unroll cascade for #thread >=512
-	if (blockSize >= 512) { // adds second 256 items to first 256 using threads 0 - 255
-		if (tid < 256) {
-			sdata[tid] = mySum = mySum + sdata[tid + 256];
-		}
-		cg::sync(cta);
-	}
-	// unroll cascade for #threads >= 256
-	if (blockSize >= 256) { // adds second 128 items to first 128 using threads 0 - 127
-		if (tid < 128) {
-			sdata[tid] = mySum = mySum + sdata[tid + 128];
-		}
-		cg::sync(cta);
-	}
-	// unroll cascade for #threads >= 128
-	if (blockSize >= 128) { // adds second 64 items to first 64 using threads 0 - 63
-		if (tid <   64) {
-			sdata[tid] = mySum = mySum + sdata[tid + 64];
-		}
-		cg::sync(cta);
-	}
-	//
-	//// simpler code that also works, but without warp
-	//// unroll SIMD synchroneous reductions within a warp
-	//if ( tid < 32 )
-	//{
-	//	if (blockSize >= 64) sdata[tid] += sdata[tid + 32];
-	//	__syncthreads();
-	//	if (blockSize >= 32) sdata[tid] += sdata[tid + 16];
-	//	__syncthreads();
-	//	if (blockSize >= 16) sdata[tid] += sdata[tid + 8];
-	//	__syncthreads();
-	//	if (blockSize >= 8) sdata[tid] += sdata[tid + 4];
-	//	__syncthreads();
-	//	if (blockSize >= 4) sdata[tid] += sdata[tid + 2];
-	//	__syncthreads();
-	//	if (blockSize >= 2) sdata[tid] += sdata[tid + 1];
-	//	__syncthreads();
-	//}
-	//
-#if (__CUDA_ARCH__ >= 300 )
-	if (tid < 32)
-	{
-		cg::coalesced_group active = cg::coalesced_threads();
-
-		// Fetch final intermediate sum from 2nd warp
-		if (blockSize >= 64) mySum += sdata[tid + 32];
-		// Reduce final warp using shuffle
-		for (int offset = warpSize / 2; offset > 0; offset /= 2)
-		{
-			mySum += active.shfl_down(mySum, offset);
-		}
-	}
-#else
-	// fully unroll reduction within a single warp
-	if ((blockSize >= 64) && (tid < 32))
-	{
-		sdata[tid] = mySum = mySum + sdata[tid + 32];
-	}
-
-	cg::sync(cta);
-
-	if ((blockSize >= 32) && (tid < 16))
-	{
-		sdata[tid] = mySum = mySum + sdata[tid + 16];
-	}
-
-	cg::sync(cta);
-
-	if ((blockSize >= 16) && (tid <  8))
-	{
-		sdata[tid] = mySum = mySum + sdata[tid + 8];
-	}
-
-	cg::sync(cta);
-
-	if ((blockSize >= 8) && (tid <  4))
-	{
-		sdata[tid] = mySum = mySum + sdata[tid + 4];
-	}
-
-	cg::sync(cta);
-
-	if ((blockSize >= 4) && (tid <  2))
-	{
-		sdata[tid] = mySum = mySum + sdata[tid + 2];
-	}
-
-	cg::sync(cta);
-
-	if ((blockSize >= 2) && (tid <  1))
-	{
-		sdata[tid] = mySum = mySum + sdata[tid + 1];
-	}
-
-	cg::sync(cta);
-#endif
-	// this block is reduced to one value, write it to output
-	if (tid == 0) out_1[blockIdx.x] = mySum;
-}
-
-
-// calculates the total dot product of two float arrays using a reduction scheme: out_1[blockIdx.x] = SUM( in_1[imask]*in_2[imask] , imask=1 ... NMASK-1)
-// but using an access mask defining which i is to be used of in_1 and in_2.
-// It is assumed that the indices in mask are not causing overflow in in_1 and in_2.
-// launch this with half the number of blocks (gridSize) since we load strided by 2 * blockSize
-// setup:
-//      threads = (nmask < maxThreads * 2) ? nextPow2((nmask + 1) / 2) : maxThreads;
-//      blocks  = (n + (threads * 2 - 1)) / (threads * 2);
-//      smemSize = (threads <= 32) ? 2 * threads * sizeof(float) : threads * sizeof(float);
-// call MaskFDotReduceKernel<threads><<<blocks,threads,smemSize>>>(out,mask,in_1,in_2,nmask);
-template <unsigned int blockSize> __global__ void MaskFDotReduceKernel(float *out_1, int* mask, float *in_1, float *in_2, unsigned int size)
-{
-	// declare and initialize
-	// Handle to thread block group
-	cg::thread_block cta = cg::this_thread_block();
-	extern __shared__ float sdata[]; // ? unclear how the size of this is set, it should be blockSize
-	unsigned int tid = threadIdx.x; // thread index
-	unsigned int i = blockIdx.x*(blockSize * 2) + tid; // 2 x stride index 1 (initial)
-	unsigned int j = i + blockSize; // 2x stride index 2 (initial)
-	unsigned int imask = 0;
-	unsigned int gridSize = blockSize * 2 * gridDim.x; // offset to the next grid
-	float mySum = 0.f;
-	sdata[tid] = 0.f; // init cache for each thread
-					  // load initial data and first level of reduction
-					  // with this loop each of the blockSize threads in the current block will access
-					  // - two elements i and j per grid add them up
-					  // - then the same elements i and j of the next grid will be added also
-					  // - the added results will end up in shared memory sdata[tid] for each thread %tid%
-	while (i < size) { // make sure not to read out of array bounds
-		imask = (unsigned)mask[i]; // get the first array index from mask
-		mySum += in_1[imask]*in_2[imask]; // add projected component
-		if (j < size) { // ensure to avoid out of bound for strided access
-			imask = (unsigned)mask[j]; // get the second array index from mask
-			mySum += in_1[imask]* in_2[imask]; // add projected component
-		}
-		i += gridSize; // stride to next grid
-		j = i + blockSize; // address to second half of the block
-	}
-	sdata[tid] = mySum; // store in shared memory
-	cg::sync(cta); // finish loading for all threads
-				   // reduce on shared memory
-				   // Note: more higher levels could be inserted if future compute classes allow more threads per block
-				   // unroll cascade for #thread >=512
-	if (blockSize >= 1024) { // adds second 256 items to first 256 using threads 0 - 255
-		if (tid < 512) {
-			sdata[tid] = mySum = mySum + sdata[tid + 512];
-		}
-		cg::sync(cta);
-	}
-	// unroll cascade for #thread >=512
-	if (blockSize >= 512) { // adds second 256 items to first 256 using threads 0 - 255
-		if (tid < 256) {
-			sdata[tid] = mySum = mySum + sdata[tid + 256];
-		}
-		cg::sync(cta);
-	}
-	// unroll cascade for #threads >= 256
-	if (blockSize >= 256) { // adds second 128 items to first 128 using threads 0 - 127
-		if (tid < 128) {
-			sdata[tid] = mySum = mySum + sdata[tid + 128];
-		}
-		cg::sync(cta);
-	}
-	// unroll cascade for #threads >= 128
-	if (blockSize >= 128) { // adds second 64 items to first 64 using threads 0 - 63
-		if (tid <   64) {
-			sdata[tid] = mySum = mySum + sdata[tid + 64];
-		}
-		cg::sync(cta);
-	}
-	//
-	//// simpler code that also works, but without warp
-	//// unroll SIMD synchroneous reductions within a warp
-	//if ( tid < 32 )
-	//{
-	//	if (blockSize >= 64) sdata[tid] += sdata[tid + 32];
-	//	__syncthreads();
-	//	if (blockSize >= 32) sdata[tid] += sdata[tid + 16];
-	//	__syncthreads();
-	//	if (blockSize >= 16) sdata[tid] += sdata[tid + 8];
-	//	__syncthreads();
-	//	if (blockSize >= 8) sdata[tid] += sdata[tid + 4];
-	//	__syncthreads();
-	//	if (blockSize >= 4) sdata[tid] += sdata[tid + 2];
-	//	__syncthreads();
-	//	if (blockSize >= 2) sdata[tid] += sdata[tid + 1];
-	//	__syncthreads();
-	//}
-	//
-#if (__CUDA_ARCH__ >= 300 )
-	if (tid < 32)
-	{
-		cg::coalesced_group active = cg::coalesced_threads();
-
-		// Fetch final intermediate sum from 2nd warp
-		if (blockSize >= 64) mySum += sdata[tid + 32];
-		// Reduce final warp using shuffle
-		for (int offset = warpSize / 2; offset > 0; offset /= 2)
-		{
-			mySum += active.shfl_down(mySum, offset);
-		}
-	}
-#else
-	// fully unroll reduction within a single warp
-	if ((blockSize >= 64) && (tid < 32))
-	{
-		sdata[tid] = mySum = mySum + sdata[tid + 32];
-	}
-
-	cg::sync(cta);
-
-	if ((blockSize >= 32) && (tid < 16))
-	{
-		sdata[tid] = mySum = mySum + sdata[tid + 16];
-	}
-
-	cg::sync(cta);
-
-	if ((blockSize >= 16) && (tid <  8))
-	{
-		sdata[tid] = mySum = mySum + sdata[tid + 8];
-	}
-
-	cg::sync(cta);
-
-	if ((blockSize >= 8) && (tid <  4))
-	{
-		sdata[tid] = mySum = mySum + sdata[tid + 4];
-	}
-
-	cg::sync(cta);
-
-	if ((blockSize >= 4) && (tid <  2))
-	{
-		sdata[tid] = mySum = mySum + sdata[tid + 2];
-	}
-
-	cg::sync(cta);
-
-	if ((blockSize >= 2) && (tid <  1))
-	{
-		sdata[tid] = mySum = mySum + sdata[tid + 1];
-	}
-
-	cg::sync(cta);
-#endif
-	// this block is reduced to one value, write it to output
-	if (tid == 0) out_1[blockIdx.x] = mySum;
-}
+//// calculates the total sum of a float array using a reduction scheme: out_1[blockIdx.x] = SUM( in_1[i] , i=1 ... N-1)
+//// launch this with half the number of blocks (gridSize) since we load strided by 2 * blockSize
+//// setup:
+////      threads = (n < maxThreads * 2) ? nextPow2((n + 1) / 2) : maxThreads;
+////      blocks  = (n + (threads * 2 - 1)) / (threads * 2);
+////      smemSize = (threads <= 32) ? 2 * threads * sizeof(float) : threads * sizeof(float);
+//// call FAddReduceKernel<threads><<<blocks,threads,smemSize>>>(out,in,n);
+//template <unsigned int blockSize> __global__ void FAddReduceKernel(float *out_1, float *in_1, unsigned int size)
+//{
+//	// declare and initialize
+//	// Handle to thread block group
+//	cg::thread_block cta = cg::this_thread_block();
+//	extern __shared__ float sdata[]; // ? unclear how the size of this is set, it should be blockSize
+//	unsigned int tid = threadIdx.x; // thread index
+//	unsigned int i = blockIdx.x*(blockSize * 2) + tid; // 2 x stride index 1 (initial)
+//	unsigned int j = i + blockSize; // 2x stride index 2 (initial)
+//	unsigned int gridSize = blockSize * 2 *gridDim.x; // offset to the next grid
+//	float mySum = 0.f;
+//	sdata[tid] = 0.f; // init cache for each thread
+//	// load initial data and first level of reduction
+//	// with this loop each of the blockSize threads in the current block will access
+//	// - two elements i and j per grid add them up
+//	// - then the same elements i and j of the next grid will be added also
+//	// - the added results will end up in shared memory sdata[tid] for each thread %tid%
+//	while(i < size) { // make sure not to read out of array bounds
+//		mySum += in_1[i];
+//		if (j < size) { // ensure to avoid out of bound for strided access
+//			mySum += in_1[j];
+//		}
+//		i += gridSize; // stride to next grid
+//		j = i + blockSize; // address to second half of the block
+//	}
+//	sdata[tid] = mySum;
+//	cg::sync(cta); // finish loading for all threads
+//	// reduce on shared memory
+//	// Note: more higher levels could be inserted if future compute classes allow more threads per block
+//	// unroll cascade for #thread >=512
+//	if (blockSize >= 1024) { // adds second 256 items to first 256 using threads 0 - 255
+//		if (tid < 512) {
+//			sdata[tid] = mySum = mySum + sdata[tid + 512];
+//		}
+//		cg::sync(cta);
+//	}
+//	// unroll cascade for #thread >=512
+//	if (blockSize >= 512) { // adds second 256 items to first 256 using threads 0 - 255
+//		if (tid < 256) {
+//			sdata[tid] = mySum = mySum + sdata[tid + 256];
+//		} 
+//		cg::sync(cta);
+//	}
+//	// unroll cascade for #threads >= 256
+//	if (blockSize >= 256) { // adds second 128 items to first 128 using threads 0 - 127
+//		if (tid < 128) {
+//			sdata[tid] = mySum = mySum + sdata[tid + 128];
+//		} 
+//		cg::sync(cta);
+//	}
+//	// unroll cascade for #threads >= 128
+//	if (blockSize >= 128) { // adds second 64 items to first 64 using threads 0 - 63
+//		if (tid <   64) {
+//			sdata[tid] = mySum = mySum + sdata[tid + 64];
+//		}
+//		cg::sync(cta);
+//	}
+//	//
+//	//// simpler code that also works, but without warp
+//	//// unroll SIMD synchroneous reductions within a warp
+//	//if ( tid < 32 )
+//	//{
+//	//	if (blockSize >= 64) sdata[tid] += sdata[tid + 32];
+//	//	__syncthreads();
+//	//	if (blockSize >= 32) sdata[tid] += sdata[tid + 16];
+//	//	__syncthreads();
+//	//	if (blockSize >= 16) sdata[tid] += sdata[tid + 8];
+//	//	__syncthreads();
+//	//	if (blockSize >= 8) sdata[tid] += sdata[tid + 4];
+//	//	__syncthreads();
+//	//	if (blockSize >= 4) sdata[tid] += sdata[tid + 2];
+//	//	__syncthreads();
+//	//	if (blockSize >= 2) sdata[tid] += sdata[tid + 1];
+//	//	__syncthreads();
+//	//}
+//	//
+//#if (__CUDA_ARCH__ >= 300 )
+//	if (tid < 32)
+//	{
+//		cg::coalesced_group active = cg::coalesced_threads();
+//
+//		// Fetch final intermediate sum from 2nd warp
+//		if (blockSize >= 64) mySum += sdata[tid + 32];
+//		// Reduce final warp using shuffle
+//		for (int offset = warpSize / 2; offset > 0; offset /= 2)
+//		{
+//			mySum += active.shfl_down(mySum, offset);
+//		}
+//	}
+//#else
+//	// fully unroll reduction within a single warp
+//	if ((blockSize >= 64) && (tid < 32))
+//	{
+//		sdata[tid] = mySum = mySum + sdata[tid + 32];
+//	}
+//
+//	cg::sync(cta);
+//
+//	if ((blockSize >= 32) && (tid < 16))
+//	{
+//		sdata[tid] = mySum = mySum + sdata[tid + 16];
+//	}
+//
+//	cg::sync(cta);
+//
+//	if ((blockSize >= 16) && (tid <  8))
+//	{
+//		sdata[tid] = mySum = mySum + sdata[tid + 8];
+//	}
+//
+//	cg::sync(cta);
+//
+//	if ((blockSize >= 8) && (tid <  4))
+//	{
+//		sdata[tid] = mySum = mySum + sdata[tid + 4];
+//	}
+//
+//	cg::sync(cta);
+//
+//	if ((blockSize >= 4) && (tid <  2))
+//	{
+//		sdata[tid] = mySum = mySum + sdata[tid + 2];
+//	}
+//
+//	cg::sync(cta);
+//
+//	if ((blockSize >= 2) && (tid <  1))
+//	{
+//		sdata[tid] = mySum = mySum + sdata[tid + 1];
+//	}
+//
+//	cg::sync(cta);
+//#endif
+//	// this block is reduced to one value, write it to output
+//	if (tid == 0) out_1[blockIdx.x] = mySum;
+//}
+//
+//
+//// calculates the total sum of a float array using a reduction scheme: out_1[blockIdx.x] = SUM( in_1[imask] , imask=1 ... NMASK-1)
+//// but using an access mask defining which i is to be used of in_1.
+//// It is assumed that the indices in mask are not causing overflow in in_1.
+//// launch this with half the number of blocks (gridSize) since we load strided by 2 * blockSize
+//// setup:
+////      threads = (nmask < maxThreads * 2) ? nextPow2((nmask + 1) / 2) : maxThreads;
+////      blocks  = (n + (threads * 2 - 1)) / (threads * 2);
+////      smemSize = (threads <= 32) ? 2 * threads * sizeof(float) : threads * sizeof(float);
+//// call MaskFAddReduceKernel<threads><<<blocks,threads,smemSize>>>(out,mask,in,nmask);
+//template <unsigned int blockSize> __global__ void MaskFAddReduceKernel(float *out_1, int* mask, float *in_1, unsigned int size)
+//{
+//	// declare and initialize
+//	// Handle to thread block group
+//	cg::thread_block cta = cg::this_thread_block();
+//	extern __shared__ float sdata[]; // ? unclear how the size of this is set, it should be blockSize
+//	unsigned int tid = threadIdx.x; // thread index
+//	unsigned int i = blockIdx.x*(blockSize * 2) + tid; // 2 x stride index 1 (initial)
+//	unsigned int j = i + blockSize; // 2x stride index 2 (initial)
+//	unsigned int imask = 0;
+//	unsigned int gridSize = blockSize * 2 * gridDim.x; // offset to the next grid
+//	float mySum = 0.f;
+//	sdata[tid] = 0.f; // init cache for each thread
+//					  // load initial data and first level of reduction
+//					  // with this loop each of the blockSize threads in the current block will access
+//					  // - two elements i and j per grid add them up
+//					  // - then the same elements i and j of the next grid will be added also
+//					  // - the added results will end up in shared memory sdata[tid] for each thread %tid%
+//	while (i < size) { // make sure not to read out of array bounds
+//		imask = (unsigned)mask[i]; // get the first array index from mask
+//		mySum += in_1[imask]; // add
+//		if (j < size) { // ensure to avoid out of bound for strided access
+//			imask = (unsigned)mask[j]; // get the second array index from mask
+//			mySum += in_1[imask]; // add
+//		}
+//		i += gridSize; // stride to next grid
+//		j = i + blockSize; // address to second half of the block
+//	}
+//	sdata[tid] = mySum; // store in shared memory
+//	cg::sync(cta); // finish loading for all threads
+//				   // reduce on shared memory
+//				   // Note: more higher levels could be inserted if future compute classes allow more threads per block
+//				   // unroll cascade for #thread >=512
+//	if (blockSize >= 1024) { // adds second 256 items to first 256 using threads 0 - 255
+//		if (tid < 512) {
+//			sdata[tid] = mySum = mySum + sdata[tid + 512];
+//		}
+//		cg::sync(cta);
+//	}
+//	// unroll cascade for #thread >=512
+//	if (blockSize >= 512) { // adds second 256 items to first 256 using threads 0 - 255
+//		if (tid < 256) {
+//			sdata[tid] = mySum = mySum + sdata[tid + 256];
+//		}
+//		cg::sync(cta);
+//	}
+//	// unroll cascade for #threads >= 256
+//	if (blockSize >= 256) { // adds second 128 items to first 128 using threads 0 - 127
+//		if (tid < 128) {
+//			sdata[tid] = mySum = mySum + sdata[tid + 128];
+//		}
+//		cg::sync(cta);
+//	}
+//	// unroll cascade for #threads >= 128
+//	if (blockSize >= 128) { // adds second 64 items to first 64 using threads 0 - 63
+//		if (tid <   64) {
+//			sdata[tid] = mySum = mySum + sdata[tid + 64];
+//		}
+//		cg::sync(cta);
+//	}
+//	//
+//	//// simpler code that also works, but without warp
+//	//// unroll SIMD synchroneous reductions within a warp
+//	//if ( tid < 32 )
+//	//{
+//	//	if (blockSize >= 64) sdata[tid] += sdata[tid + 32];
+//	//	__syncthreads();
+//	//	if (blockSize >= 32) sdata[tid] += sdata[tid + 16];
+//	//	__syncthreads();
+//	//	if (blockSize >= 16) sdata[tid] += sdata[tid + 8];
+//	//	__syncthreads();
+//	//	if (blockSize >= 8) sdata[tid] += sdata[tid + 4];
+//	//	__syncthreads();
+//	//	if (blockSize >= 4) sdata[tid] += sdata[tid + 2];
+//	//	__syncthreads();
+//	//	if (blockSize >= 2) sdata[tid] += sdata[tid + 1];
+//	//	__syncthreads();
+//	//}
+//	//
+//#if (__CUDA_ARCH__ >= 300 )
+//	if (tid < 32)
+//	{
+//		cg::coalesced_group active = cg::coalesced_threads();
+//
+//		// Fetch final intermediate sum from 2nd warp
+//		if (blockSize >= 64) mySum += sdata[tid + 32];
+//		// Reduce final warp using shuffle
+//		for (int offset = warpSize / 2; offset > 0; offset /= 2)
+//		{
+//			mySum += active.shfl_down(mySum, offset);
+//		}
+//	}
+//#else
+//	// fully unroll reduction within a single warp
+//	if ((blockSize >= 64) && (tid < 32))
+//	{
+//		sdata[tid] = mySum = mySum + sdata[tid + 32];
+//	}
+//
+//	cg::sync(cta);
+//
+//	if ((blockSize >= 32) && (tid < 16))
+//	{
+//		sdata[tid] = mySum = mySum + sdata[tid + 16];
+//	}
+//
+//	cg::sync(cta);
+//
+//	if ((blockSize >= 16) && (tid <  8))
+//	{
+//		sdata[tid] = mySum = mySum + sdata[tid + 8];
+//	}
+//
+//	cg::sync(cta);
+//
+//	if ((blockSize >= 8) && (tid <  4))
+//	{
+//		sdata[tid] = mySum = mySum + sdata[tid + 4];
+//	}
+//
+//	cg::sync(cta);
+//
+//	if ((blockSize >= 4) && (tid <  2))
+//	{
+//		sdata[tid] = mySum = mySum + sdata[tid + 2];
+//	}
+//
+//	cg::sync(cta);
+//
+//	if ((blockSize >= 2) && (tid <  1))
+//	{
+//		sdata[tid] = mySum = mySum + sdata[tid + 1];
+//	}
+//
+//	cg::sync(cta);
+//#endif
+//	// this block is reduced to one value, write it to output
+//	if (tid == 0) out_1[blockIdx.x] = mySum;
+//}
+//
+//
+//// calculates the total dot product of two float arrays using a reduction scheme: out_1[blockIdx.x] = SUM( in_1[imask]*in_2[imask] , imask=1 ... NMASK-1)
+//// but using an access mask defining which i is to be used of in_1 and in_2.
+//// It is assumed that the indices in mask are not causing overflow in in_1 and in_2.
+//// launch this with half the number of blocks (gridSize) since we load strided by 2 * blockSize
+//// setup:
+////      threads = (nmask < maxThreads * 2) ? nextPow2((nmask + 1) / 2) : maxThreads;
+////      blocks  = (n + (threads * 2 - 1)) / (threads * 2);
+////      smemSize = (threads <= 32) ? 2 * threads * sizeof(float) : threads * sizeof(float);
+//// call MaskFDotReduceKernel<threads><<<blocks,threads,smemSize>>>(out,mask,in_1,in_2,nmask);
+//template <unsigned int blockSize> __global__ void MaskFDotReduceKernel(float *out_1, int* mask, float *in_1, float *in_2, unsigned int size)
+//{
+//	// declare and initialize
+//	// Handle to thread block group
+//	cg::thread_block cta = cg::this_thread_block();
+//	extern __shared__ float sdata[]; // ? unclear how the size of this is set, it should be blockSize
+//	unsigned int tid = threadIdx.x; // thread index
+//	unsigned int i = blockIdx.x*(blockSize * 2) + tid; // 2 x stride index 1 (initial)
+//	unsigned int j = i + blockSize; // 2x stride index 2 (initial)
+//	unsigned int imask = 0;
+//	unsigned int gridSize = blockSize * 2 * gridDim.x; // offset to the next grid
+//	float mySum = 0.f;
+//	sdata[tid] = 0.f; // init cache for each thread
+//					  // load initial data and first level of reduction
+//					  // with this loop each of the blockSize threads in the current block will access
+//					  // - two elements i and j per grid add them up
+//					  // - then the same elements i and j of the next grid will be added also
+//					  // - the added results will end up in shared memory sdata[tid] for each thread %tid%
+//	while (i < size) { // make sure not to read out of array bounds
+//		imask = (unsigned)mask[i]; // get the first array index from mask
+//		mySum += in_1[imask]*in_2[imask]; // add projected component
+//		if (j < size) { // ensure to avoid out of bound for strided access
+//			imask = (unsigned)mask[j]; // get the second array index from mask
+//			mySum += in_1[imask]* in_2[imask]; // add projected component
+//		}
+//		i += gridSize; // stride to next grid
+//		j = i + blockSize; // address to second half of the block
+//	}
+//	sdata[tid] = mySum; // store in shared memory
+//	cg::sync(cta); // finish loading for all threads
+//				   // reduce on shared memory
+//				   // Note: more higher levels could be inserted if future compute classes allow more threads per block
+//				   // unroll cascade for #thread >=512
+//	if (blockSize >= 1024) { // adds second 256 items to first 256 using threads 0 - 255
+//		if (tid < 512) {
+//			sdata[tid] = mySum = mySum + sdata[tid + 512];
+//		}
+//		cg::sync(cta);
+//	}
+//	// unroll cascade for #thread >=512
+//	if (blockSize >= 512) { // adds second 256 items to first 256 using threads 0 - 255
+//		if (tid < 256) {
+//			sdata[tid] = mySum = mySum + sdata[tid + 256];
+//		}
+//		cg::sync(cta);
+//	}
+//	// unroll cascade for #threads >= 256
+//	if (blockSize >= 256) { // adds second 128 items to first 128 using threads 0 - 127
+//		if (tid < 128) {
+//			sdata[tid] = mySum = mySum + sdata[tid + 128];
+//		}
+//		cg::sync(cta);
+//	}
+//	// unroll cascade for #threads >= 128
+//	if (blockSize >= 128) { // adds second 64 items to first 64 using threads 0 - 63
+//		if (tid <   64) {
+//			sdata[tid] = mySum = mySum + sdata[tid + 64];
+//		}
+//		cg::sync(cta);
+//	}
+//	//
+//	//// simpler code that also works, but without warp
+//	//// unroll SIMD synchroneous reductions within a warp
+//	//if ( tid < 32 )
+//	//{
+//	//	if (blockSize >= 64) sdata[tid] += sdata[tid + 32];
+//	//	__syncthreads();
+//	//	if (blockSize >= 32) sdata[tid] += sdata[tid + 16];
+//	//	__syncthreads();
+//	//	if (blockSize >= 16) sdata[tid] += sdata[tid + 8];
+//	//	__syncthreads();
+//	//	if (blockSize >= 8) sdata[tid] += sdata[tid + 4];
+//	//	__syncthreads();
+//	//	if (blockSize >= 4) sdata[tid] += sdata[tid + 2];
+//	//	__syncthreads();
+//	//	if (blockSize >= 2) sdata[tid] += sdata[tid + 1];
+//	//	__syncthreads();
+//	//}
+//	//
+//#if (__CUDA_ARCH__ >= 300 )
+//	if (tid < 32)
+//	{
+//		cg::coalesced_group active = cg::coalesced_threads();
+//
+//		// Fetch final intermediate sum from 2nd warp
+//		if (blockSize >= 64) mySum += sdata[tid + 32];
+//		// Reduce final warp using shuffle
+//		for (int offset = warpSize / 2; offset > 0; offset /= 2)
+//		{
+//			mySum += active.shfl_down(mySum, offset);
+//		}
+//	}
+//#else
+//	// fully unroll reduction within a single warp
+//	if ((blockSize >= 64) && (tid < 32))
+//	{
+//		sdata[tid] = mySum = mySum + sdata[tid + 32];
+//	}
+//
+//	cg::sync(cta);
+//
+//	if ((blockSize >= 32) && (tid < 16))
+//	{
+//		sdata[tid] = mySum = mySum + sdata[tid + 16];
+//	}
+//
+//	cg::sync(cta);
+//
+//	if ((blockSize >= 16) && (tid <  8))
+//	{
+//		sdata[tid] = mySum = mySum + sdata[tid + 8];
+//	}
+//
+//	cg::sync(cta);
+//
+//	if ((blockSize >= 8) && (tid <  4))
+//	{
+//		sdata[tid] = mySum = mySum + sdata[tid + 4];
+//	}
+//
+//	cg::sync(cta);
+//
+//	if ((blockSize >= 4) && (tid <  2))
+//	{
+//		sdata[tid] = mySum = mySum + sdata[tid + 2];
+//	}
+//
+//	cg::sync(cta);
+//
+//	if ((blockSize >= 2) && (tid <  1))
+//	{
+//		sdata[tid] = mySum = mySum + sdata[tid + 1];
+//	}
+//
+//	cg::sync(cta);
+//#endif
+//	// this block is reduced to one value, write it to output
+//	if (tid == 0) out_1[blockIdx.x] = mySum;
+//}
 
 
 // Helper API to determine optimum multiplication call scenario
@@ -1590,6 +1603,36 @@ Error:
 	return cudaStatus;
 }
 
+// calculates out_1[i] += in_1[i] * conjg(in_1[i]) * sca  on device 
+cudaError_t ArrayOpAddCPowSca(float* out_1, cuComplex* in_1, float sca, ArrayOpStats1 stats)
+{
+	cudaError_t cudaStatus;
+	unsigned int size = stats.uSize;	// input size
+	int blockSize = stats.nBlockSize;	// block size 
+	int gridSize = stats.nGridSize;		// grid size needed, based on input size
+
+	// Launch the parallel kernel operation
+	AddCPowScaKernel<<<gridSize, blockSize>>>(out_1, in_1, sca, size);
+
+	// Check for any errors launching the kernel
+	cudaStatus = cudaGetLastError();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "AddCPowScaKernel launch failed: %s\n", cudaGetErrorString(cudaStatus));
+		fprintf(stderr, "  - gridSize: %i, blockSize: %i\n", gridSize, blockSize);
+		goto Error;
+	}
+
+	// synchronize threads and wait for all to be finished
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaDeviceSynchronize failed after launching AddCPowScaKernel: %s\n", cudaGetErrorString(cudaStatus));
+		goto Error;
+	}
+
+Error:
+	return cudaStatus;
+}
+
 // calculate out_1[(j+sh1)%n1][(i+sh0)%n0] = in_1[j][i] on device
 cudaError_t ArrayOpCShift2d(cuComplex *out_1, cuComplex *in_1, unsigned int sh0, unsigned int sh1, unsigned int n0, unsigned int n1, ArrayOpStats1 stats)
 {
@@ -1679,660 +1722,704 @@ Error:
 	return cudaStatus;
 }
 
-// Calculates the sum of a float array on device.
-cudaError_t ArrayOpFSum(float &out_1, float * in_1, ArrayOpStats1 stats, int CPU_threshold)
-{
-	cudaError_t cudaStatus = cudaSuccess;
-	unsigned int size = stats.uSize;
-	int blockSize = (1024 < stats.nBlockSize) ? 1024 : stats.nBlockSize;
-	int gridSize = (size + (blockSize * 2 - 1)) / (blockSize * 2); // determine gridSize locally
-	int smemSize = (blockSize <= 32) ? 2 * blockSize * sizeof(float) : blockSize * sizeof(float);
-	unsigned int ns1 = size;
-	unsigned int nstage = 0;
-	float dsum = 0.0, dc = 0.0, dy = 0.0, dt = 0.0;
-	static int d_alloc_grid = 0;
-	static float * d_odata = NULL;
-	static float * d_idata = NULL;
-	// init output
-	out_1 = 0.f;
-	// allocate temp output array on device, one slot for each block and preset with zeroes
-	if (d_alloc_grid > 0 && gridSize > d_alloc_grid) { // current pre-allocated grid is insufficient in size
-		// free memory in order to force re-allocation
-		if (NULL != d_odata) { cudaFree(d_odata); d_odata = NULL; }
-		if (NULL != d_idata) { cudaFree(d_idata); d_idata = NULL; }
-		d_alloc_grid = 0;
-	}
-	if (d_odata == NULL) {
-		cudaStatus = cudaMalloc((void**)&d_odata, sizeof(float)*gridSize);
-		if (cudaSuccess != cudaStatus) { nstage = 1;  goto Error; }
-		d_alloc_grid = gridSize;
-	}
-	if (d_idata == NULL) {
-		cudaStatus = cudaMalloc((void**)&d_idata, sizeof(float)*gridSize);
-		if (cudaSuccess != cudaStatus) { nstage = 2;  goto Error; }
-		d_alloc_grid = gridSize;
-	}
-	if (cudaSuccess != cudaStatus) { nstage=2;  goto Error; }
-	cudaStatus = cudaMemset(d_odata, 0, sizeof(float)*gridSize);
-	if (cudaSuccess != cudaStatus) { nstage=3;  goto Error; }
-	cudaStatus = cudaMemset(d_idata, 0, sizeof(float)*gridSize);
-	if (cudaSuccess != cudaStatus) { nstage=4;  goto Error; }
-	// initial reduction (max blockSize 1024)
-	// this is separated as it runs on the large input array, which do not want to change
-	switch (blockSize)
-	{
-	case 1024:
-		FAddReduceKernel<1024><<<gridSize, blockSize, smemSize>>>(d_odata, in_1, size);
-		break;
+//// Calculates the sum of a float array on device.
+//cudaError_t ArrayOpFSum(float &out_1, float * in_1, ArrayOpStats1 stats, int CPU_threshold)
+//{
+//	cudaError_t cudaStatus = cudaSuccess;
+//	unsigned int size = stats.uSize;
+//	int blockSize = (1024 < stats.nBlockSize) ? 1024 : stats.nBlockSize;
+//	int gridSize = (size + (blockSize * 2 - 1)) / (blockSize * 2); // determine gridSize locally
+//	int smemSize = (blockSize <= 32) ? 2 * blockSize * sizeof(float) : blockSize * sizeof(float);
+//	unsigned int ns1 = size;
+//	unsigned int nstage = 0;
+//	float dsum = 0.0, dc = 0.0, dy = 0.0, dt = 0.0;
+//	static int d_alloc_grid = 0;
+//	static float * d_odata = NULL;
+//	static float * d_idata = NULL;
+//	// init output
+//	out_1 = 0.f;
+//	// allocate temp output array on device, one slot for each block and preset with zeroes
+//	if (d_alloc_grid > 0 && gridSize > d_alloc_grid) { // current pre-allocated grid is insufficient in size
+//		// free memory in order to force re-allocation
+//		if (NULL != d_odata) { cudaFree(d_odata); d_odata = NULL; }
+//		if (NULL != d_idata) { cudaFree(d_idata); d_idata = NULL; }
+//		d_alloc_grid = 0;
+//	}
+//	if (d_odata == NULL) {
+//		cudaStatus = cudaMalloc((void**)&d_odata, sizeof(float)*gridSize);
+//		if (cudaSuccess != cudaStatus) { nstage = 1;  goto Error; }
+//		d_alloc_grid = gridSize;
+//	}
+//	if (d_idata == NULL) {
+//		cudaStatus = cudaMalloc((void**)&d_idata, sizeof(float)*gridSize);
+//		if (cudaSuccess != cudaStatus) { nstage = 2;  goto Error; }
+//		d_alloc_grid = gridSize;
+//	}
+//	if (cudaSuccess != cudaStatus) { nstage=2;  goto Error; }
+//	cudaStatus = cudaMemset(d_odata, 0, sizeof(float)*gridSize);
+//	if (cudaSuccess != cudaStatus) { nstage=3;  goto Error; }
+//	cudaStatus = cudaMemset(d_idata, 0, sizeof(float)*gridSize);
+//	if (cudaSuccess != cudaStatus) { nstage=4;  goto Error; }
+//	// initial reduction (max blockSize 1024)
+//	// this is separated as it runs on the large input array, which do not want to change
+//	switch (blockSize)
+//	{
+//	case 1024:
+//		FAddReduceKernel<1024><<<gridSize, blockSize, smemSize>>>(d_odata, in_1, size);
+//		break;
+//
+//	case 512:
+//		FAddReduceKernel<512><<<gridSize, blockSize, smemSize>>>(d_odata, in_1, size);
+//		break;
+//
+//	case 256:
+//		FAddReduceKernel<256><<<gridSize, blockSize, smemSize>>>(d_odata, in_1, size);
+//		break;
+//
+//	case 128:
+//		FAddReduceKernel<128><<<gridSize, blockSize, smemSize>>>(d_odata, in_1, size);
+//		break;
+//
+//	case 64:
+//		FAddReduceKernel<64><<<gridSize, blockSize, smemSize>>>(d_odata, in_1, size);
+//		break;
+//
+//	case 32:
+//		FAddReduceKernel<32><<<gridSize, blockSize, smemSize>>>(d_odata, in_1, size);
+//		break;
+//
+//	case 16:
+//		FAddReduceKernel<16><<<gridSize, blockSize, smemSize>>>(d_odata, in_1, size);
+//		break;
+//
+//	case  8:
+//		FAddReduceKernel<8><<<gridSize, blockSize, smemSize>>>(d_odata, in_1, size);
+//		break;
+//
+//	case  4:
+//		FAddReduceKernel<4><<<gridSize, blockSize, smemSize>>>(d_odata, in_1, size);
+//		break;
+//
+//	case  2:
+//		FAddReduceKernel<2><<<gridSize, blockSize, smemSize>>>(d_odata, in_1, size);
+//		break;
+//
+//	case  1:
+//		FAddReduceKernel<1><<<gridSize, blockSize, smemSize>>>(d_odata, in_1, size);
+//		break;
+//	}
+//	cudaStatus = cudaGetLastError();
+//	if (cudaSuccess != cudaStatus) { nstage=5;  goto Error; }
+//	cudaStatus = cudaDeviceSynchronize();
+//	if (cudaSuccess != cudaStatus) { nstage=6;  goto Error; }
+//	// here, data is summed up to d_odata
+//	//
+//	// sum further while number of items > 1
+//	// this can be repeated until full reduction to a single float since it runs on
+//	// local arrays (d_odata, d_idata) of reduced size
+//	ns1 = gridSize;
+//	while (ns1 > (unsigned int)(1 + abs(CPU_threshold))) {
+//		gridSize = (ns1 + (blockSize * 2 - 1)) / (blockSize * 2); // update gridSize
+//		// prepare new input data on device
+//		cudaStatus = cudaMemcpy(d_idata, d_odata, sizeof(float)*ns1, cudaMemcpyDeviceToDevice);
+//		if (cudaSuccess != cudaStatus) { nstage=7;  goto Error; }
+//		// initialize output on device
+//		cudaStatus = cudaMemset(d_odata, 0, sizeof(float)*ns1);
+//		if (cudaSuccess != cudaStatus) { nstage=8;  goto Error; }
+//		switch (blockSize)
+//		{
+//		case 1024:
+//			FAddReduceKernel<1024><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case 512:
+//			FAddReduceKernel<512><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case 256:
+//			FAddReduceKernel<256><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case 128:
+//			FAddReduceKernel<128><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case 64:
+//			FAddReduceKernel<64><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case 32:
+//			FAddReduceKernel<32><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case 16:
+//			FAddReduceKernel<16><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case  8:
+//			FAddReduceKernel<8><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case  4:
+//			FAddReduceKernel<4><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case  2:
+//			FAddReduceKernel<2><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case  1:
+//			FAddReduceKernel<1><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
+//			break;
+//		}
+//		cudaStatus = cudaGetLastError();
+//		if (cudaSuccess != cudaStatus) { nstage=9;  goto Error; }
+//		cudaStatus = cudaDeviceSynchronize();
+//		if (cudaSuccess != cudaStatus) { nstage=10;  goto Error; }
+//		ns1 = gridSize; // update size of the problem
+//		// d_odata contains the reduced chain of length ns1
+//		// when ns1 == 1, we are done with reducing
+//	}
+//	if (ns1 == 1) {
+//		// final retrieval of the sum
+//		cudaStatus = cudaMemcpy(&out_1, d_odata, sizeof(float), cudaMemcpyDeviceToHost);
+//		if (cudaSuccess != cudaStatus) { nstage = 11;  goto Error; }
+//	}
+//	else {
+//		// do a Kohan Summation on the remaining items
+//		float *frest = (float*)malloc(sizeof(float)*ns1);
+//		cudaStatus = cudaMemcpy(frest, d_odata, sizeof(float)*ns1, cudaMemcpyDeviceToHost);
+//		if (cudaSuccess != cudaStatus) { nstage = 12;  goto Error; }
+//		for (unsigned int ir = 0; ir < ns1; ir++) {
+//			dy = frest[ir] - dc; // next value including previous correction
+//			dt = dsum + dy; // intermediate new sum value
+//			dc = (dt - dsum) - dy; // new correction
+//			dsum = dt; // update result
+//		}
+//		out_1 = dsum;
+//		free(frest);
+//	}
+//	//
+//Error:
+//	// if (NULL != d_odata) cudaFree(d_odata);
+//	// if (NULL != d_idata) cudaFree(d_idata);
+//	if (nstage > 0) {
+//		fprintf(stderr, "CUDA error in ArrayOpFSum: %s\n", cudaGetErrorString(cudaStatus));
+//		fprintf(stderr, "  - procedure stage: %d\n", nstage);
+//		goto Error;
+//	}
+//	return cudaStatus;
+//}
 
-	case 512:
-		FAddReduceKernel<512><<<gridSize, blockSize, smemSize>>>(d_odata, in_1, size);
-		break;
 
-	case 256:
-		FAddReduceKernel<256><<<gridSize, blockSize, smemSize>>>(d_odata, in_1, size);
-		break;
-
-	case 128:
-		FAddReduceKernel<128><<<gridSize, blockSize, smemSize>>>(d_odata, in_1, size);
-		break;
-
-	case 64:
-		FAddReduceKernel<64><<<gridSize, blockSize, smemSize>>>(d_odata, in_1, size);
-		break;
-
-	case 32:
-		FAddReduceKernel<32><<<gridSize, blockSize, smemSize>>>(d_odata, in_1, size);
-		break;
-
-	case 16:
-		FAddReduceKernel<16><<<gridSize, blockSize, smemSize>>>(d_odata, in_1, size);
-		break;
-
-	case  8:
-		FAddReduceKernel<8><<<gridSize, blockSize, smemSize>>>(d_odata, in_1, size);
-		break;
-
-	case  4:
-		FAddReduceKernel<4><<<gridSize, blockSize, smemSize>>>(d_odata, in_1, size);
-		break;
-
-	case  2:
-		FAddReduceKernel<2><<<gridSize, blockSize, smemSize>>>(d_odata, in_1, size);
-		break;
-
-	case  1:
-		FAddReduceKernel<1><<<gridSize, blockSize, smemSize>>>(d_odata, in_1, size);
-		break;
-	}
-	cudaStatus = cudaGetLastError();
-	if (cudaSuccess != cudaStatus) { nstage=5;  goto Error; }
-	cudaStatus = cudaDeviceSynchronize();
-	if (cudaSuccess != cudaStatus) { nstage=6;  goto Error; }
-	// here, data is summed up to d_odata
-	//
-	// sum further while number of items > 1
-	// this can be repeated until full reduction to a single float since it runs on
-	// local arrays (d_odata, d_idata) of reduced size
-	ns1 = gridSize;
-	while (ns1 > (unsigned int)(1 + abs(CPU_threshold))) {
-		gridSize = (ns1 + (blockSize * 2 - 1)) / (blockSize * 2); // update gridSize
-		// prepare new input data on device
-		cudaStatus = cudaMemcpy(d_idata, d_odata, sizeof(float)*ns1, cudaMemcpyDeviceToDevice);
-		if (cudaSuccess != cudaStatus) { nstage=7;  goto Error; }
-		// initialize output on device
-		cudaStatus = cudaMemset(d_odata, 0, sizeof(float)*ns1);
-		if (cudaSuccess != cudaStatus) { nstage=8;  goto Error; }
-		switch (blockSize)
-		{
-		case 1024:
-			FAddReduceKernel<1024><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
-			break;
-
-		case 512:
-			FAddReduceKernel<512><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
-			break;
-
-		case 256:
-			FAddReduceKernel<256><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
-			break;
-
-		case 128:
-			FAddReduceKernel<128><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
-			break;
-
-		case 64:
-			FAddReduceKernel<64><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
-			break;
-
-		case 32:
-			FAddReduceKernel<32><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
-			break;
-
-		case 16:
-			FAddReduceKernel<16><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
-			break;
-
-		case  8:
-			FAddReduceKernel<8><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
-			break;
-
-		case  4:
-			FAddReduceKernel<4><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
-			break;
-
-		case  2:
-			FAddReduceKernel<2><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
-			break;
-
-		case  1:
-			FAddReduceKernel<1><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
-			break;
-		}
-		cudaStatus = cudaGetLastError();
-		if (cudaSuccess != cudaStatus) { nstage=9;  goto Error; }
-		cudaStatus = cudaDeviceSynchronize();
-		if (cudaSuccess != cudaStatus) { nstage=10;  goto Error; }
-		ns1 = gridSize; // update size of the problem
-		// d_odata contains the reduced chain of length ns1
-		// when ns1 == 1, we are done with reducing
-	}
-	if (ns1 == 1) {
-		// final retrieval of the sum
-		cudaStatus = cudaMemcpy(&out_1, d_odata, sizeof(float), cudaMemcpyDeviceToHost);
-		if (cudaSuccess != cudaStatus) { nstage = 11;  goto Error; }
-	}
-	else {
-		// do a Kohan Summation on the remaining items
-		float *frest = (float*)malloc(sizeof(float)*ns1);
-		cudaStatus = cudaMemcpy(frest, d_odata, sizeof(float)*ns1, cudaMemcpyDeviceToHost);
-		if (cudaSuccess != cudaStatus) { nstage = 12;  goto Error; }
-		for (unsigned int ir = 0; ir < ns1; ir++) {
-			dy = frest[ir] - dc; // next value including previous correction
-			dt = dsum + dy; // intermediate new sum value
-			dc = (dt - dsum) - dy; // new correction
-			dsum = dt; // update result
-		}
-		out_1 = dsum;
-		free(frest);
-	}
-	//
-Error:
-	// if (NULL != d_odata) cudaFree(d_odata);
-	// if (NULL != d_idata) cudaFree(d_idata);
-	if (nstage > 0) {
-		fprintf(stderr, "CUDA error in ArrayOpFSum: %s\n", cudaGetErrorString(cudaStatus));
-		fprintf(stderr, "  - procedure stage: %d\n", nstage);
-		goto Error;
-	}
-	return cudaStatus;
-}
-
-
-// Calculates the sum of a float array on device using a mask.
-cudaError_t ArrayOpMaskFSum(float &out_1, int * mask, float * in_1, ArrayOpStats1 stats, int CPU_threshold)
-{
-	cudaError_t cudaStatus = cudaSuccess;
-	unsigned int size = stats.uSize;
-	int blockSize = (1024 < stats.nBlockSize) ? 1024 : stats.nBlockSize;
-	int gridSize = (size + (blockSize * 2 - 1)) / (blockSize * 2); // determine gridSize locally
-	int smemSize = (blockSize <= 32) ? 2 * blockSize * sizeof(float) : blockSize * sizeof(float);
-	unsigned int ns1 = size;
-	unsigned int nstage = 0;
-	float dsum = 0.0, dc = 0.0, dy = 0.0, dt = 0.0;
-	static int d_alloc_grid = 0;
-	static float * d_odata = NULL;
-	static float * d_idata = NULL;
-	// init output
-	out_1 = 0.f;
-	// allocate temp output array on device, one slot for each block and preset with zeroes
-	if (d_alloc_grid > 0 && gridSize > d_alloc_grid) { // current pre-allocated grid is insufficient in size
-		// free memory in order to force re-allocation
-		if (NULL != d_odata) { cudaFree(d_odata); d_odata = NULL; }
-		if (NULL != d_idata) { cudaFree(d_idata); d_idata = NULL; }
-		d_alloc_grid = 0;
-	}
-	if (d_odata == NULL) {
-		cudaStatus = cudaMalloc((void**)&d_odata, sizeof(float)*gridSize);
-		if (cudaSuccess != cudaStatus) { nstage = 1;  goto Error; }
-		d_alloc_grid = gridSize;
-	}
-	if (d_idata == NULL) {
-		cudaStatus = cudaMalloc((void**)&d_idata, sizeof(float)*gridSize);
-		if (cudaSuccess != cudaStatus) { nstage = 2;  goto Error; }
-		d_alloc_grid = gridSize;
-	}
-	
-	cudaStatus = cudaMemset(d_odata, 0, sizeof(float)*gridSize);
-	if (cudaSuccess != cudaStatus) { nstage = 3;  goto Error; }
-	cudaStatus = cudaMemset(d_idata, 0, sizeof(float)*gridSize);
-	if (cudaSuccess != cudaStatus) { nstage = 4;  goto Error; }
-	// initial reduction with mask (max blockSize 1024)
-	// this is separated as it runs on the large input array, which do not want to change
-	switch (blockSize)
-	{
-	case 1024:
-		MaskFAddReduceKernel<1024><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, size);
-		break;
-
-	case 512:
-		MaskFAddReduceKernel<512><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, size);
-		break;
-
-	case 256:
-		MaskFAddReduceKernel<256><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, size);
-		break;
-
-	case 128:
-		MaskFAddReduceKernel<128><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, size);
-		break;
-
-	case 64:
-		MaskFAddReduceKernel<64><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, size);
-		break;
-
-	case 32:
-		MaskFAddReduceKernel<32><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, size);
-		break;
-
-	case 16:
-		MaskFAddReduceKernel<16><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, size);
-		break;
-
-	case  8:
-		MaskFAddReduceKernel<8><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, size);
-		break;
-
-	case  4:
-		MaskFAddReduceKernel<4><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, size);
-		break;
-
-	case  2:
-		MaskFAddReduceKernel<2><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, size);
-		break;
-
-	case  1:
-		MaskFAddReduceKernel<1><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, size);
-		break;
-	}
-	cudaStatus = cudaGetLastError();
-	if (cudaSuccess != cudaStatus) { nstage = 5;  goto Error; }
-	cudaStatus = cudaDeviceSynchronize();
-	if (cudaSuccess != cudaStatus) { nstage = 6;  goto Error; }
-	// here, data is summed up to d_odata
-	//
-	// Sum further while number of items > 1.
-	// This can be repeated until full reduction to a single float since it runs on
-	// local arrays (d_odata, d_idata) of reduced size.
-	// And this is also done now without mask and the standard float reduction kernel.
-	ns1 = gridSize;
-	while (ns1 > (unsigned int)(1 + abs(CPU_threshold))) {
-		gridSize = (ns1 + (blockSize * 2 - 1)) / (blockSize * 2); // update gridSize
-																  // prepare new input data on device
-		cudaStatus = cudaMemcpy(d_idata, d_odata, sizeof(float)*ns1, cudaMemcpyDeviceToDevice);
-		if (cudaSuccess != cudaStatus) { nstage = 7;  goto Error; }
-		// initialize output on device
-		cudaStatus = cudaMemset(d_odata, 0, sizeof(float)*ns1);
-		if (cudaSuccess != cudaStatus) { nstage = 8;  goto Error; }
-		switch (blockSize)
-		{
-		case 1024:
-			FAddReduceKernel<1024><<<gridSize, blockSize, smemSize >>>(d_odata, d_idata, ns1);
-			break;
-
-		case 512:
-			FAddReduceKernel<512><<<gridSize, blockSize, smemSize >>>(d_odata, d_idata, ns1);
-			break;
-
-		case 256:
-			FAddReduceKernel<256><<<gridSize, blockSize, smemSize >>>(d_odata, d_idata, ns1);
-			break;
-
-		case 128:
-			FAddReduceKernel<128><<<gridSize, blockSize, smemSize >>>(d_odata, d_idata, ns1);
-			break;
-
-		case 64:
-			FAddReduceKernel<64><<<gridSize, blockSize, smemSize >>>(d_odata, d_idata, ns1);
-			break;
-
-		case 32:
-			FAddReduceKernel<32><<<gridSize, blockSize, smemSize >>>(d_odata, d_idata, ns1);
-			break;
-
-		case 16:
-			FAddReduceKernel<16><<<gridSize, blockSize, smemSize >>>(d_odata, d_idata, ns1);
-			break;
-
-		case  8:
-			FAddReduceKernel<8><<<gridSize, blockSize, smemSize >>>(d_odata, d_idata, ns1);
-			break;
-
-		case  4:
-			FAddReduceKernel<4><<<gridSize, blockSize, smemSize >>>(d_odata, d_idata, ns1);
-			break;
-
-		case  2:
-			FAddReduceKernel<2><<<gridSize, blockSize, smemSize >>>(d_odata, d_idata, ns1);
-			break;
-
-		case  1:
-			FAddReduceKernel<1><<<gridSize, blockSize, smemSize >>>(d_odata, d_idata, ns1);
-			break;
-		}
-		cudaStatus = cudaGetLastError();
-		if (cudaSuccess != cudaStatus) { nstage = 9;  goto Error; }
-		cudaStatus = cudaDeviceSynchronize();
-		if (cudaSuccess != cudaStatus) { nstage = 10;  goto Error; }
-		ns1 = gridSize; // update size of the problem
-						// d_odata contains the reduced chain of length ns1
-						// when ns1 == 1, we are done with reducing
-	}
-	if (ns1 == 1) {
-		// final retrieval of the sum
-		cudaStatus = cudaMemcpy(&out_1, d_odata, sizeof(float), cudaMemcpyDeviceToHost);
-		if (cudaSuccess != cudaStatus) { nstage = 11;  goto Error; }
-	}
-	else {
-		// do a Kohan Summation on the remaining items
-		float *frest = (float*)malloc(sizeof(float)*ns1);
-		cudaStatus = cudaMemcpy(frest, d_odata, sizeof(float)*ns1, cudaMemcpyDeviceToHost);
-		if (cudaSuccess != cudaStatus) { nstage = 12;  goto Error; }
-		for (unsigned int ir = 0; ir < ns1; ir++) {
-			dy = frest[ir] - dc; // next value including previous correction
-			dt = dsum + dy; // intermediate new sum value
-			dc = (dt - dsum) - dy; // new correction
-			dsum = dt; // update result
-		}
-		out_1 = dsum;
-		free(frest);
-	}
-	//
-Error:
-	//if (NULL != d_odata) cudaFree(d_odata);
-	//if (NULL != d_idata) cudaFree(d_idata);
-	if (nstage > 0) {
-		fprintf(stderr, "CUDA error in ArrayOpMaskFSum: %s\n", cudaGetErrorString(cudaStatus));
-		fprintf(stderr, "  - procedure stage: %d\n", nstage);
-		goto Error;
-	}
-	return cudaStatus;
-}
+//// Calculates the sum of a float array on device using a mask.
+//cudaError_t ArrayOpMaskFSum(float &out_1, int * mask, float * in_1, ArrayOpStats1 stats, int CPU_threshold)
+//{
+//	cudaError_t cudaStatus = cudaSuccess;
+//	unsigned int size = stats.uSize;
+//	int blockSize = (1024 < stats.nBlockSize) ? 1024 : stats.nBlockSize;
+//	int gridSize = (size + (blockSize * 2 - 1)) / (blockSize * 2); // determine gridSize locally
+//	int smemSize = (blockSize <= 32) ? 2 * blockSize * sizeof(float) : blockSize * sizeof(float);
+//	unsigned int ns1 = size;
+//	unsigned int nstage = 0;
+//	float dsum = 0.0, dc = 0.0, dy = 0.0, dt = 0.0;
+//	static int d_alloc_grid = 0;
+//	static float * d_odata = NULL;
+//	static float * d_idata = NULL;
+//	// init output
+//	out_1 = 0.f;
+//	// allocate temp output array on device, one slot for each block and preset with zeroes
+//	if (d_alloc_grid > 0 && gridSize > d_alloc_grid) { // current pre-allocated grid is insufficient in size
+//		// free memory in order to force re-allocation
+//		if (NULL != d_odata) { cudaFree(d_odata); d_odata = NULL; }
+//		if (NULL != d_idata) { cudaFree(d_idata); d_idata = NULL; }
+//		d_alloc_grid = 0;
+//	}
+//	if (d_odata == NULL) {
+//		cudaStatus = cudaMalloc((void**)&d_odata, sizeof(float)*gridSize);
+//		if (cudaSuccess != cudaStatus) { nstage = 1;  goto Error; }
+//		d_alloc_grid = gridSize;
+//	}
+//	if (d_idata == NULL) {
+//		cudaStatus = cudaMalloc((void**)&d_idata, sizeof(float)*gridSize);
+//		if (cudaSuccess != cudaStatus) { nstage = 2;  goto Error; }
+//		d_alloc_grid = gridSize;
+//	}
+//	
+//	cudaStatus = cudaMemset(d_odata, 0, sizeof(float)*gridSize);
+//	if (cudaSuccess != cudaStatus) { nstage = 3;  goto Error; }
+//	cudaStatus = cudaMemset(d_idata, 0, sizeof(float)*gridSize);
+//	if (cudaSuccess != cudaStatus) { nstage = 4;  goto Error; }
+//	// initial reduction with mask (max blockSize 1024)
+//	// this is separated as it runs on the large input array, which do not want to change
+//	switch (blockSize)
+//	{
+//	case 1024:
+//		MaskFAddReduceKernel<1024><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, size);
+//		break;
+//
+//	case 512:
+//		MaskFAddReduceKernel<512><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, size);
+//		break;
+//
+//	case 256:
+//		MaskFAddReduceKernel<256><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, size);
+//		break;
+//
+//	case 128:
+//		MaskFAddReduceKernel<128><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, size);
+//		break;
+//
+//	case 64:
+//		MaskFAddReduceKernel<64><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, size);
+//		break;
+//
+//	case 32:
+//		MaskFAddReduceKernel<32><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, size);
+//		break;
+//
+//	case 16:
+//		MaskFAddReduceKernel<16><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, size);
+//		break;
+//
+//	case  8:
+//		MaskFAddReduceKernel<8><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, size);
+//		break;
+//
+//	case  4:
+//		MaskFAddReduceKernel<4><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, size);
+//		break;
+//
+//	case  2:
+//		MaskFAddReduceKernel<2><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, size);
+//		break;
+//
+//	case  1:
+//		MaskFAddReduceKernel<1><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, size);
+//		break;
+//	}
+//	cudaStatus = cudaGetLastError();
+//	if (cudaSuccess != cudaStatus) { nstage = 5;  goto Error; }
+//	cudaStatus = cudaDeviceSynchronize();
+//	if (cudaSuccess != cudaStatus) { nstage = 6;  goto Error; }
+//	// here, data is summed up to d_odata
+//	//
+//	// Sum further while number of items > 1.
+//	// This can be repeated until full reduction to a single float since it runs on
+//	// local arrays (d_odata, d_idata) of reduced size.
+//	// And this is also done now without mask and the standard float reduction kernel.
+//	ns1 = gridSize;
+//	while (ns1 > (unsigned int)(1 + abs(CPU_threshold))) {
+//		gridSize = (ns1 + (blockSize * 2 - 1)) / (blockSize * 2); // update gridSize
+//																  // prepare new input data on device
+//		cudaStatus = cudaMemcpy(d_idata, d_odata, sizeof(float)*ns1, cudaMemcpyDeviceToDevice);
+//		if (cudaSuccess != cudaStatus) { nstage = 7;  goto Error; }
+//		// initialize output on device
+//		cudaStatus = cudaMemset(d_odata, 0, sizeof(float)*ns1);
+//		if (cudaSuccess != cudaStatus) { nstage = 8;  goto Error; }
+//		switch (blockSize)
+//		{
+//		case 1024:
+//			FAddReduceKernel<1024><<<gridSize, blockSize, smemSize >>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case 512:
+//			FAddReduceKernel<512><<<gridSize, blockSize, smemSize >>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case 256:
+//			FAddReduceKernel<256><<<gridSize, blockSize, smemSize >>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case 128:
+//			FAddReduceKernel<128><<<gridSize, blockSize, smemSize >>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case 64:
+//			FAddReduceKernel<64><<<gridSize, blockSize, smemSize >>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case 32:
+//			FAddReduceKernel<32><<<gridSize, blockSize, smemSize >>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case 16:
+//			FAddReduceKernel<16><<<gridSize, blockSize, smemSize >>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case  8:
+//			FAddReduceKernel<8><<<gridSize, blockSize, smemSize >>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case  4:
+//			FAddReduceKernel<4><<<gridSize, blockSize, smemSize >>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case  2:
+//			FAddReduceKernel<2><<<gridSize, blockSize, smemSize >>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case  1:
+//			FAddReduceKernel<1><<<gridSize, blockSize, smemSize >>>(d_odata, d_idata, ns1);
+//			break;
+//		}
+//		cudaStatus = cudaGetLastError();
+//		if (cudaSuccess != cudaStatus) { nstage = 9;  goto Error; }
+//		cudaStatus = cudaDeviceSynchronize();
+//		if (cudaSuccess != cudaStatus) { nstage = 10;  goto Error; }
+//		ns1 = gridSize; // update size of the problem
+//						// d_odata contains the reduced chain of length ns1
+//						// when ns1 == 1, we are done with reducing
+//	}
+//	if (ns1 == 1) {
+//		// final retrieval of the sum
+//		cudaStatus = cudaMemcpy(&out_1, d_odata, sizeof(float), cudaMemcpyDeviceToHost);
+//		if (cudaSuccess != cudaStatus) { nstage = 11;  goto Error; }
+//	}
+//	else {
+//		// do a Kahan Summation on the remaining items
+//		float *frest = (float*)malloc(sizeof(float)*ns1);
+//		cudaStatus = cudaMemcpy(frest, d_odata, sizeof(float)*ns1, cudaMemcpyDeviceToHost);
+//		if (cudaSuccess != cudaStatus) { nstage = 12;  goto Error; }
+//		for (unsigned int ir = 0; ir < ns1; ir++) {
+//			dy = frest[ir] - dc; // next value including previous correction
+//			dt = dsum + dy; // intermediate new sum value
+//			dc = (dt - dsum) - dy; // new correction
+//			dsum = dt; // update result
+//		}
+//		out_1 = dsum;
+//		free(frest);
+//	}
+//	//
+//Error:
+//	//if (NULL != d_odata) cudaFree(d_odata);
+//	//if (NULL != d_idata) cudaFree(d_idata);
+//	if (nstage > 0) {
+//		fprintf(stderr, "CUDA error in ArrayOpMaskFSum: %s\n", cudaGetErrorString(cudaStatus));
+//		fprintf(stderr, "  - procedure stage: %d\n", nstage);
+//		goto Error;
+//	}
+//	return cudaStatus;
+//}
 
 
 // calculates the dot product of two float arrays on device using a mask: out_1 = SUM( in_1[imask]*in_2[imask] )_imask[i]
 // - set stats.uSize to the size of the mask array
 // - set stats.nBlockSize to as much as many threads you want, it will be capped to 1024.
 // - use this to calculate integrated detector results with mask and detector sensitivity (in_2) from a intensity distrib. (in_1)
-cudaError_t ArrayOpMaskFDot(float &out_1, int * mask, float * in_1, float * in_2, ArrayOpStats1 stats, int CPU_threshold)
+//cudaError_t ArrayOpMaskFDot(float &out_1, int * mask, float * in_1, float * in_2, ArrayOpStats1 stats, int CPU_threshold)
+//{
+//	cudaError_t cudaStatus = cudaSuccess;
+//	unsigned int size = stats.uSize;
+//	int blockSize = (1024 < stats.nBlockSize) ? 1024 : stats.nBlockSize;
+//	int gridSize = (size + (blockSize * 2 - 1)) / (blockSize * 2); // determine gridSize locally
+//	int smemSize = (blockSize <= 32) ? 2 * blockSize * sizeof(float) : blockSize * sizeof(float);
+//	unsigned int ns1 = size;
+//	unsigned int nstage = 0;
+//	static int d_alloc_grid = 0; // remember size of allocated static grids
+//	static float * d_odata = NULL; // use static array to avoid repeated allocation
+//	static float * d_idata = NULL;
+//	float dsum = 0.0, dc = 0.0, dy = 0.0, dt = 0.0;
+//	// init output
+//	out_1 = 0.f;
+//	// allocate temp output array on device, one slot for each block and preset with zeroes
+//	if (d_alloc_grid > 0 && gridSize > d_alloc_grid) { // current pre-allocated grid is insufficient in size
+//		// free memory in order to force re-allocation
+//		if (NULL != d_odata) { cudaFree(d_odata); d_odata = NULL; }
+//		if (NULL != d_idata) { cudaFree(d_idata); d_idata = NULL; }
+//		d_alloc_grid = 0;
+//	}
+//	if (d_odata == NULL) {
+//		cudaStatus = cudaMalloc((void**)&d_odata, sizeof(float)*gridSize);
+//		if (cudaSuccess != cudaStatus) { nstage = 1;  goto Error; }
+//		d_alloc_grid = gridSize;
+//	}
+//	if (d_idata == NULL) {
+//		cudaStatus = cudaMalloc((void**)&d_idata, sizeof(float)*gridSize);
+//		if (cudaSuccess != cudaStatus) { nstage = 2;  goto Error; }
+//		d_alloc_grid = gridSize;
+//	}
+//	cudaStatus = cudaMemset(d_odata, 0, sizeof(float)*gridSize);
+//	if (cudaSuccess != cudaStatus) { nstage = 3;  goto Error; }
+//	cudaStatus = cudaMemset(d_idata, 0, sizeof(float)*gridSize);
+//	if (cudaSuccess != cudaStatus) { nstage = 4;  goto Error; }
+//	// initial reduction with mask (max blockSize 1024)
+//	// this is separated as it runs on the large input array, which do not want to change
+//	switch (blockSize)
+//	{
+//	case 1024:
+//		MaskFDotReduceKernel<1024><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, in_2, size);
+//		break;
+//
+//	case 512:
+//		MaskFDotReduceKernel<512><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, in_2, size);
+//		break;
+//
+//	case 256:
+//		MaskFDotReduceKernel<256><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, in_2, size);
+//		break;
+//
+//	case 128:
+//		MaskFDotReduceKernel<128><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, in_2, size);
+//		break;
+//
+//	case 64:
+//		MaskFDotReduceKernel<64><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, in_2, size);
+//		break;
+//
+//	case 32:
+//		MaskFDotReduceKernel<32><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, in_2, size);
+//		break;
+//
+//	case 16:
+//		MaskFDotReduceKernel<16><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, in_2, size);
+//		break;
+//
+//	case  8:
+//		MaskFDotReduceKernel<8><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, in_2, size);
+//		break;
+//
+//	case  4:
+//		MaskFDotReduceKernel<4><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, in_2, size);
+//		break;
+//
+//	case  2:
+//		MaskFDotReduceKernel<2><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, in_2, size);
+//		break;
+//
+//	case  1:
+//		MaskFDotReduceKernel<1><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, in_2, size);
+//		break;
+//	}
+//	cudaStatus = cudaGetLastError();
+//	if (cudaSuccess != cudaStatus) { nstage = 5;  goto Error; }
+//	cudaStatus = cudaDeviceSynchronize();
+//	if (cudaSuccess != cudaStatus) { nstage = 6;  goto Error; }
+//	// here, data is summed up to d_odata
+//	//
+//	// Sum further while number of items > 1.
+//	// This can be repeated until full reduction to a single float since it runs on
+//	// local arrays (d_odata, d_idata) of reduced size.
+//	// And this is also done now without mask and the standard float reduction kernel.
+//	ns1 = gridSize;
+//	while (ns1 > (unsigned int)(1 + abs(CPU_threshold))) {
+//		gridSize = (ns1 + (blockSize * 2 - 1)) / (blockSize * 2); // update gridSize
+//																  // prepare new input data on device
+//		cudaStatus = cudaMemcpy(d_idata, d_odata, sizeof(float)*ns1, cudaMemcpyDeviceToDevice);
+//		if (cudaSuccess != cudaStatus) { nstage = 7;  goto Error; }
+//		// initialize output on device
+//		cudaStatus = cudaMemset(d_odata, 0, sizeof(float)*ns1);
+//		if (cudaSuccess != cudaStatus) { nstage = 8;  goto Error; }
+//		switch (blockSize)
+//		{
+//		case 1024:
+//			FAddReduceKernel<1024><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case 512:
+//			FAddReduceKernel<512><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case 256:
+//			FAddReduceKernel<256><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case 128:
+//			FAddReduceKernel<128><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case 64:
+//			FAddReduceKernel<64><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case 32:
+//			FAddReduceKernel<32><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case 16:
+//			FAddReduceKernel<16><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case  8:
+//			FAddReduceKernel<8><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case  4:
+//			FAddReduceKernel<4><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case  2:
+//			FAddReduceKernel<2><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
+//			break;
+//
+//		case  1:
+//			FAddReduceKernel<1><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
+//			break;
+//		}
+//		cudaStatus = cudaGetLastError();
+//		if (cudaSuccess != cudaStatus) { nstage = 9;  goto Error; }
+//		cudaStatus = cudaDeviceSynchronize();
+//		if (cudaSuccess != cudaStatus) { nstage = 10;  goto Error; }
+//		ns1 = gridSize; // update size of the problem
+//						// d_odata contains the reduced chain of length ns1
+//						// when ns1 == 1, we are done with reducing
+//	}
+//	if (ns1 == 1) {
+//		// final retrieval of the sum
+//		cudaStatus = cudaMemcpy(&out_1, d_odata, sizeof(float), cudaMemcpyDeviceToHost);
+//		if (cudaSuccess != cudaStatus) { nstage = 11;  goto Error; }
+//	}
+//	else {
+//		// do a Kohan Summation on the remaining items
+//		float *frest = (float*)malloc(sizeof(float)*ns1);
+//		cudaStatus = cudaMemcpy(frest, d_odata, sizeof(float)*ns1, cudaMemcpyDeviceToHost);
+//		if (cudaSuccess != cudaStatus) { nstage = 12;  goto Error; }
+//		for (unsigned int ir = 0; ir < ns1; ir++) {
+//			dy = frest[ir] - dc; // next value including previous correction
+//			dt = dsum + dy; // intermediate new sum value
+//			dc = (dt - dsum) - dy; // new correction
+//			dsum = dt; // update result
+//		}
+//		out_1 = dsum;
+//		free(frest);
+//	}
+//	//
+//Error:
+//	//if (NULL != d_odata) cudaFree(d_odata);
+//	//if (NULL != d_idata) cudaFree(d_idata);
+//	if (nstage > 0) {
+//		fprintf(stderr, "CUDA error in ArrayOpMaskFSum: %s\n", cudaGetErrorString(cudaStatus));
+//		fprintf(stderr, "  - procedure stage: %d\n", nstage);
+//		goto Error;
+//	}
+//	return cudaStatus;
+//}
+
+
+// change call new dot product that incorporates an alternative reduction
+cudaError_t ArrayOpMaskFDot(float& out_1, int* mask, float* in_1, float* in_2, ArrayOpStats1 stats, int CPU_threshold)
 {
-	cudaError_t cudaStatus = cudaSuccess;
-	unsigned int size = stats.uSize;
-	int blockSize = (1024 < stats.nBlockSize) ? 1024 : stats.nBlockSize;
-	int gridSize = (size + (blockSize * 2 - 1)) / (blockSize * 2); // determine gridSize locally
-	int smemSize = (blockSize <= 32) ? 2 * blockSize * sizeof(float) : blockSize * sizeof(float);
-	unsigned int ns1 = size;
-	unsigned int nstage = 0;
-	static int d_alloc_grid = 0; // remember size of allocated static grids
-	static float * d_odata = NULL; // use static array to avoid repeated allocation
-	static float * d_idata = NULL;
-	float dsum = 0.0, dc = 0.0, dy = 0.0, dt = 0.0;
-	// init output
-	out_1 = 0.f;
-	// allocate temp output array on device, one slot for each block and preset with zeroes
-	if (d_alloc_grid > 0 && gridSize > d_alloc_grid) { // current pre-allocated grid is insufficient in size
-		// free memory in order to force re-allocation
-		if (NULL != d_odata) { cudaFree(d_odata); d_odata = NULL; }
-		if (NULL != d_idata) { cudaFree(d_idata); d_idata = NULL; }
-		d_alloc_grid = 0;
-	}
-	if (d_odata == NULL) {
-		cudaStatus = cudaMalloc((void**)&d_odata, sizeof(float)*gridSize);
-		if (cudaSuccess != cudaStatus) { nstage = 1;  goto Error; }
-		d_alloc_grid = gridSize;
-	}
-	if (d_idata == NULL) {
-		cudaStatus = cudaMalloc((void**)&d_idata, sizeof(float)*gridSize);
-		if (cudaSuccess != cudaStatus) { nstage = 2;  goto Error; }
-		d_alloc_grid = gridSize;
-	}
-	cudaStatus = cudaMemset(d_odata, 0, sizeof(float)*gridSize);
-	if (cudaSuccess != cudaStatus) { nstage = 3;  goto Error; }
-	cudaStatus = cudaMemset(d_idata, 0, sizeof(float)*gridSize);
-	if (cudaSuccess != cudaStatus) { nstage = 4;  goto Error; }
-	// initial reduction with mask (max blockSize 1024)
-	// this is separated as it runs on the large input array, which do not want to change
-	switch (blockSize)
-	{
-	case 1024:
-		MaskFDotReduceKernel<1024><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, in_2, size);
-		break;
-
-	case 512:
-		MaskFDotReduceKernel<512><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, in_2, size);
-		break;
-
-	case 256:
-		MaskFDotReduceKernel<256><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, in_2, size);
-		break;
-
-	case 128:
-		MaskFDotReduceKernel<128><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, in_2, size);
-		break;
-
-	case 64:
-		MaskFDotReduceKernel<64><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, in_2, size);
-		break;
-
-	case 32:
-		MaskFDotReduceKernel<32><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, in_2, size);
-		break;
-
-	case 16:
-		MaskFDotReduceKernel<16><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, in_2, size);
-		break;
-
-	case  8:
-		MaskFDotReduceKernel<8><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, in_2, size);
-		break;
-
-	case  4:
-		MaskFDotReduceKernel<4><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, in_2, size);
-		break;
-
-	case  2:
-		MaskFDotReduceKernel<2><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, in_2, size);
-		break;
-
-	case  1:
-		MaskFDotReduceKernel<1><<<gridSize, blockSize, smemSize >>>(d_odata, mask, in_1, in_2, size);
-		break;
-	}
-	cudaStatus = cudaGetLastError();
-	if (cudaSuccess != cudaStatus) { nstage = 5;  goto Error; }
-	cudaStatus = cudaDeviceSynchronize();
-	if (cudaSuccess != cudaStatus) { nstage = 6;  goto Error; }
-	// here, data is summed up to d_odata
-	//
-	// Sum further while number of items > 1.
-	// This can be repeated until full reduction to a single float since it runs on
-	// local arrays (d_odata, d_idata) of reduced size.
-	// And this is also done now without mask and the standard float reduction kernel.
-	ns1 = gridSize;
-	while (ns1 > (unsigned int)(1 + abs(CPU_threshold))) {
-		gridSize = (ns1 + (blockSize * 2 - 1)) / (blockSize * 2); // update gridSize
-																  // prepare new input data on device
-		cudaStatus = cudaMemcpy(d_idata, d_odata, sizeof(float)*ns1, cudaMemcpyDeviceToDevice);
-		if (cudaSuccess != cudaStatus) { nstage = 7;  goto Error; }
-		// initialize output on device
-		cudaStatus = cudaMemset(d_odata, 0, sizeof(float)*ns1);
-		if (cudaSuccess != cudaStatus) { nstage = 8;  goto Error; }
-		switch (blockSize)
-		{
-		case 1024:
-			FAddReduceKernel<1024><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
-			break;
-
-		case 512:
-			FAddReduceKernel<512><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
-			break;
-
-		case 256:
-			FAddReduceKernel<256><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
-			break;
-
-		case 128:
-			FAddReduceKernel<128><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
-			break;
-
-		case 64:
-			FAddReduceKernel<64><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
-			break;
-
-		case 32:
-			FAddReduceKernel<32><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
-			break;
-
-		case 16:
-			FAddReduceKernel<16><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
-			break;
-
-		case  8:
-			FAddReduceKernel<8><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
-			break;
-
-		case  4:
-			FAddReduceKernel<4><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
-			break;
-
-		case  2:
-			FAddReduceKernel<2><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
-			break;
-
-		case  1:
-			FAddReduceKernel<1><<<gridSize, blockSize, smemSize>>>(d_odata, d_idata, ns1);
-			break;
-		}
-		cudaStatus = cudaGetLastError();
-		if (cudaSuccess != cudaStatus) { nstage = 9;  goto Error; }
-		cudaStatus = cudaDeviceSynchronize();
-		if (cudaSuccess != cudaStatus) { nstage = 10;  goto Error; }
-		ns1 = gridSize; // update size of the problem
-						// d_odata contains the reduced chain of length ns1
-						// when ns1 == 1, we are done with reducing
-	}
-	if (ns1 == 1) {
-		// final retrieval of the sum
-		cudaStatus = cudaMemcpy(&out_1, d_odata, sizeof(float), cudaMemcpyDeviceToHost);
-		if (cudaSuccess != cudaStatus) { nstage = 11;  goto Error; }
-	}
-	else {
-		// do a Kohan Summation on the remaining items
-		float *frest = (float*)malloc(sizeof(float)*ns1);
-		cudaStatus = cudaMemcpy(frest, d_odata, sizeof(float)*ns1, cudaMemcpyDeviceToHost);
-		if (cudaSuccess != cudaStatus) { nstage = 12;  goto Error; }
-		for (unsigned int ir = 0; ir < ns1; ir++) {
-			dy = frest[ir] - dc; // next value including previous correction
-			dt = dsum + dy; // intermediate new sum value
-			dc = (dt - dsum) - dy; // new correction
-			dsum = dt; // update result
-		}
-		out_1 = dsum;
-		free(frest);
-	}
-	//
-Error:
-	//if (NULL != d_odata) cudaFree(d_odata);
-	//if (NULL != d_idata) cudaFree(d_idata);
-	if (nstage > 0) {
-		fprintf(stderr, "CUDA error in ArrayOpMaskFSum: %s\n", cudaGetErrorString(cudaStatus));
-		fprintf(stderr, "  - procedure stage: %d\n", nstage);
-		goto Error;
-	}
-	return cudaStatus;
+	static addingReduction<float> reduction;
+	out_1 = reduction.perform<maskedTDotProduct<float>>(stats.uSize, mask, in_1, in_2);
+	return cudaGetLastError();
 }
 
-
-// calculates out_1[0] = SUM( in_1[i]*conjg( in_1[i] )) * sca on device
-cudaError_t ArrayOpCPowSum(float &out_1, cuComplex *in_1, float sca, ArrayOpStats1 stats, int CPU_threshold)
+cudaError_t ArrayOpMaskFDot(float& out_1, int* mask, float2* in_1, float* in_2, ArrayOpStats1 stats, int CPU_threshold)
 {
-	cudaError_t cudaStatus;
-	unsigned int size = stats.uSize;	// input size
-	unsigned int nstage = 0;			// internal error stage code
-	// allocate temporary output size and allocate on device
-	size_t sz_tmp_out = sizeof(float)*size;
-	static unsigned int d_alloc_grid = 0;
-	static float * tmp_out_1 = NULL;
-	if (d_alloc_grid > 0 && size > d_alloc_grid) { // current pre-allocated grid is insufficient in size
-		// free memory in order to force re-allocation
-		if (NULL != tmp_out_1) { cudaFree(tmp_out_1); tmp_out_1 = NULL; }
-		d_alloc_grid = 0;
-	}
-	if (NULL == tmp_out_1) {
-		cudaStatus = cudaMalloc((void**)&tmp_out_1, sz_tmp_out);
-		if (cudaStatus != cudaSuccess) { nstage = 1; goto Error; }
-		d_alloc_grid = size;
-	}
-	cudaStatus = cudaMemset(tmp_out_1, 0, sz_tmp_out);
-	if (cudaStatus != cudaSuccess) { nstage = 2; goto Error; }
-	// Launch the parallel CPow operation: tmp_out_1[i] -> in_1[i]*conjg( in_1[i] )
-	cudaStatus = ArrayOpCPow(tmp_out_1, in_1, stats);
-	if (cudaStatus != cudaSuccess) { nstage = 3; goto Error; }
-	// Launch the parallel float array summation: out_1 -> SUM( tmp_out_1[i] )
-	cudaStatus = ArrayOpFSum(out_1, tmp_out_1, stats, CPU_threshold);
-	if (cudaStatus != cudaSuccess) { nstage = 4; goto Error; }
-	// Final scaling
-	out_1 *= sca;
-Error:
-	// if (tmp_out_1 != NULL) cudaFree(tmp_out_1);
-	if (nstage > 0) {
-		fprintf(stderr, "CUDA error in ArrayOpCPowSum: %s\n", cudaGetErrorString(cudaStatus));
-		fprintf(stderr, "  - procedure stage: %d\n", nstage);
-		goto Error;
-	}
-	return cudaStatus;
+	static addingReduction<float> reduction;
+	out_1 = reduction.perform<maskedComplexDotProduct<float, float2>>(stats.uSize, mask, in_1, in_2);
+	return cudaGetLastError();
 }
 
-
-// calculates out_1 = SUM( in_1[i]*conjg( in_1[i] ) * in_2[i] ) * sca on device
-cudaError_t ArrayOpCPowSumFMul(float &out_1, cuComplex *in_1, float *in_2, float sca, ArrayOpStats1 stats, int CPU_threshold)
+cudaError_t ArrayOpFDot(float& out_1, float* in_1, float* in_2, ArrayOpStats1 stats, int CPU_threshold)
 {
-	cudaError_t cudaStatus;
-	unsigned int size = stats.uSize;	// input size
-	unsigned int nstage = 0;			// internal error stage code
-	size_t sz_tmp_out = sizeof(float)*size; // size of float temporaray working array on device
-	static unsigned int d_alloc_grid = 0;
-	static float * tmp_out_1 = NULL;
-	if (d_alloc_grid > 0 && size > d_alloc_grid) { // current pre-allocated grid is insufficient in size
-		// free memory in order to force re-allocation
-		if (NULL != tmp_out_1) { cudaFree(tmp_out_1); tmp_out_1 = NULL; }
-		d_alloc_grid = 0;
-	}
-	if (NULL == tmp_out_1) {
-		cudaStatus = cudaMalloc((void**)&tmp_out_1, sz_tmp_out);
-		if (cudaStatus != cudaSuccess) { nstage = 1; goto Error; }
-		d_alloc_grid = size;
-	}
-	cudaStatus = cudaMemset(tmp_out_1, 0, sz_tmp_out);
-	if (cudaStatus != cudaSuccess) { nstage = 2; goto Error; }
-
-	// Launch the parallel CPow operation: tmp_out_1[i] -> in_1[i]*conjg( in_1[i] )
-	cudaStatus = ArrayOpCPow(tmp_out_1, in_1, stats);
-	if (cudaStatus != cudaSuccess) { nstage = 3; goto Error; }
-	// Launch the parallel float array multiplication: tmp_out_1[i] -> tmp_out_1[i] * in_2[i]
-	cudaStatus = ArrayOpFFMul(tmp_out_1, tmp_out_1, in_2, stats);
-	if (cudaStatus != cudaSuccess) { nstage = 4; goto Error; }
-	// Launch the parallel float array summation: out_1 -> SUM( tmp_out_1[i] )
-	cudaStatus = ArrayOpFSum(out_1, tmp_out_1, stats, CPU_threshold);
-	if (cudaStatus != cudaSuccess) { nstage = 5; goto Error; }
-	// Final scaling
-	out_1 *= sca;
-Error:
-	if (tmp_out_1 != NULL) cudaFree(tmp_out_1);
-	if (nstage > 0) {
-		fprintf(stderr, "CUDA error in ArrayOpCPowSumFMul: %s\n", cudaGetErrorString(cudaStatus));
-		fprintf(stderr, "  - procedure stage: %d\n", nstage);
-		goto Error;
-	}
-	return cudaStatus;
+	static addingReduction<float> reduction;
+	out_1 = reduction.perform<TDotProduct<float>>(stats.uSize, in_1, in_2);
+	return cudaGetLastError();
 }
+
+cudaError_t ArrayOpFDot(float& out_1, float2 * in_1, float* in_2, ArrayOpStats1 stats, int CPU_threshold)
+{
+	static addingReduction<float> reduction;
+	out_1 = reduction.perform<ComplexDotProduct<float, float2>>(stats.uSize, in_1, in_2);
+	return cudaGetLastError();
+}
+
+cudaError_t ArrayOpCPowSum(float& out_1, float2* in_1, float sca, ArrayOpStats1 stats, int CPU_threshold)
+{
+	static addingReduction<float> reduction;
+	out_1 = sca * reduction.perform<ComplexPower<float, float2>>(stats.uSize, in_1);
+	return cudaGetLastError();
+}
+
+cudaError_t ArrayOpCPowSumFMul(float& out_1, float2* in_1, float* in_2, float sca, ArrayOpStats1 stats, int CPU_threshold)
+{
+	static addingReduction<float> reduction;
+	out_1 = sca * reduction.perform<ComplexPowerFMul<float, float2>>(stats.uSize, in_1, in_2);
+	return cudaGetLastError();
+}
+// end change
+
+//// calculates out_1[0] = SUM( in_1[i]*conjg( in_1[i] )) * sca on device
+//cudaError_t ArrayOpCPowSum(float &out_1, cuComplex *in_1, float sca, ArrayOpStats1 stats, int CPU_threshold)
+//{
+//	cudaError_t cudaStatus;
+//	unsigned int size = stats.uSize;	// input size
+//	unsigned int nstage = 0;			// internal error stage code
+//	// allocate temporary output size and allocate on device
+//	size_t sz_tmp_out = sizeof(float)*size;
+//	static unsigned int d_alloc_grid = 0;
+//	static float * tmp_out_1 = NULL;
+//	if (d_alloc_grid > 0 && size > d_alloc_grid) { // current pre-allocated grid is insufficient in size
+//		// free memory in order to force re-allocation
+//		if (NULL != tmp_out_1) { cudaFree(tmp_out_1); tmp_out_1 = NULL; }
+//		d_alloc_grid = 0;
+//	}
+//	if (NULL == tmp_out_1) {
+//		cudaStatus = cudaMalloc((void**)&tmp_out_1, sz_tmp_out);
+//		if (cudaStatus != cudaSuccess) { nstage = 1; goto Error; }
+//		d_alloc_grid = size;
+//	}
+//	cudaStatus = cudaMemset(tmp_out_1, 0, sz_tmp_out);
+//	if (cudaStatus != cudaSuccess) { nstage = 2; goto Error; }
+//	// Launch the parallel CPow operation: tmp_out_1[i] -> in_1[i]*conjg( in_1[i] )
+//	cudaStatus = ArrayOpCPow(tmp_out_1, in_1, stats);
+//	if (cudaStatus != cudaSuccess) { nstage = 3; goto Error; }
+//	// Launch the parallel float array summation: out_1 -> SUM( tmp_out_1[i] )
+//	cudaStatus = ArrayOpFSum(out_1, tmp_out_1, stats, CPU_threshold);
+//	if (cudaStatus != cudaSuccess) { nstage = 4; goto Error; }
+//	// Final scaling
+//	out_1 *= sca;
+//Error:
+//	// if (tmp_out_1 != NULL) cudaFree(tmp_out_1);
+//	if (nstage > 0) {
+//		fprintf(stderr, "CUDA error in ArrayOpCPowSum: %s\n", cudaGetErrorString(cudaStatus));
+//		fprintf(stderr, "  - procedure stage: %d\n", nstage);
+//		goto Error;
+//	}
+//	return cudaStatus;
+//}
+
+
+//// calculates out_1 = SUM( in_1[i]*conjg( in_1[i] ) * in_2[i] ) * sca on device
+//cudaError_t ArrayOpCPowSumFMul(float &out_1, cuComplex *in_1, float *in_2, float sca, ArrayOpStats1 stats, int CPU_threshold)
+//{
+//	cudaError_t cudaStatus;
+//	unsigned int size = stats.uSize;	// input size
+//	unsigned int nstage = 0;			// internal error stage code
+//	size_t sz_tmp_out = sizeof(float)*size; // size of float temporaray working array on device
+//	static unsigned int d_alloc_grid = 0;
+//	static float * tmp_out_1 = NULL;
+//	if (d_alloc_grid > 0 && size > d_alloc_grid) { // current pre-allocated grid is insufficient in size
+//		// free memory in order to force re-allocation
+//		if (NULL != tmp_out_1) { cudaFree(tmp_out_1); tmp_out_1 = NULL; }
+//		d_alloc_grid = 0;
+//	}
+//	if (NULL == tmp_out_1) {
+//		cudaStatus = cudaMalloc((void**)&tmp_out_1, sz_tmp_out);
+//		if (cudaStatus != cudaSuccess) { nstage = 1; goto Error; }
+//		d_alloc_grid = size;
+//	}
+//	cudaStatus = cudaMemset(tmp_out_1, 0, sz_tmp_out);
+//	if (cudaStatus != cudaSuccess) { nstage = 2; goto Error; }
+//
+//	// Launch the parallel CPow operation: tmp_out_1[i] -> in_1[i]*conjg( in_1[i] )
+//	cudaStatus = ArrayOpCPow(tmp_out_1, in_1, stats);
+//	if (cudaStatus != cudaSuccess) { nstage = 3; goto Error; }
+//	// Launch the parallel float array multiplication: tmp_out_1[i] -> tmp_out_1[i] * in_2[i]
+//	cudaStatus = ArrayOpFFMul(tmp_out_1, tmp_out_1, in_2, stats);
+//	if (cudaStatus != cudaSuccess) { nstage = 4; goto Error; }
+//	// Launch the parallel float array summation: out_1 -> SUM( tmp_out_1[i] )
+//	cudaStatus = ArrayOpFSum(out_1, tmp_out_1, stats, CPU_threshold);
+//	if (cudaStatus != cudaSuccess) { nstage = 5; goto Error; }
+//	// Final scaling
+//	out_1 *= sca;
+//Error:
+//	if (tmp_out_1 != NULL) cudaFree(tmp_out_1);
+//	if (nstage > 0) {
+//		fprintf(stderr, "CUDA error in ArrayOpCPowSumFMul: %s\n", cudaGetErrorString(cudaStatus));
+//		fprintf(stderr, "  - procedure stage: %d\n", nstage);
+//		goto Error;
+//	}
+//	return cudaStatus;
+//}

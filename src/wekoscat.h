@@ -57,8 +57,14 @@
 #define _WEKOSCAT_MAXZ			98 // largest Z supported
 #define _WEKOSCAT_NPRMF			21 // number of extra parameters for rih2
 #define _WEKOSCAT_NPRMEI		4 // number of parameters for ei
-#define _WEKOSCAT_R8PI2A		(100. / (8.*_PI*_PI))  // reciprocal of 8*Pi^2 times 100
-#define _WEKOSCAT_K0PA			(_TPI * _QEL / (_HPL*_C0) * 1.E-7) // prefactor for wavenumber [A^-1 * kV^-1]
+constexpr double _WKS_PI = (double)_PI; // Pi
+constexpr double _WKS_TPI = (double)_TPI; // 2 * Pi
+constexpr double _WKS_FPI = (double)_FPI; // 4 * Pi
+constexpr double _WKS_E0KV = (double)_EEL0KEV; // electron rest energy = 511 keV
+constexpr double _WKS_EPS = 1.0E-8; // small value
+constexpr double _WKS_R8PI2A = 100. / (8. * _WKS_PI * _WKS_PI);  // reciprocal of 8*Pi^2 times 100
+constexpr double _WKS_K0PA = _WKS_TPI * (double)_QEL / ((double)_HPL * (double)_C0) * 1.0E-7; // prefactor for wavenumber [A^-1 * kV^-1]
+constexpr double _WKS_CFFA = (double)_CFFA; // form factor amplitude m0 e^2 / (2 h^2) / (4 Pi eps_0) * 10^-10 = 0.0239336609787... [1/A]
 
 
 
@@ -73,6 +79,10 @@ public:
 
 	// Data Member
 protected:
+
+	double m_g; // current g value [1/A]
+	double m_dw; // current absorption parameter
+	double m_k0; // current wave number in vacuum [1/A]
 	double m_a[2]; // current a parameters (backup)
 	double m_b[_WEKOSCAT_NPRM]; // current b parameters (backup)
 	double m_dv[_WEKOSCAT_MAXZ + 1]; // V parameters
@@ -91,6 +101,9 @@ protected:
 	// - a : double[2] : receives computed A parameters
 	// - b : double[6] : receives copies of B parameters
 	int getweko(int z, double* a, double* b);
+
+	// returns the relativistic correction factor for the given kinetic electron energy in keV
+	double relcorr(double ekv);
 
 	// returns elastic atomic form factor [A^2] from backup parameters
 	// - s : scattering angle [1/A]
@@ -122,7 +135,32 @@ protected:
 	// - ul : mean square displacement of vibration [A^2]
 	// - a : double[2] : A parameters
 	// - b : double[6] : B parameters
-	double wekoimag(double g, double ul, double* a, double *b);
+	double wekoimag(double g, double ul, double* a, double* b);
+
+	// calculates atomic form factors from member parameters
+	double wekoscar1(double s);
+
+	// returns the absorptive form factor integrand for thermal diffuse scattering as function of scattering angle (theta, phi)
+	double wekomug(double theta, double phi);
+
+	// returns the absorptive form factor integrand for an aperture as function of scattering angle (theta and phi)
+	double wekomugap(double theta, double phi);
+
+	// returns the absortive form factor [A] due to thermal diffuse scattering
+	// - g : scattering vector length [1/A]
+	// - dw : biso value [A^2]
+	// - a : double[2] : A parameters
+	// - b : double[6] : B parameters
+	// - k0 : electron wave number in vacuum [1/A]
+	double wekoabs(double g, double dw, double* a, double* b, double k0);
+
+	// returns the absortive form factor [A] due to absorption by a band-wisth limiting aperture
+	// - g : scattering vector length [1/A]
+	// - ap : aperture radius, band-width limit [1/A]
+	// - a : double[2] : A parameters
+	// - b : double[6] : B parameters
+	// - k0 : electron wave number in vacuum [1/A]
+	double wekoabsap(double g, double ap, double* a, double* b, double k0);
 
 public:
 
