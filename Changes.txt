@@ -1,5 +1,12 @@
 List of changes to JMultiSliceLib
 
+
+2020-06-10: 0.45 JB
+- Added and tested code for separating elastic and tds channels
+  for STEM, diffraction and probe imaging.
+- Added multi-thread code for the multislice calculations. The
+  code runs now with a hybrid setup.
+  
 2020-06-02: 0.44 JB
 - Added code to calculate object transmission functions from
   atomic structure data (single thread & multi thread)

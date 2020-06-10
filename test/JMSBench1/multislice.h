@@ -59,6 +59,7 @@ public:
 	bool b_foc_avg; // apply explicit focal averaging
 	bool b_active; // flags that the thread is still running
 	bool b_cancel; // set to true if you want to cancel the calculation
+	bool b_calc_ela; // calculate elastic image intensities (*_ela result buffers must be provided)
 	int n_state; // thread state flag
 	int n_thread; // thread number of the application (-1: for no cpu)
 	int n_gpu; // gpu id (-1: for no gpu)
@@ -77,9 +78,13 @@ public:
 	float f_fs; // focus spread in nm
 	float f_fkw; // focal kernel relative width (default: 2.0f)
 	float f_wgt; // weight of the result for accumulation
+	float f_wgt_ela; // elastic integration weight
 	float *pf_res_int; // result buffer for integrating detectors
 	float *pf_res_img; // result buffer for image detectors
 	float *pf_res_dif; // result buffer for diffraction detectors
+	float* pf_res_int_ela; // result buffer for integrating detectors (elastic channel)
+	float* pf_res_img_ela; // result buffer for image detectors (elastic channel)
+	float* pf_res_dif_ela; // result buffer for diffraction detectors (elastic channel)
 	std::thread::id id_thread; // system cpu thread id
 	std::string str_err; // error message
 	CJMultiSlice *pjms; // pointer to multislice module
@@ -175,7 +180,7 @@ unsigned int __cdecl prepare_probe(prm_main *pprm, CJMultiSlice *pjms);
 unsigned int __cdecl run_multislice(jmsworker* pw);
 
 // cycling multislice calls with queued worker data
-unsigned int __cdecl worker_multislice(int gpu_id, int cpu_id, prm_main* pprm, CJMultiSlice* pjms, jms_calc_queue* pq);
+unsigned int __cdecl worker_stem_multislice(int gpu_id, int cpu_id, prm_main* pprm, CJMultiSlice* pjms, jms_calc_queue* pq);
 
 
 // runs a single thread STEM simulation on CPU or GPU

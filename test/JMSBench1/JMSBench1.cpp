@@ -117,7 +117,7 @@ int init(prm_main *pprm)
 		std::cout << std::endl;
 		std::cout << "  +--------------------------------------------------+  " << std::endl;
 		std::cout << "  |                                                  |  " << std::endl;
-		std::cout << "  |       JMSBench1 - version 1.1 - 2020-06-03       |  " << std::endl;
+		std::cout << "  |       JMSBench1 - version 1.1 - 2020-06-10       |  " << std::endl;
 		std::cout << "  |                                                  |  " << std::endl;
 		std::cout << "  |       J. Barthel (ju.barthel@fz-juelich.de)      |  " << std::endl;
 		std::cout << "  |       Forschungszentrum Juelich GmbH             |  " << std::endl;
@@ -296,12 +296,12 @@ int setup(prm_main *pprm)
 		*/
 	}
 
-	//// - additional QEP options, such as separation of thermal diffuse scattering from the elastic channel
-	//ierr = pprm->setup_qepopt();
-	//if (0 < ierr) {
-	//	nerr = 9000 + ierr;
-	//	std::cerr << "Failed to setup QEP options." << std::endl;
-	//}
+	// - additional QEP options, such as separation of thermal diffuse scattering from the elastic channel
+	ierr = pprm->setup_qepopt();
+	if (0 < ierr) {
+		nerr = 8000 + ierr;
+		std::cerr << "Failed to setup QEP options." << std::endl;
+	}
 
 	// - Low-Loss inelastic scattering
 	ierr = pprm->setup_lis();
@@ -370,8 +370,24 @@ int output(prm_main *pprm)
 					std::cerr << "Error (output): failed to write " << pprm->stem_images.detector.v_annular[idet].name  <<
 						" STEM images." << std::endl;
 				}
+				// elastic channel and TDS separation ...
+				if (pprm->detector.b_separate_tds && pprm->stem_images_ela.detector.b_annular && (0 < pprm->stem_images_ela.get_data_bytes())) {
+					ierr = pprm->stem_images_ela.save(idet, "_" + pprm->stem_images.detector.v_annular[idet].name + "_ela", "bin");
+					if (0 < ierr) {
+						nerr = 11;
+						std::cerr << "Error (output): failed to write " << pprm->stem_images_ela.detector.v_annular[idet].name <<
+							" elastic channel STEM images." << std::endl;
+					}
+					ierr = pprm->stem_images.dif_save(&pprm->stem_images_ela, idet, "_" + pprm->stem_images_ela.detector.v_annular[idet].name + "_tds", "bin");
+					if (0 < ierr) {
+						nerr = 12;
+						std::cerr << "Error (output): failed to write " << pprm->stem_images_ela.detector.v_annular[idet].name <<
+							" TDS channel STEM images." << std::endl;
+					}
+				}
 			}
 		}
+		
 	}
 
 	if (pprm->stem_pix_padif.detector.b_difpat_avg && (0 < pprm->stem_pix_padif.get_data_bytes())) {

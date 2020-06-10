@@ -219,8 +219,11 @@ extern "C" __declspec(dllexport) int __stdcall GetGPUCores(int idev, int &nMulti
 //          an unscrambled array (preallocated by the calling code)
 extern "C" __declspec(dllexport) int __stdcall GetUnscrambleHash(unsigned int* phash);
 
-// returns the total weight used for accumulation in the averaging detector channcels
-extern "C" __declspec(dllexport) float __stdcall GetAveragingWeight(int whichcode, int iThread = 0);
+// returns the total weight used for accumulation in the image averaging detector channcels
+extern "C" __declspec(dllexport) float __stdcall GetImageAveragingWeight(int whichcode, int iThread = 0);
+
+// returns the total weight used for accumulation in the wave function averaging detector channcels
+extern "C" __declspec(dllexport) float __stdcall GetWaveAveragingWeight(int whichcode, int iThread = 0);
 
 // *** Setup Interface ***
 
@@ -256,8 +259,11 @@ extern "C" __declspec(dllexport) int __stdcall SetDetectorData(int whichcode, in
 //             1 = each phase-grating is loaded to device on demand
 extern "C" __declspec(dllexport) int __stdcall SetGPUPgrLoading(int npgrload = 0);
 
-// Resets the data in the averaging output buffers to zero
-extern "C" __declspec(dllexport) int __stdcall ResetAveraging(int whichcode, int iThread = 0);
+// Resets the data in the image averaging output buffers to zero
+extern "C" __declspec(dllexport) int __stdcall ResetImageAveraging(int whichcode, int iThread = 0);
+
+// Resets the data in the wave function averaging output buffers to zero
+extern "C" __declspec(dllexport) int __stdcall ResetWaveAveraging(int whichcode, int iThread = 0);
 
 
 // *** Calculation Interface ***
@@ -342,14 +348,14 @@ extern "C" __declspec(dllexport) int __stdcall GetAvgResult(int whichcode, int w
 // Clears host detector memory for a CPU thread
 extern "C" __declspec(dllexport) int __stdcall ClearDetMem_h(int iThread);
 
-// Clears host averaging detector memory for a CPU thread
-extern "C" __declspec(dllexport) int __stdcall ClearDetAvgMem_h(int iThread);
+//// Clears host averaging detector memory for a CPU thread
+//extern "C" __declspec(dllexport) int __stdcall ClearDetAvgMem_h(int iThread);
 
 // Clears device detector memory
 extern "C" __declspec(dllexport) int __stdcall ClearDetMem_d(void);
 
-// Clears device averaging detector memory
-extern "C" __declspec(dllexport) int __stdcall ClearDetAvgMem_d(void);
+//// Clears device averaging detector memory
+//extern "C" __declspec(dllexport) int __stdcall ClearDetAvgMem_d(void);
 
 
 // ** Cleanup Interface ***

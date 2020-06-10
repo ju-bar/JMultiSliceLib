@@ -24,6 +24,7 @@ set_cpu_num
 2) Output
 
 set_output_file
+<string>
 
 	Set the prefix of the output file names.
 
@@ -223,6 +224,16 @@ set_det_paimg
 	probe positions of the scan.
 
 
+set_det_separate_tds
+
+	Activate the separation of intensities for elastic and
+	thermal diffuse scattering from the total instensity.
+	The separation is for integrating diffraction (set_det_annular)
+	detectors, pixelated diffraction detectors (set_det_dif), and
+	probe image detectors (set_det_img).
+	A large number of repeats per scan position (set_num_repeat)
+	should be used.
+
 
 6) Scanning
 
@@ -267,11 +278,11 @@ set_num_repeat
 
 	Set number of calculation repeats per scan position.
 	This parameter can be used to control the amount of averaging over
-	frozen-lattice varations for improving the simulation of thermal
-	diffuse scattering.	Normal STEM image simulations achieve high
-	quality with 10 repeats	per scan position. Diffraction and probe
-	image simulations require a much larger amount of averaging with
-	a few hundred or even thousand repetitions.
+	thermal vibration states for calculations within the QEP model of
+	thermal diffuse scattering (TDS). Normal STEM image simulations 
+	achieve high quality with 10 repeats per scan position. Diffraction
+	and probe image simulations require a much larger amount of
+	averaging with a few hundred or even thousand repetitions.
 
 
 7) Simulation of additional effects

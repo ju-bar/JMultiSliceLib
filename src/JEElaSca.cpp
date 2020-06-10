@@ -443,20 +443,20 @@ int CJEElaSca::CalculateFormFactors(bool bverbose)
 		std::cout << std::endl;
 		std::cout << "  Calculating radial electron form factors for " << natt << " atom types ..." << std::endl;
 		if (mod_atffacs == 0) {
-			std::cout << "  - Using the parameterization of Weickenmeier and Kohl, Acta Cryst. A 47 (1991) 590-597." << std::endl;
+			std::cout << "  - using the parameterization of Weickenmeier and Kohl, Acta Cryst. A 47 (1991) 590-597" << std::endl;
 		}
 		if (UseDWF()) {
-			std::cout << "  - Form factors will be attenuated by Debye-Waller factors." << std::endl;
+			std::cout << "  - form factors attenuated by Debye-Waller factors" << std::endl;
 		}
 		if (mod_absorb == 1) {
-			std::cout << "  - Calculating absorptive form factors as fraction " << m_vabf << " of the elastic form factors." << std::endl;
+			std::cout << "  - generating absorptive form factors as fraction " << m_vabf << " of the elastic form factors" << std::endl;
 		}
 		if (mod_absorb == 2) {
 			if (UseDWF()) {
-				std::cout << "  - Calculating absorptive form factors due to thermal diffuse scattering." << std::endl;
+				std::cout << "  - calculating absorptive form factors due to thermal diffuse scattering" << std::endl;
 			}
 			else {
-				std::cout << "  - Calculating absorptive form factors due to the band-width limitation of the calculation." << std::endl;
+				std::cout << "  - calculating absorptive form factors due to the numerical band-width limitation" << std::endl;
 			}
 		}
 	}
@@ -987,6 +987,10 @@ int CJEElaSca::CalculatePhasegratingGPU(CStructure* pst, fcmplx* pgr)
 	size_t npix = nx * ny; // number of pixels in the (x,y) plane
 	size_t ix = 0, iy = 0, idx = 0, iats = 0, iat = 0, jat = 0, iatt = 0, nat2 = 0;
 	CV3D pos_cur(0.f, 0.f, 0.f);
+	/*float dx = 0.f, dy = 0.f;
+	static float u2 = 0.f;
+	static float fnd = 0.f;
+	static float um = 0.;*/
 	float ux = 0.f, phy = 0.f, pha = 0.f, p_x = 0.f, p_y = 0.f;
 	float occ = 0.f, crg = 0.f, biso = 0.f;
 	float vol = 0.f; // volume of the structure cell (nm^3)
@@ -1054,8 +1058,13 @@ int CJEElaSca::CalculatePhasegratingGPU(CStructure* pst, fcmplx* pgr)
 		pos_cur = cell_basis.VProduct(pst->m_vSites[iats].m_vPos); // physical position of the site in the structure cell
 		if (mod_thermal == 2) { // QEP calculation: modify the site position according to thermal vibration amplitude
 			ux = sqrt(pst->m_vSites[iats].m_fBiso) * EELSCA_CONST_RSQR8PI2;
-			pos_cur.x += ux * NormRand();
-			pos_cur.y += ux * NormRand();
+			/*dx = ux * NormRand(); dy = ux * NormRand();
+			if (pst->m_vAtoms[pst->m_vSites[iats].m_vatocc[0]].m_nAtomTypeIndex == 0) {
+				um += (dx + dy); u2 += (dx * dx + dy * dy);	fnd += 2.f;
+				
+			}*/
+			pos_cur.x += ux * NormRand(); // dx;
+			pos_cur.y += ux * NormRand(); // dy;
 		}
 		nat2 = pst->m_vSites[iats].m_vatocc.size(); // number of linked atoms
 		if (nat2 > 0) {
@@ -1065,6 +1074,17 @@ int CJEElaSca::CalculatePhasegratingGPU(CStructure* pst, fcmplx* pgr)
 			}
 		}
 	}
+	/*if (fnd > 0.f) {
+		std::cout << std::endl;
+		std::cout << "  Themal vibration statistics for " << pst->m_vTypes[0].SpeciesName() << std::endl;
+		std::cout << "  - Biso = " << pst->m_vTypes[0].m_fBiso << " nm^2";
+		std::cout << "  - ux   = " << sqrt(pst->m_vTypes[0].m_fBiso) * EELSCA_CONST_RSQR8PI2 << " nm" << std::endl;
+		std::cout << "  - <u1> = " << um / fnd << " nm" << std::endl;
+		std::cout << "  - <u2> = " << u2 / fnd << " nm^2  (B: " << u2 / fnd / EELSCA_CONST_RSQR8PI2 / EELSCA_CONST_RSQR8PI2 << ")" << std::endl;
+		std::cout << "  - N    = " << fnd << std::endl;
+	}*/
+
+
 
 	// calculate the projected potential
 	for (iatt = 0; iatt < natt; iatt++) { // loop over atom types

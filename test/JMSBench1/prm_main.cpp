@@ -490,22 +490,28 @@ _exit:
 int prm_main::setup_qepopt(void)
 {
 	int nerr = 0;
-	if (scan.num_repeat < 100) {
+	if (binteractive && scan.num_repeat < 100) {
 		std::cout << std::endl;
 		std::cout << "Warning: You are about to setup additional options for calculations" << std::endl;
-		std::cout << "         within the QEP model with a low number of statistical" << std::endl;
-		std::cout << "         samples (" << scan.num_repeat << ")." << std::endl;
+		std::cout << "         within the QEP model with a low number of statistical samples (" << scan.num_repeat << ")." << std::endl;
 		std::cout << "         QEP = Quantum Excitations of Phonons" << std::endl;
-		std::cout << "         Forbes et al., Phys.Rev.B 82, 104103 (2010)" << std::endl;
+		std::cout << "         Forbes et al., Phys. Rev. B 82, 104103 (2010)" << std::endl;
 	}
-	//sample.set_ctrl(*this);
-	//// do something here
-	//if (nerr == 0 && binteractive && sample.v_str_ctrl.size() > 0) { // append scan input control to main control
-	//	v_str_ctrl = sample.v_str_ctrl;
-	//}
-	//if (!binteractive) { // erase control input copy
-	//	sample.v_str_ctrl.clear();
-	//}
+	detector.set_ctrl(*this);
+	nerr = detector.setup_separate_tds();
+	if (!binteractive && btalk && scan.num_repeat < 100) {
+		std::cout << std::endl;
+		std::cout << "Warning: You have set additional options for calculations" << std::endl;
+		std::cout << "         within the QEP model with a low number of statistical samples (" << scan.num_repeat << ")." << std::endl;
+		std::cout << "         QEP = Quantum Excitations of Phonons" << std::endl;
+		std::cout << "         Forbes et al., Phys. Rev. B 82, 104103 (2010)" << std::endl;
+	}
+	if (nerr == 0 && binteractive && detector.v_str_ctrl.size() > 0) { // append detector input control to main control
+		v_str_ctrl = detector.v_str_ctrl;
+	}
+	if (!binteractive) { // erase control input copy
+		detector.v_str_ctrl.clear();
+	}
 	return nerr;
 }
 
@@ -513,7 +519,7 @@ int prm_main::setup_qepopt(void)
 int prm_main::setup_lis(void)
 {
 	int nerr = 0;
-	if (scan.num_repeat < 100) {
+	if (binteractive && scan.num_repeat < 100) {
 		std::cout << std::endl;
 		std::cout << "Warning: You are about to setup the low-loss inelastic scattering" << std::endl;
 		std::cout << "         Monte-Carlo procedure with a low number of statistical" << std::endl;
@@ -522,7 +528,14 @@ int prm_main::setup_lis(void)
 	}
 	sample.set_ctrl(*this);
 	nerr = sample.setup_lis();
-	if (nerr == 0 && binteractive && sample.v_str_ctrl.size() > 0) { // append scan input control to main control
+	if (!binteractive && btalk && scan.num_repeat < 100 && sample.lis_exc_max > 0) {
+		std::cout << std::endl;
+		std::cout << "Warning: You have activated the low-loss inelastic scattering" << std::endl;
+		std::cout << "         Monte-Carlo procedure with a low number of statistical" << std::endl;
+		std::cout << "         samples per scan position (" << scan.num_repeat << ")." << std::endl;
+		std::cout << "         Barthel et al., Phys. Rev. B 101, 184109 (2020)." << std::endl;
+	}
+	if (nerr == 0 && binteractive && sample.v_str_ctrl.size() > 0) { // append sample input control to main control
 		v_str_ctrl = sample.v_str_ctrl;
 	}
 	if (!binteractive) { // erase control input copy
@@ -541,7 +554,7 @@ int prm_main::prepare_sample_pgr(void)
 	case SAMPLE_INF_CEL:
 		if (btalk || binteractive) {
 			std::cout << std::endl;
-			std::cout << "  Calculating object transmission functions ..." << std::endl;
+			std::cout << "  Calculation of object transmission functions ..." << std::endl;
 		}
 		ierr = sample.calculate_pgr(cpu_num, gpu_id);
 		if (0 < ierr) {
@@ -553,7 +566,7 @@ int prm_main::prepare_sample_pgr(void)
 	case SAMPLE_INF_SLI:
 		if (btalk || binteractive) {
 			std::cout << std::endl;
-			std::cout << "  Loading object transmission functions ..." << std::endl;
+			std::cout << "  Object transmission functions are loaded from files ..." << std::endl;
 		}
 		ierr = sample.load_sli_file_data();
 		if (0 < ierr) {
@@ -594,10 +607,14 @@ int prm_main::prepare_result_params()
 		stem_images.str_out_file = str_out_file;
 		stem_images.f_calc_scale = 1.f;
 		stem_images.f_calc_weight = 0.f;
+		// this can be pre-allocated and used globally by all threads
 		if (0 < stem_images.init_buffer()) {
 			nerr = 1;
 			std::cerr << "Error: (prepare_result_params) failed to allocate scan image buffer." << std::endl;
 			goto _exit;
+		}
+		if (detector.b_separate_tds) {
+			stem_images_ela = stem_images;
 		}
 	}
 
@@ -615,11 +632,15 @@ int prm_main::prepare_result_params()
 		stem_pix_dif.str_out_file = str_out_file;
 		stem_pix_dif.f_calc_scale = 1.f;
 		stem_pix_dif.f_calc_weight = 0.f;
-		if (0 < stem_pix_dif.init_buffer()) {
-			nerr = 2;
-			std::cerr << "Error: (prepare_result_params) failed to allocate scanned diffraction buffer." << std::endl;
-			goto _exit;
-		}
+		// This should not be allocated and only used as template by the calculation thread.
+		//if (0 < stem_pix_dif.init_buffer()) {
+		//	nerr = 2;
+		//	std::cerr << "Error: (prepare_result_params) failed to allocate scanned diffraction buffer." << std::endl;
+		//	goto _exit;
+		//}
+		//if (detector.b_separate_tds) {
+		//	stem_pix_dif_ela = stem_pix_dif; // only copy the parameters, no allocation!
+		//}
 	}
 
 	if (detector.b_difpat_avg) {
@@ -636,6 +657,7 @@ int prm_main::prepare_result_params()
 		stem_pix_padif.str_out_file = str_out_file;
 		stem_pix_padif.f_calc_scale = 1.f;
 		stem_pix_padif.f_calc_weight = 0.f;
+		// This can be allocated and used globally by all threads with the thread blocking guard and method add_buffer
 		if (0 < stem_pix_padif.init_buffer()) {
 			nerr = 2;
 			std::cerr << "Error: (prepare_result_params) failed to allocate average diffraction buffer." << std::endl;
@@ -657,11 +679,15 @@ int prm_main::prepare_result_params()
 		stem_pix_img.str_out_file = str_out_file;
 		stem_pix_img.f_calc_scale = 1.f / ((float)sample.grid_nx*sample.grid_ny);
 		stem_pix_img.f_calc_weight = 0.f;
-		if (0 < stem_pix_img.init_buffer()) {
-			nerr = 2;
-			std::cerr << "Error: (prepare_result_params) failed to allocate scanned image buffer." << std::endl;
-			goto _exit;
-		}
+		// This should not be allocated and only used as template by the calculation thread.
+		//if (0 < stem_pix_img.init_buffer()) {
+		//	nerr = 2;
+		//	std::cerr << "Error: (prepare_result_params) failed to allocate scanned image buffer." << std::endl;
+		//	goto _exit;
+		//}
+		//if (detector.b_separate_tds) {
+		//	stem_pix_img_ela = stem_pix_img; // only copy parameters, no allocation!
+		//}
 	}
 
 	if (detector.b_image_avg) {
@@ -678,6 +704,7 @@ int prm_main::prepare_result_params()
 		stem_pix_paimg.str_out_file = str_out_file;
 		stem_pix_paimg.f_calc_scale = 1.f / ((float)sample.grid_nx*sample.grid_ny);
 		stem_pix_paimg.f_calc_weight = 0.f;
+		// This can be allocated and used globally by all threads with the thread blocking guard and method add_buffer
 		if (0 < stem_pix_paimg.init_buffer()) {
 			nerr = 2;
 			std::cerr << "Error: (prepare_result_params) failed to allocate average image buffer." << std::endl;

@@ -34,6 +34,7 @@ jmsworker::jmsworker()
 	b_cancel = false;
 	b_foc_avg = false;
 	b_wave_offset = true;
+	b_calc_ela = false;
 	whichcode = 0;
 	f_dx = 0.f;
 	f_dy = 0.f;
@@ -41,6 +42,7 @@ jmsworker::jmsworker()
 	f_fkw = 2.f;
 	f_fs = 0.f;
 	f_wgt = 0.f;
+	f_wgt_ela = 0.f;
 	id_thread = std::thread::id();
 	n_acc_data = _JMS_ACCMODE_NONE;
 	n_det_flags = _JMS_DETECT_NONE;
@@ -56,6 +58,9 @@ jmsworker::jmsworker()
 	pf_res_dif = NULL;
 	pf_res_img = NULL;
 	pf_res_int = NULL;
+	pf_res_dif_ela = NULL;
+	pf_res_img_ela = NULL;
+	pf_res_int_ela = NULL;
 	pjms = NULL;
 }
 
@@ -518,10 +523,10 @@ unsigned int __cdecl run_multislice(jmsworker* pw)
 	// repetition init
 	nrepeat = pw->n_repeat;
 	if (nrepeat < 1) nrepeat = 1;
-	f_wgt = 1.f / (float)nrepeat; // init weight for each pass
 	if (nznum > 1) { // make focal kernel size a factor of nrepeat
 		nrepeat = nznum * (1 + (nrepeat - (nrepeat%nznum)) / nznum);
 	}
+	f_wgt = 1.f / (float)nrepeat; // init weight for each pass
 	// finish focal kernel setup
 	if (pw->b_foc_avg) { 
 		fk_step = 2.0f * fabsf(pw->f_fkw) * fabsf(pw->f_fs) / (float)(nznum - 1); // focal setp size
@@ -543,7 +548,7 @@ unsigned int __cdecl run_multislice(jmsworker* pw)
 	f_x = pw->f_dx; // set probe x shift
 	f_y = pw->f_dy; // set probe y shift
 	//
-	for (ir = 0; ir < nrepeat; ir++) {
+	for (ir = 0; ir < nrepeat; ir++) { // repeat multislice passes
 		//
 		if (pw->b_cancel) { // cancel check before new run
 			goto _exit;
@@ -594,6 +599,7 @@ unsigned int __cdecl run_multislice(jmsworker* pw)
 			goto _exit;
 		}
 		nacc = _JMS_ACCMODE_INTEGRATE; // set local flag to integrating mode after the first pass
+		//
 	}
 	//
 	// *** get the results
@@ -615,6 +621,15 @@ unsigned int __cdecl run_multislice(jmsworker* pw)
 				pw->str_err = "Retrieving integrating detector data failed on " + scode + " (" + format("%d", njmserr) + ")";
 				goto _exit;
 			}
+			if (pw->b_calc_ela && (NULL != pw->pf_res_int_ela)) { // retrieve elastic channel intensities and weight (those are not scaled yet)
+				njmserr = pw->pjms->ReadoutDetAvg(pw->whichcode, _JMS_DETECT_INTEGRATED, pw->pf_res_int_ela, pw->f_wgt_ela, ithread);
+				if (0 < njmserr) {
+					nerr = 21;
+					pw->n_err = nerr;
+					pw->str_err = "Retrieving integrating detector elastic data failed on " + scode + " (" + format("%d", njmserr) + ")";
+					goto _exit;
+				}
+			}
 		}
 		if (pw->n_det_flags & (unsigned int)_JMS_DETECT_IMAGE) {
 			// image detector readout
@@ -625,6 +640,15 @@ unsigned int __cdecl run_multislice(jmsworker* pw)
 				pw->str_err = "Retrieving image data failed on " + scode + " (" + format("%d", njmserr) + ")";
 				goto _exit;
 			}
+			if (pw->b_calc_ela && (NULL != pw->pf_res_img_ela)) { // retrieve elastic channel intensities and weight (those are not scaled yet)
+				njmserr = pw->pjms->ReadoutDetAvg(pw->whichcode, _JMS_DETECT_IMAGE, pw->pf_res_img_ela, pw->f_wgt_ela, ithread);
+				if (0 < njmserr) {
+					nerr = 22;
+					pw->n_err = nerr;
+					pw->str_err = "Retrieving elastic image data failed on " + scode + " (" + format("%d", njmserr) + ")";
+					goto _exit;
+				}
+			}
 		}
 		if (pw->n_det_flags & (unsigned int)_JMS_DETECT_DIFFRACTION) {
 			// image detector readout
@@ -634,6 +658,15 @@ unsigned int __cdecl run_multislice(jmsworker* pw)
 				pw->n_err = nerr;
 				pw->str_err = "Retrieving diffraction data failed on " + scode + " (" + format("%d", njmserr) + ")";
 				goto _exit;
+			}
+			if (pw->b_calc_ela && (NULL != pw->pf_res_dif_ela)) { // retrieve elastic channel intensities and weight (those are not scaled yet)
+				njmserr = pw->pjms->ReadoutDetAvg(pw->whichcode, _JMS_DETECT_DIFFRACTION, pw->pf_res_dif_ela, pw->f_wgt_ela, ithread);
+				if (0 < njmserr) {
+					nerr = 23;
+					pw->n_err = nerr;
+					pw->str_err = "Retrieving elastic diffraction data failed on " + scode + " (" + format("%d", njmserr) + ")";
+					goto _exit;
+				}
 			}
 		}
 	}
@@ -654,153 +687,6 @@ _exit: // final state
 	return nerr;
 }
 
-
-
-unsigned int __cdecl worker_multislice(int gpu_id, int cpu_id, prm_main* pprm, CJMultiSlice* pjms, jms_calc_queue* pq)
-{
-	unsigned int nerr = 0, ierr = 0; // routine error code
-	int whichcode = 0;
-	jmsworker w; // current worker data
-	size_t itask = 0; // task id
-	size_t num_ann = 0; // number of integrating annular detectors
-	size_t num_det_slc = 0; // number of detection planes in z
-	size_t num_scan = 0; // total number of scan points
-	size_t sz_idx = 0; // buffer index
-	size_t sz_mem_ann = 0; // memory sizes allocated locally
-	size_t i = 0, j = 0; // indices
-	unsigned int nyqx = 0, nyqy = 0; // grid nyquist numbers
-	float weight = 0.f; // result weight
-	float* det_annular = NULL; // pointer to result array for integrating detectors
-	float* det_pix_dif = NULL; // pointer to result array for diffraction patterns
-	float* det_pix_img = NULL; // pointer to result array for image patterns
-	float* dst = NULL;
-	float* src = NULL;
-	std::string str_pix = "";
-	if (NULL == pprm) return 1;
-	if (NULL == pjms) return 2;
-	if (NULL == pq) return 3;
-	num_ann = pprm->detector.v_annular.size();
-	num_det_slc = (size_t)pjms->GetDetetionSliceNum();
-	num_scan = (size_t)pprm->scan.nx * pprm->scan.ny;
-	nyqx = pprm->sample.grid_nx >> 1;
-	nyqy = pprm->sample.grid_ny >> 1;
-	if (cpu_id >= 0) whichcode = _JMS_CODE_CPU;
-	if (gpu_id >= 0) whichcode = _JMS_CODE_GPU;
-	if (0 == whichcode) return 4;
-	// prepare local result arrays
-	if (pprm->detector.b_annular && num_ann > 0 && num_det_slc > 0) {
-		// local buffer: holds data of all detectors and all detection planes for one scan position
-		sz_mem_ann = sizeof(float) * num_det_slc * num_ann;
-		det_annular = (float*)malloc(sz_mem_ann);
-		if (NULL == det_annular) {
-			nerr = 10;
-			goto _exit;
-		}
-		memset(det_annular, 0, sz_mem_ann);
-	}
-	if (pprm->detector.b_difpat) {
-		det_pix_dif = (float*)pprm->stem_pix_dif.pdata;
-	}
-	if (pprm->detector.b_image) {
-		det_pix_img = (float*)pprm->stem_pix_img.pdata;
-	}
-	pjms->ResetAveraging(whichcode, cpu_id);
-	while (!pq->empty()) {
-		itask = pq->request();
-		ierr = pq->get_task(itask, w);
-		if (0 == ierr) {
-			w.whichcode = whichcode;
-			w.n_gpu = gpu_id;
-			w.n_thread = cpu_id;
-			w.pf_res_int = det_annular;
-			w.pf_res_dif = det_pix_dif;
-			w.pf_res_img = det_pix_img;
-			w.id_thread = std::this_thread::get_id();
-			pq->set_task_calculate(itask);
-			ierr = run_multislice(&w); // run the multislice
-			if (ierr == 0 && w.n_state!=MS_WS_CANCELLED) {
-				//
-				// results per scan point
-				// - STEM images of integrated detectors
-				if (0 < (w.n_det_flags & (unsigned int)_JMS_DETECT_INTEGRATED)) {
-					// write data to result buffer
-					// as image series over thickness for each detector
-					// - {{plane 1, detector 1},{plane 2, detector 1}, ...{plane N, detector M}}
-					for (j = 0; j < num_ann; j++) { // for each detector j
-						for (i = 0; i < num_det_slc; i++) { // for each plane i
-							sz_idx = (size_t)w.n_scan_idx + (size_t)num_scan * i + (size_t)num_det_slc * num_scan * j;
-							dst = &((float*)pprm->stem_images.pdata)[sz_idx];
-							src = &w.pf_res_int[i * num_ann + j];
-							*dst = *src / w.f_wgt; // write result to pixel
-						}
-					}
-				}
-				// - STEM images of integrated detectors
-				if (0 < (w.n_det_flags & (unsigned int)_JMS_DETECT_DIFFRACTION)) {
-					// write data to result buffers
-					// as image series over thickness
-					// - position dependent data -> push to disk
-					if (pprm->detector.b_difpat) {
-						str_pix = format("_px%03d_py%03d", w.n_scan_ix, w.n_scan_iy); // format pixel string
-						pprm->stem_pix_dif.shift_org(nyqx + 1, nyqy + 1, 1.f / w.f_wgt); // shift and normalize pattern
-						pprm->stem_pix_dif.save(0, "_dif" + str_pix, "bin"); // save pattern
-					}
-				}
-				if (0 < (w.n_det_flags & (unsigned int)_JMS_DETECT_IMAGE)) {
-					// write data to result buffers
-					// as image series over thickness
-					// - position dependent data -> push to disk
-					if (pprm->detector.b_image) {
-						str_pix = format("_px%03d_py%03d", w.n_scan_ix, w.n_scan_iy); // format pixel string
-						pprm->stem_pix_img.normalize(w.f_wgt / pprm->stem_pix_img.f_calc_scale); // normalize image
-						pprm->stem_pix_img.save(0, "_img" + str_pix, "bin"); // save image
-					}
-				}
-				//
-				pq->set_task_solved(itask); // solved
-			}
-			else {
-				pq->set_task_error(itask); // error
-			}
-		}
-	}
-	//
-	// collect averaged data from jms
-	if (pprm->detector.b_image_avg) { // collect averaged probe image
-		size_t sz = pprm->stem_pix_paimg.get_data_bytes();
-		float* buf = (float*)malloc(sz);
-		ierr = pjms->GetAvgResult(whichcode, _JMS_DETECT_IMAGE_AVG, buf, weight, cpu_id);
-		if (0 < ierr) {
-			nerr = 60;
-			goto _exit;
-		}
-		ierr = pprm->stem_pix_paimg.add_buffer(buf, weight);
-		if (0 < ierr) {
-			nerr = 61;
-			goto _exit;
-		}
-		free(buf);
-	}
-	if (pprm->detector.b_difpat_avg) { // collect averaged diffraction pattern
-		size_t sz = pprm->stem_pix_padif.get_data_bytes();
-		float* buf = (float*)malloc(sz);
-		ierr = pjms->GetAvgResult(whichcode, _JMS_DETECT_DIFFR_AVG, buf, weight, cpu_id);
-		if (0 < ierr) {
-			nerr = 80;
-			goto _exit;
-		}
-		ierr = pprm->stem_pix_padif.add_buffer(buf, weight);
-		if (0 < ierr) {
-			nerr = 81;
-			goto _exit;
-		}
-		free(buf);
-	}
-	//
-_exit:
-	if (0 < sz_mem_ann) { free(det_annular); det_annular = NULL; sz_mem_ann = 0; }
-	return nerr;
-}
 
 
 
@@ -825,9 +711,16 @@ unsigned int __cdecl singlethread_stem(prm_main *pprm)
 	float *det_annular = NULL; // pointer to result array for integrating detectors
 	float *det_pix_dif = NULL; // pointer to result array for diffraction patterns
 	float *det_pix_img = NULL; // pointer to result array for image patterns
+	float* det_annular_ela = NULL; // pointer to result array for integrating detectors (elastic channel)
+	float* det_pix_dif_ela = NULL; // pointer to result array for diffraction patterns (elastic channel)
+	float* det_pix_img_ela = NULL; // pointer to result array for image patterns (elastic channel)
 	float *dst = NULL;
 	float *src = NULL;
 	float weight = 0.f;
+	prm_result* stem_pix_img = new prm_result; // ... heap allocations to keep function stack on low level 
+	prm_result* stem_pix_dif = new prm_result;
+	prm_result* stem_pix_img_ela = new prm_result;
+	prm_result* stem_pix_dif_ela = new prm_result;
 	size_t sz_mem_ann = 0; // memory sizes allocated locally
 	size_t num_ann = pprm->detector.v_annular.size();
 	size_t num_det_slc = 0; // number of detection planes in z
@@ -854,9 +747,8 @@ unsigned int __cdecl singlethread_stem(prm_main *pprm)
 		w.whichcode = _JMS_CODE_GPU;
 		njmserr = jms.SetCurrentGPU(pprm->gpu_id);
 		if (0 < njmserr) {
-			nerr = 1;
 			std::cerr << "Error: (singlethread_stem) failed to set GPU #" << pprm->gpu_id << ". (" << njmserr << ")" << std::endl;
-			goto _exit;
+			nerr = 1; goto _exit;
 		}
 		w.n_thread = -1;
 	}
@@ -875,17 +767,15 @@ unsigned int __cdecl singlethread_stem(prm_main *pprm)
 	// prepare transmission functions
 	ierr = prepare_slices(pprm, &jms);
 	if (0 < ierr) {
-		nerr = 1000 + ierr;
 		std::cerr << "Error: (singlethread_stem) failed to prepare transmission functions (" << ierr << ")." << std::endl;
-		goto _exit;
+		nerr = 1000 + ierr; goto _exit;
 	}
 
 	// prepare detectors
 	ierr = prepare_detectors(pprm, &jms);
 	if (0 < ierr) {
-		nerr = 2000 + ierr;
 		std::cerr << "Error: (singlethread_stem) failed to prepare detectors (" << ierr << ")." << std::endl;
-		goto _exit;
+		nerr = 2000 + ierr; goto _exit;
 	}
 	num_det_slc = (unsigned int)jms.GetDetetionSliceNum();
 	w.n_det_flags = pprm->detector.get_jms_flags();
@@ -893,25 +783,22 @@ unsigned int __cdecl singlethread_stem(prm_main *pprm)
 	// prepare cores
 	ierr = prepare_cores(pprm, &jms);
 	if (0 < ierr) {
-		nerr = 3000 + ierr;
 		std::cerr << "Error: (singlethread_stem) failed to calculation cores (" << ierr << ")." << std::endl;
-		goto _exit;
+		nerr = 3000 + ierr; goto _exit;
 	}
 	
 	// prepare probe
 	ierr = prepare_probe(pprm, &jms);
 	if (0 < ierr) {
-		nerr = 4000 + ierr;
 		std::cerr << "Error: (singlethread_stem) failed to prepare probe (" << ierr << ")." << std::endl;
-		goto _exit;
+		nerr = 4000 + ierr; goto _exit;
 	}
 
 	// prepare result containers of the prm_main object linked by the function interface
 	ierr = pprm->prepare_result_params();
 	if (0 < ierr) {
-		nerr = 5000 + ierr;
 		std::cerr << "Error: (singlethread_stem) failed to prepare result containers." << std::endl;
-		goto _exit;
+		nerr = 5000 + ierr; goto _exit;
 	}
 
 	// prepare local result arrays
@@ -920,24 +807,53 @@ unsigned int __cdecl singlethread_stem(prm_main *pprm)
 		sz_mem_ann = sizeof(float) * num_det_slc * num_ann;
 		det_annular = (float*)malloc(sz_mem_ann);
 		if (NULL == det_annular) {
-			nerr = 10;
 			std::cerr << "Error: (singlethread_stem) failed to allocate local scan result buffer." << std::endl;
-			goto _exit;
+			nerr = 10; goto _exit;
 		}
 		memset(det_annular, 0, sz_mem_ann);
+		if (pprm->detector.b_separate_tds) {
+			det_annular_ela = (float*)malloc(sz_mem_ann);
+			if (NULL == det_annular_ela) {
+				std::cerr << "Error: (singlethread_stem) failed to allocate local elastic scan result buffer." << std::endl;
+				nerr = 11; goto _exit;
+			}
+			memset(det_annular_ela, 0, sz_mem_ann);
+		}
 	}
-	if (pprm->detector.b_difpat) {
-		det_pix_dif = (float*)pprm->stem_pix_dif.pdata;
+	if (pprm->detector.b_difpat) { // ... worker diffraction pattern result per scan point
+		*stem_pix_dif = pprm->stem_pix_dif;
+		ierr = stem_pix_dif->init_buffer();
+		if (0 < ierr) { nerr = 12; goto _exit; }
+		det_pix_dif = (float*)stem_pix_dif->pdata;
+		if (pprm->detector.b_separate_tds) { // ... worker elastic diffraction pattern result per scan point
+			*stem_pix_dif_ela = pprm->stem_pix_dif;
+			ierr = stem_pix_dif_ela->init_buffer();
+			if (0 < ierr) { nerr = 13; goto _exit; }
+			det_pix_dif_ela = (float*)stem_pix_dif_ela->pdata;
+		}
 	}
-	if (pprm->detector.b_image) {
-		det_pix_img = (float*)pprm->stem_pix_img.pdata;
+	if (pprm->detector.b_image) { // ... worker probe image result per scan point
+		*stem_pix_img = pprm->stem_pix_img;
+		ierr = stem_pix_img->init_buffer();
+		if (0 < ierr) { nerr = 14; goto _exit; }
+		det_pix_img = (float*)stem_pix_img->pdata;
+		if (pprm->detector.b_separate_tds) { // ... worker elastic probe image result per scan point
+			*stem_pix_img_ela = pprm->stem_pix_img;
+			ierr = stem_pix_img_ela->init_buffer();
+			if (0 < ierr) { nerr = 15; goto _exit; }
+			det_pix_img_ela = (float*)stem_pix_img_ela->pdata;
+		}
+	}
+	w.b_calc_ela = false;
+	if (pprm->detector.b_separate_tds) {
+		w.b_calc_ela = true;
 	}
 
 	w.n_acc_data = (unsigned int)_JMS_ACCMODE_NONE;
 	w.n_repeat = pprm->scan.num_repeat;
 	w.b_foc_avg = false;
 	w.b_wave_offset = true;
-	jms.ResetAveraging(w.whichcode, 0);
+	jms.ResetImageAveraging(w.whichcode, 0); // reset accumulators for position averaged images and diffraction
 
 	// run the calculation by looping over scan points
 	if (pprm->btalk) {
@@ -945,6 +861,8 @@ unsigned int __cdecl singlethread_stem(prm_main *pprm)
 	}
 	//
 	for (iy = pprm->scan.sub_iy0; iy <= pprm->scan.sub_iy1; iy++) { // slow loop over scan rows
+		//
+		w.n_scan_iy = iy;
 		//
 		for (ix = pprm->scan.sub_ix0; ix <= pprm->scan.sub_ix1; ix++) { // fast loop through each scan row
 			//
@@ -961,18 +879,21 @@ unsigned int __cdecl singlethread_stem(prm_main *pprm)
 			//
 			// set worker parameters
 			w.n_scan_idx = idx;
+			w.n_scan_ix = ix;
 			w.pf_res_int = det_annular;
 			w.pf_res_dif = det_pix_dif;
 			w.pf_res_img = det_pix_img;
+			w.pf_res_int_ela = det_annular_ela;
+			w.pf_res_dif_ela = det_pix_dif_ela;
+			w.pf_res_img_ela = det_pix_img_ela;
 			//
 			// run the multislice calculation for this scan pixel
 			// (this may include several passes)
 			ierr = run_multislice(&w);
 			if (0 < ierr) {
-				nerr = 20;
 				std::cerr << "Error (JMS): " << w.str_err << std::endl;
 				std::cerr << "Error (singlethread_stem): failed to run multislice (" << ierr << ")." << std::endl;
-				goto _exit;
+				nerr = 20; goto _exit;
 			}
 			//
 			// transfer data to result objects
@@ -985,30 +906,53 @@ unsigned int __cdecl singlethread_stem(prm_main *pprm)
 					for (i = 0; i < num_det_slc; i++) { // for each plane i
 						sz_idx = (size_t)w.n_scan_idx + (size_t)num_scan * i + (size_t)num_det_slc * num_scan * j;
 						dst = &((float*)pprm->stem_images.pdata)[sz_idx];
-						src = &w.pf_res_int[i * num_ann + j];
+						src = &w.pf_res_int[i * num_ann + j]; // use the addressing of the accumulator (detectors first, then planes)
 						*dst = *src / w.f_wgt;
+						if (pprm->detector.b_separate_tds) { // save additional separated output
+							dst = &((float*)pprm->stem_images_ela.pdata)[sz_idx];
+							src = &w.pf_res_int_ela[i * num_ann + j]; // use the addressing of the accumulator (detectors first, then planes)
+							*dst = *src / w.f_wgt_ela; // normalize with weight of elastic data
+						}
 					}
 				}
 			}
-			// - STEM images of integrated detectors
+			// - pixelated diffraction detectors
 			if (0 < (w.n_det_flags &(unsigned int)_JMS_DETECT_DIFFRACTION)) {
 				// write data to result buffers
 				// as image series over thickness
 				// - position dependent data -> push to disk
 				if (pprm->detector.b_difpat) {
 					str_pix = format("_px%03d_py%03d", ix, iy); // format pixel string
-					pprm->stem_pix_dif.shift_org(nyqx + 1, nyqy + 1, 1.f / w.f_wgt); // shift and normalize pattern
-					pprm->stem_pix_dif.save(0, "_dif" + str_pix, "bin"); // save pattern
+					stem_pix_dif->shift_org(nyqx + 1, nyqy + 1, 1.f / w.f_wgt); // shift and normalize pattern
+					stem_pix_dif->save(0, "_dif" + str_pix, "bin"); // save pattern
+					if (pprm->detector.b_separate_tds) { // save additional separated output
+						stem_pix_dif_ela->shift_org(nyqx + 1, nyqy + 1, 1.f / w.f_wgt_ela); // shift and normalize pattern
+						stem_pix_dif_ela->save(0, "_dif_ela" + str_pix, "bin"); // save elastic pattern
+						stem_pix_dif->dif_save(stem_pix_dif_ela, 0, "_dif_tds" + str_pix, "bin"); // save tds pattern
+					}
 				}
 			}
+			// - pixelated image detectors
 			if (0 < (w.n_det_flags &(unsigned int)_JMS_DETECT_IMAGE)) {
 				// write data to result buffers
 				// as image series over thickness
 				// - position dependent data -> push to disk
 				if (pprm->detector.b_image) {
 					str_pix = format("_px%03d_py%03d", ix, iy); // format pixel string
-					pprm->stem_pix_img.normalize(w.f_wgt / pprm->stem_pix_img.f_calc_scale); // normalize image
-					pprm->stem_pix_img.save(0, "_img" + str_pix, "bin"); // save image
+					stem_pix_img->normalize(w.f_wgt / stem_pix_img->f_calc_scale); // normalize image
+					stem_pix_img->save(0, "_img" + str_pix, "bin"); // save image
+					if (pprm->detector.b_separate_tds) { // save additional separated output
+						stem_pix_img_ela->normalize(w.f_wgt_ela / stem_pix_img_ela->f_calc_scale); // normalize image
+						stem_pix_img_ela->save(0, "_img_ela" + str_pix, "bin"); // save elastic image
+						stem_pix_img->dif_save(stem_pix_img_ela, 0, "_img_tds" + str_pix, "bin"); // save tds image
+					}
+				}
+			}
+			if (pprm->detector.b_separate_tds) {
+				ierr = jms.ResetWaveAveraging(w.whichcode, w.n_thread);
+				if (0 < ierr) {
+					std::cerr << "Error (singlethread_stem): failed to reset accumulated wave function data (" << ierr << ")." << std::endl;
+					nerr = 30; goto _exit;
 				}
 			}
 		} // scan x
@@ -1018,18 +962,16 @@ unsigned int __cdecl singlethread_stem(prm_main *pprm)
 	if (pprm->detector.b_image_avg) { // collect averaged probe image
 		ierr = jms.GetAvgResult(w.whichcode, _JMS_DETECT_IMAGE_AVG, (float*)pprm->stem_pix_paimg.pdata, weight, 0);
 		if (0 < ierr) {
-			nerr = 7001;
 			std::cerr << "Error (singlethread_stem): failed to retrieve averaged probe image (" << ierr << ")." << std::endl;
-			goto _exit;
+			nerr = 7001; goto _exit;
 		}
 		pprm->stem_pix_paimg.f_calc_weight += weight;
 	}
 	if (pprm->detector.b_difpat_avg) { // collect averaged diffraction pattern
 		ierr = jms.GetAvgResult(w.whichcode, _JMS_DETECT_DIFFR_AVG, (float*)pprm->stem_pix_padif.pdata, weight, 0);
 		if (0 < ierr) {
-			nerr = 7012;
 			std::cerr << "Error (singlethread_stem): failed to retrieve averaged probe diffraction (" << ierr << ")." << std::endl;
-			goto _exit;
+			nerr = 7012; goto _exit;
 		}
 		pprm->stem_pix_padif.f_calc_weight += weight;
 	}
@@ -1042,7 +984,235 @@ unsigned int __cdecl singlethread_stem(prm_main *pprm)
 	}
 
 _exit:
-	if (0 < sz_mem_ann) { free(det_annular); det_annular = NULL; sz_mem_ann = 0; }
+	if (0 < sz_mem_ann) { 
+		if (NULL != det_annular) { free(det_annular); det_annular = NULL; }
+		if (NULL != det_annular_ela) { free(det_annular_ela); det_annular_ela = NULL; }
+		sz_mem_ann = 0;
+	}
+	delete stem_pix_dif;
+	delete stem_pix_dif_ela;
+	delete stem_pix_img;
+	delete stem_pix_img_ela;
+	return nerr;
+}
+
+
+unsigned int __cdecl worker_stem_multislice(int gpu_id, int cpu_id, prm_main* pprm, CJMultiSlice* pjms, jms_calc_queue* pq)
+{
+	unsigned int nerr = 0, ierr = 0; // routine error code
+	int whichcode = 0;
+	jmsworker w; // current worker data
+	size_t itask = 0; // task id
+	size_t num_ann = 0; // number of integrating annular detectors
+	size_t num_det_slc = 0; // number of detection planes in z
+	size_t num_scan = 0; // total number of scan points
+	size_t sz_idx = 0; // buffer index
+	size_t sz_mem_ann = 0; // memory sizes allocated locally
+	size_t i = 0, j = 0; // indices
+	unsigned int nyqx = 0, nyqy = 0; // grid nyquist numbers
+	float weight = 0.f; // result weight
+	float* det_annular = NULL; // pointer to result array for integrating detectors
+	float* det_pix_dif = NULL; // pointer to result array for diffraction patterns
+	float* det_pix_img = NULL; // pointer to result array for image patterns
+	float* det_annular_ela = NULL; // pointer to result array for integrating detectors
+	float* det_pix_dif_ela = NULL; // pointer to result array for diffraction patterns
+	float* det_pix_img_ela = NULL; // pointer to result array for image patterns
+	float* dst = NULL;
+	float* src = NULL;
+	prm_result* stem_pix_img = new prm_result; // ... heap allocations to keep function stack on low level 
+	prm_result* stem_pix_img_ela = new prm_result;
+	prm_result* stem_pix_dif = new prm_result;
+	prm_result* stem_pix_dif_ela = new prm_result;
+	std::string str_pix = "";
+	//
+	// init worker thread
+	//
+	if (NULL == pprm) { nerr = 1; goto _exit; }
+	if (NULL == pjms) { nerr = 2; goto _exit; }
+	if (NULL == pq) { nerr = 3; goto _exit; }
+	num_ann = pprm->detector.v_annular.size();
+	num_det_slc = (size_t)pjms->GetDetetionSliceNum();
+	num_scan = (size_t)pprm->scan.nx * pprm->scan.ny;
+	nyqx = pprm->sample.grid_nx >> 1;
+	nyqy = pprm->sample.grid_ny >> 1;
+	if (cpu_id >= 0) whichcode = _JMS_CODE_CPU;
+	if (gpu_id >= 0) whichcode = _JMS_CODE_GPU;
+	if (0 == whichcode) { nerr = 4; goto _exit; }
+	//
+	// prepare local result arrays
+	if (pprm->detector.b_annular && num_ann > 0 && num_det_slc > 0) {
+		// local buffer: holds data of all detectors and all detection planes for one scan position
+		sz_mem_ann = sizeof(float) * num_det_slc * num_ann;
+		det_annular = (float*)malloc(sz_mem_ann);
+		if (NULL == det_annular) { nerr = 10; goto _exit; }
+		memset(det_annular, 0, sz_mem_ann);
+		if (pprm->detector.b_separate_tds) {
+			det_annular_ela = (float*)malloc(sz_mem_ann);
+			if (NULL == det_annular_ela) { nerr = 11; goto _exit; }
+			memset(det_annular_ela, 0, sz_mem_ann);
+		}
+	}
+	if (pprm->detector.b_difpat) { // ... worker diffraction pattern result per scan point
+		*stem_pix_dif = pprm->stem_pix_dif;
+		ierr = stem_pix_dif->init_buffer();
+		if (0 < ierr) {	nerr = 12; goto _exit; }
+		det_pix_dif = (float*)stem_pix_dif->pdata;
+		if (pprm->detector.b_separate_tds) { // ... worker elastic diffraction pattern result per scan point
+			*stem_pix_dif_ela = pprm->stem_pix_dif;
+			ierr = stem_pix_dif_ela->init_buffer();
+			if (0 < ierr) { nerr = 13; goto _exit; }
+			det_pix_dif_ela = (float*)stem_pix_dif_ela->pdata;
+		}
+	}
+	if (pprm->detector.b_image) { // ... worker probe image result per scan point
+		*stem_pix_img = pprm->stem_pix_img;
+		ierr = stem_pix_img->init_buffer();
+		if (0 < ierr) { nerr = 14; goto _exit; }
+		det_pix_img = (float*)stem_pix_img->pdata;
+		if (pprm->detector.b_separate_tds) { // ... worker elastic probe image result per scan point
+			*stem_pix_img_ela = pprm->stem_pix_img;
+			ierr = stem_pix_img_ela->init_buffer();
+			if (0 < ierr) { nerr = 15; goto _exit; }
+			det_pix_img_ela = (float*)stem_pix_img_ela->pdata;
+		}
+	}
+	
+	// reset worker accumulators for position averaged images and diffraction
+	pjms->ResetImageAveraging(whichcode, cpu_id);
+
+	while (!pq->empty()) { // 
+		itask = pq->request();
+		ierr = pq->get_task(itask, w);
+		if (0 == ierr) {
+			w.whichcode = whichcode;
+			w.n_gpu = gpu_id;
+			w.n_thread = cpu_id;
+			w.pf_res_int = det_annular;
+			w.pf_res_dif = det_pix_dif;
+			w.pf_res_img = det_pix_img;
+			w.pf_res_int_ela = det_annular_ela;
+			w.pf_res_dif_ela = det_pix_dif_ela;
+			w.pf_res_img_ela = det_pix_img_ela;
+			w.id_thread = std::this_thread::get_id();
+			ierr = pq->set_task_calculate(itask);
+			if (0 < ierr) { nerr = 21; goto _exit; } // failed to set task calculation state in queue
+			//
+			// <--------------------------------------------
+			ierr = run_multislice(&w); // run the multislice
+			// <--------------------------------------------
+			//
+			if (ierr == 0 && w.n_state != MS_WS_CANCELLED) {
+				//
+				// results per scan point
+				// - STEM images of integrated detectors
+				if (0 < (w.n_det_flags & (unsigned int)_JMS_DETECT_INTEGRATED)) {
+					// write data to result buffer
+					// as image series over thickness for each detector
+					// - {{plane 1, detector 1},{plane 2, detector 1}, ...{plane N, detector M}}
+					for (j = 0; j < num_ann; j++) { // for each detector j
+						for (i = 0; i < num_det_slc; i++) { // for each plane i
+							sz_idx = (size_t)w.n_scan_idx + (size_t)num_scan * i + (size_t)num_det_slc * num_scan * j;
+							dst = &((float*)pprm->stem_images.pdata)[sz_idx];
+							src = &w.pf_res_int[i * num_ann + j]; // use the addressing of the accumulator (detectors first, then planes)
+							*dst = *src / w.f_wgt; // write result to pixel
+							if (pprm->detector.b_separate_tds) { // save additional separated output
+								dst = &((float*)pprm->stem_images_ela.pdata)[sz_idx];
+								src = &w.pf_res_int_ela[i * num_ann + j]; // use the addressing of the accumulator (detectors first, then planes)
+								*dst = *src / w.f_wgt_ela; // normalize with weight of elastic data
+							}
+						}
+					}
+				}
+				// - STEM images of integrated detectors
+				if (0 < (w.n_det_flags & (unsigned int)_JMS_DETECT_DIFFRACTION)) {
+					// write data to result buffers
+					// as image series over thickness
+					// - position dependent data -> push to disk
+					if (pprm->detector.b_difpat) {
+						str_pix = format("_px%03d_py%03d", w.n_scan_ix, w.n_scan_iy); // format pixel string
+						ierr = stem_pix_dif->shift_org(nyqx + 1, nyqy + 1, 1.f / w.f_wgt); // shift and normalize pattern
+						if (0 < ierr) { nerr = 22; goto _exit; } // failed to shift diffraction origin
+						ierr = stem_pix_dif->save(0, "_dif" + str_pix, "bin"); // save pattern
+						if (0 < ierr) { nerr = 23; goto _exit; } // failed to store diffraction pattern
+						if (pprm->detector.b_separate_tds) { // save additional separated output
+							ierr = stem_pix_dif_ela->shift_org(nyqx + 1, nyqy + 1, 1.f / w.f_wgt_ela); // shift and normalize pattern
+							if (0 < ierr) { nerr = 24; goto _exit; } // failed to shift diffraction origin of elastic data
+							ierr = stem_pix_dif_ela->save(0, "_dif_ela" + str_pix, "bin"); // save elastic pattern
+							if (0 < ierr) { nerr = 25; goto _exit; } // failed to save elastic diffraction pattern
+							ierr = stem_pix_dif->dif_save(stem_pix_dif_ela, 0, "_dif_tds" + str_pix, "bin"); // save tds pattern
+							if (0 < ierr) { nerr = 26; goto _exit; } // failed to save tds pattern
+						}
+					}
+				}
+				if (0 < (w.n_det_flags & (unsigned int)_JMS_DETECT_IMAGE)) {
+					// write data to result buffers
+					// as image series over thickness
+					// - position dependent data -> push to disk
+					if (pprm->detector.b_image) {
+						str_pix = format("_px%03d_py%03d", w.n_scan_ix, w.n_scan_iy); // format pixel string
+						stem_pix_img->normalize(w.f_wgt / stem_pix_img->f_calc_scale); // normalize image
+						if (0 < ierr) { nerr = 27; goto _exit; } // failed to normalize probe image
+						stem_pix_img->save(0, "_img" + str_pix, "bin"); // save image
+						if (0 < ierr) { nerr = 28; goto _exit; } // failed to save probe image
+						if (pprm->detector.b_separate_tds) { // save additional separated output
+							stem_pix_img_ela->normalize(w.f_wgt_ela / stem_pix_img_ela->f_calc_scale); // normalize image
+							if (0 < ierr) { nerr = 29; goto _exit; } // failed to normalize elastic image
+							stem_pix_img_ela->save(0, "_img_ela" + str_pix, "bin"); // save elastic image
+							if (0 < ierr) { nerr = 30; goto _exit; } // failed to save elastic image
+							stem_pix_img->dif_save(stem_pix_img_ela, 0, "_img_tds" + str_pix, "bin"); // save tds image
+							if (0 < ierr) { nerr = 31; goto _exit; } // failed to save tds image
+						}
+					}
+				}
+				if (pprm->detector.b_separate_tds) {
+					ierr = w.pjms->ResetWaveAveraging(w.whichcode, w.n_thread);
+					if (0 < ierr) {
+						std::cerr << "Error (worker_stem_multislice): failed to reset accumulated wave function data (" << ierr << ")." << std::endl;
+						nerr = 40; goto _exit;
+					}
+				}
+				//
+				pq->set_task_solved(itask); // solved
+			}
+			else {
+				pq->set_task_error(itask); // error, multislice failed (mark task as failed and try to proceed, but why?)
+			}
+		}
+		else {
+			ierr = 20; goto _exit; // failed to get task from queue
+		}
+	}
+	//
+	// collect averaged data from jms
+	if (pprm->detector.b_image_avg) { // collect averaged probe image
+		size_t sz = pprm->stem_pix_paimg.get_data_bytes();
+		float* buf = (float*)malloc(sz);
+		ierr = pjms->GetAvgResult(whichcode, _JMS_DETECT_IMAGE_AVG, buf, weight, cpu_id);
+		if (0 < ierr) {	nerr = 60; goto _exit; }
+		ierr = pprm->stem_pix_paimg.add_buffer(buf, weight);
+		if (0 < ierr) { nerr = 61; goto _exit; }
+		free(buf);
+	}
+	if (pprm->detector.b_difpat_avg) { // collect averaged diffraction pattern
+		size_t sz = pprm->stem_pix_padif.get_data_bytes();
+		float* buf = (float*)malloc(sz);
+		ierr = pjms->GetAvgResult(whichcode, _JMS_DETECT_DIFFR_AVG, buf, weight, cpu_id);
+		if (0 < ierr) {	nerr = 80; goto _exit; }
+		ierr = pprm->stem_pix_padif.add_buffer(buf, weight);
+		if (0 < ierr) {	nerr = 81; goto _exit; }
+		free(buf);
+	}
+	//
+_exit:
+	if (0 < sz_mem_ann) {
+		if (NULL != det_annular) { free(det_annular); det_annular = NULL; }
+		if (NULL != det_annular_ela) { free(det_annular_ela); det_annular_ela = NULL; }
+		sz_mem_ann = 0;
+	}
+	delete stem_pix_dif;
+	delete stem_pix_dif_ela;
+	delete stem_pix_img;
+	delete stem_pix_img_ela;
 	return nerr;
 }
 
@@ -1059,25 +1229,15 @@ unsigned int __cdecl multithread_stem(prm_main *pprm)
 	unsigned int num_scan = 1;
 	unsigned int num_finished = 0, num_failed = 0;
 	unsigned int ix = 0, iy = 0, idx = 0; // scan indices
-	unsigned int ix0 = 0, ix1 = pprm->scan.nx, iy0 = 0, iy1 = pprm->scan.ny; // scan range
-	unsigned int i = 0, j = 0;
-	unsigned int nyqx = pprm->sample.grid_nx >> 1, nyqy = pprm->sample.grid_ny >> 1; // image nyquist numbers
 	float scan_rot_sin = 0.f, scan_rot_cos = 1.f;
 	float scan_step_x = pprm->scan.get_step_x();
 	float scan_step_y = pprm->scan.get_step_y();
-	float weight = 0.f;
 	float perc_solved = 0.f, perc_solved_delta = 0.1f, perc_solved_prev = 0.f;
-	size_t num_ann = pprm->detector.v_annular.size();
-	size_t num_det_slc = 0; // number of detection planes in z
-	size_t sz_idx = 0;
-	std::string str_pix;
 	long long cl_0 = 0, cl_1 = 0;
 	CJMultiSlice jms;
 	jms_calc_queue q;
 	jmsworker w; // jms worker stats template
 	std::thread* pthread = NULL;
-
-	cl_0 = pprm->clock.getmsec();
 	
 	if (pprm->btalk) {
 		std::cout << std::endl;
@@ -1085,6 +1245,7 @@ unsigned int __cdecl multithread_stem(prm_main *pprm)
 	}
 
 	// prepare task template
+	cl_0 = pprm->clock.getmsec();
 	w.pjms = &jms;
 	jms.SetHighTension(pprm->probe.ekv);
 	jms.SetGridSize(pprm->sample.grid_nx, pprm->sample.grid_ny);
@@ -1137,7 +1298,6 @@ unsigned int __cdecl multithread_stem(prm_main *pprm)
 		std::cerr << "Error (multithread_stem): failed to prepare detectors (" << ierr << ")." << std::endl;
 		goto _exit;
 	}
-	num_det_slc = (unsigned int)jms.GetDetetionSliceNum();
 	w.n_det_flags = pprm->detector.get_jms_flags();
 
 	// prepare cores
@@ -1168,6 +1328,10 @@ unsigned int __cdecl multithread_stem(prm_main *pprm)
 	w.n_repeat = pprm->scan.num_repeat;
 	w.b_foc_avg = false;
 	w.b_wave_offset = true;
+	w.b_calc_ela = false;
+	if (pprm->detector.b_separate_tds) {
+		w.b_calc_ela = true;
+	}
 
 	// initialize queue
 	ierr = q.init((size_t)num_scan);
@@ -1207,11 +1371,11 @@ unsigned int __cdecl multithread_stem(prm_main *pprm)
 	//
 	// start the calculation workers (threads)
 	if (pprm->gpu_id >= 0) { // start a gpu thread
-		pthread = new std::thread(worker_multislice, pprm->gpu_id, uoff, pprm, &jms, &q);
+		pthread = new std::thread(worker_stem_multislice, pprm->gpu_id, uoff, pprm, &jms, &q);
 	}
 	if (ncpu > 0) { // start cpu threads
 		for (int ithread = 0; ithread < ncpu; ithread++) {
-			pthread = new std::thread(worker_multislice, uoff, ithread, pprm, &jms, &q);
+			pthread = new std::thread(worker_stem_multislice, uoff, ithread, pprm, &jms, &q);
 		}
 	}
 	//

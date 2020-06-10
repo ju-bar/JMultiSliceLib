@@ -185,31 +185,35 @@ int prm_scan::setup_subframe()
 		}
 		else {
 			sub_ix0 = 0; sub_iy0 = 0;
-			sub_ix1 = nx - 1; sub_iy0 = ny - 1;
+			sub_ix1 = nx - 1; sub_iy1 = ny - 1;
 		}
 		v_str_ctrl.push_back("set_scan_sub_frame");
 		v_str_ctrl.push_back(format("%i %i %i %i", sub_ix0, sub_iy0, sub_ix1, sub_iy1));
 	}
 	else {
 		sub_ix0 = 0; sub_iy0 = 0;
-		sub_ix1 = nx - 1; sub_iy0 = ny - 1;
+		sub_ix1 = nx - 1; sub_iy1 = ny - 1;
 		i = ctrl_find_param("set_scan_sub_frame", &stmp);
 		if (i >= 0) { //
 			// * TODO * //
 			// implement a working error handling here, this is user input and may not work
 			j = read_param(0, &stmp, &sprm);
 			sub_ix0 = to_int(sprm);
+			sub_ix0 = std::min(sub_ix0, nx - 1);
 			if (j > 0 && j < stmp.length()) {
 				j = read_param(j, &stmp, &sprm);
 				sub_iy0 = to_int(sprm);
+				sub_iy0 = std::min(sub_iy0, ny - 1);
 			}
 			if (j > 0 && j < stmp.length()) {
 				j = read_param(j, &stmp, &sprm);
 				sub_ix1 = to_int(sprm);
+				sub_ix1 = std::max(std::min(sub_ix1, nx - 1), sub_ix0);
 			}
 			if (j > 0 && j < stmp.length()) {
 				j = read_param(j, &stmp, &sprm);
 				sub_iy1 = to_int(sprm);
+				sub_iy1 = std::max(std::min(sub_iy1, ny - 1), sub_iy0);
 			}
 		}
 	}

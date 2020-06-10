@@ -298,7 +298,8 @@ CJMultiSlice::CJMultiSlice() : m_msg("")
 	m_h_det_dif_avg = NULL;
 	m_h_det_wfr_avg = NULL;
 	m_h_det_wff_avg = NULL;
-	m_h_weight_avg = NULL;
+	m_h_weight_imgavg = NULL;
+	m_h_weight_wavavg = NULL;
 	m_h_dif_ndescanx = NULL;
 	m_h_dif_ndescany = NULL;
 	m_d_wav = NULL;
@@ -316,7 +317,8 @@ CJMultiSlice::CJMultiSlice() : m_msg("")
 	m_d_det_dif_avg = NULL;
 	m_d_det_wfr_avg = NULL;
 	m_d_det_wff_avg = NULL;
-	m_d_weight_avg = 0.f;
+	m_d_weight_imgavg = 0.f;
+	m_d_weight_wavavg = 0.f;
 	m_d_det_tmp = NULL;
 	m_d_det_tmpwav = NULL;
 	m_d_dif_ndescanx = 0;
@@ -729,7 +731,8 @@ int CJMultiSlice::DetectorSetup(int whichcode, int ndetper, int ndetint, int ima
 			nbytes = sizeof(fcmplx)*nitems*m_ndetslc*m_threads_CPU_out;
 			if (0 < AllocMem_h((void**)&m_h_det_wff, nbytes, "DetectorSetup", "Fourier-space wavefunction", true)) { nerr = 9; goto _Exit; }
 		}
-		if (0 < AllocMem_h((void**)&m_h_weight_avg, sizeof(float)*m_threads_CPU_out, "DetectorSetup", "averaging weights", true)) { nerr = 10; goto _Exit; }
+		if (0 < AllocMem_h((void**)&m_h_weight_imgavg, sizeof(float)*m_threads_CPU_out, "DetectorSetup", "image averaging weights", true)) { nerr = 10; goto _Exit; }
+		if (0 < AllocMem_h((void**)&m_h_weight_wavavg, sizeof(float) * m_threads_CPU_out, "DetectorSetup", "wave function averaging weights", true)) { nerr = 10; goto _Exit; }
 		if (m_imagedet&_JMS_DETECT_IMAGE_AVG) { // prepare averaged image plane readout arrays
 			nbytes = sizeof(float)*nitems*m_ndetslc*m_threads_CPU_out;
 			if (0 < AllocMem_h((void**)&m_h_det_img_avg, nbytes, "DetectorSetup", "averaged image planes", true)) { nerr = 11; goto _Exit; }
@@ -775,7 +778,8 @@ int CJMultiSlice::DetectorSetup(int whichcode, int ndetper, int ndetint, int ima
 			nbytes = sizeof(cuComplex)*nitems*m_ndetslc; // calculate number of bytes to allocate
 			if (0 < AllocMem_d((void**)&m_d_det_wff, nbytes, "DetectorSetup", "Fourier-space wavefunction", true)) { nerr = 109; goto _Exit; }
 		}
-		m_d_weight_avg = 0.f;
+		m_d_weight_imgavg = 0.f;
+		m_d_weight_wavavg = 0.f;
 		if (m_imagedet&_JMS_DETECT_IMAGE_AVG) { // prepare averaged image plane readout arrays
 			nbytes = sizeof(float)*nitems*m_ndetslc; // calculate number of bytes to allocate
 			if (0 < AllocMem_d((void**)&m_d_det_img_avg, nbytes, "DetectorSetup", "averaged image planes", true)) { nerr = 111; goto _Exit; }
@@ -845,9 +849,9 @@ int CJMultiSlice::DetectorSetup(int whichcode, std::vector<int> slc_det, int nde
 	}
 
 	// CPU code - detector setup -> Memory prepared but no data set.
-	if ((whichcode & (int)_JMS_CODE_CPU) && (m_imagedet > (int)_JMS_DETECT_NONE)) {
+	if ((0 < (whichcode & (int)_JMS_CODE_CPU)) && (m_imagedet > (int)_JMS_DETECT_NONE)) {
 		m_threads_CPU_out = nthreads;
-		if ((m_ndet > 0) && (m_imagedet & (int)_JMS_DETECT_INTEGRATED)) { // Prepare integrating detector arrays
+		if ((m_ndet > 0) && (0 < (m_imagedet & (int)_JMS_DETECT_INTEGRATED))) { // Prepare integrating detector arrays
 			nbytes = sizeof(float*)*(size_t)m_ndet;
 			if (0 < AllocMem_h((void**)&m_h_det, nbytes, "DetectorSetup", "detector function addresses", true)) { nerr = 3; goto _Exit; }
 			nbytes = sizeof(int*)*(size_t)m_ndet;
@@ -855,45 +859,46 @@ int CJMultiSlice::DetectorSetup(int whichcode, std::vector<int> slc_det, int nde
 			nbytes = sizeof(float)*(size_t)m_ndet*m_ndetslc*m_threads_CPU_out;
 			if (0 < AllocMem_h((void**)&m_h_det_int, nbytes, "DetectorSetup", "integrated detector channels", true)) { nerr = 4; goto _Exit; }
 		}
-		if (m_imagedet&_JMS_DETECT_IMAGE) { // prepare image plane readout arrays
+		if (0 < (m_imagedet&_JMS_DETECT_IMAGE)) { // prepare image plane readout arrays
 			nbytes = sizeof(float)*nitems*m_ndetslc*m_threads_CPU_out;
 			if (0 < AllocMem_h((void**)&m_h_det_img, nbytes, "DetectorSetup", "image planes", true)) { nerr = 5; goto _Exit; }
 		}
-		if (m_imagedet&_JMS_DETECT_DIFFRACTION) { // prepare diffraction plane readout arrays
+		if (0 < (m_imagedet&_JMS_DETECT_DIFFRACTION)) { // prepare diffraction plane readout arrays
 			nbytes = sizeof(float)*nitems*m_ndetslc*m_threads_CPU_out;
 			if (0 < AllocMem_h((void**)&m_h_det_dif, nbytes, "DetectorSetup", "diffraction planes", true)) { nerr = 6; goto _Exit; }
 		}
-		if (m_imagedet&_JMS_DETECT_WAVEREAL) { // prepare psi(r) readout arrays
+		if (0 < (m_imagedet&_JMS_DETECT_WAVEREAL)) { // prepare psi(r) readout arrays
 			nbytes = sizeof(fcmplx)*nitems*m_ndetslc*m_threads_CPU_out;
 			if (0 < AllocMem_h((void**)&m_h_det_wfr, nbytes, "DetectorSetup", "real-space wavefunction", true)) { nerr = 7; goto _Exit; }
 		}
-		if (m_imagedet&_JMS_DETECT_WAVEFOURIER) { // prepare psi(k) readout arrays
+		if (0 < (m_imagedet&_JMS_DETECT_WAVEFOURIER)) { // prepare psi(k) readout arrays
 			nbytes = sizeof(fcmplx)*nitems*m_ndetslc*m_threads_CPU_out;
 			if (0 < AllocMem_h((void**)&m_h_det_wff, nbytes, "DetectorSetup", "Fourier-space wavefunction", true)) { nerr = 9; goto _Exit; }
 		}
-		if (0 < AllocMem_h((void**)&m_h_weight_avg, sizeof(float) * m_threads_CPU_out, "DetectorSetup", "averaging weights", true)) { nerr = 10; goto _Exit; }
-		if (m_imagedet & _JMS_DETECT_IMAGE_AVG) { // prepare averaged image plane readout arrays
+		if (0 < AllocMem_h((void**)&m_h_weight_imgavg, sizeof(float) * m_threads_CPU_out, "DetectorSetup", "image averaging weights", true)) { nerr = 10; goto _Exit; }
+		if (0 < AllocMem_h((void**)&m_h_weight_wavavg, sizeof(float) * m_threads_CPU_out, "DetectorSetup", "wave function averaging weights", true)) { nerr = 10; goto _Exit; }
+		if (0 < (m_imagedet & _JMS_DETECT_IMAGE_AVG)) { // prepare averaged image plane readout arrays
 			nbytes = sizeof(float) * nitems * m_ndetslc * m_threads_CPU_out;
 			if (0 < AllocMem_h((void**)&m_h_det_img_avg, nbytes, "DetectorSetup", "averaged image planes", true)) { nerr = 11; goto _Exit; }
 		}
-		if (m_imagedet & _JMS_DETECT_DIFFR_AVG) { // prepare averaged diffraction plane readout arrays
+		if (0 < (m_imagedet & _JMS_DETECT_DIFFR_AVG)) { // prepare averaged diffraction plane readout arrays
 			nbytes = sizeof(float) * nitems * m_ndetslc * m_threads_CPU_out;
 			if (0 < AllocMem_h((void**)&m_h_det_dif_avg, nbytes, "DetectorSetup", "averaged diffraction planes", true)) { nerr = 12; goto _Exit; }
 		}
-		if (m_imagedet & _JMS_DETECT_WAVER_AVG) { // prepare averaged psi(r) readout arrays
+		if (0 < (m_imagedet & _JMS_DETECT_WAVER_AVG)) { // prepare averaged psi(r) readout arrays
 			nbytes = sizeof(fcmplx) * nitems * m_ndetslc * m_threads_CPU_out;
 			if (0 < AllocMem_h((void**)&m_h_det_wfr_avg, nbytes, "DetectorSetup", "averaged real-space wavefunction", true)) { nerr = 13; goto _Exit; }
 		}
-		if (m_imagedet & _JMS_DETECT_WAVEF_AVG) { // prepare averaged psi(k) readout arrays
+		if (0 < (m_imagedet & _JMS_DETECT_WAVEF_AVG)) { // prepare averaged psi(k) readout arrays
 			nbytes = sizeof(fcmplx) * nitems * m_ndetslc * m_threads_CPU_out;
 			if (0 < AllocMem_h((void**)&m_h_det_wff_avg, nbytes, "DetectorSetup", "averaged Fourier-space wavefunction", true)) { nerr = 14; goto _Exit; }
 		}
 	}
 
 	// GPU code - detector setup -> Memory prepared but no data set.
-	if ((whichcode & (int)_JMS_CODE_GPU) && (m_imagedet > (int)_JMS_DETECT_NONE)) {
+	if ((0 < (whichcode & (int)_JMS_CODE_GPU)) && (m_imagedet > (int)_JMS_DETECT_NONE)) {
 		ndetitems = (int64_t)m_ndet*nitems;
-		if ((ndetitems > 0) && (m_imagedet & (int)_JMS_DETECT_INTEGRATED)) { // make sure to allocate integrated detectors only if data is expected.
+		if ((ndetitems > 0) && (0 < (m_imagedet & (int)_JMS_DETECT_INTEGRATED))) { // make sure to allocate integrated detectors only if data is expected.
 			nbytes = sizeof(float)*(size_t)ndetitems;
 			if (0 < AllocMem_d((void**)&m_d_det, nbytes, "DetectorSetup", "detector functions", true)) { nerr = 103; goto _Exit; }
 			nbytes = sizeof(int)*(size_t)ndetitems;
@@ -901,36 +906,37 @@ int CJMultiSlice::DetectorSetup(int whichcode, std::vector<int> slc_det, int nde
 			nbytes = sizeof(float)*(size_t)m_ndet*m_ndetslc;
 			if (0 < AllocMem_h((void**)&m_d_det_int, nbytes, "DetectorSetup", "integrated detector channels, GPU", true)) { nerr = 104; goto _Exit; }
 		}
-		if (m_imagedet&_JMS_DETECT_IMAGE) { // prepare image plane readout arrays
+		if (0 < (m_imagedet&_JMS_DETECT_IMAGE)) { // prepare image plane readout arrays
 			nbytes = sizeof(float)*nitems*m_ndetslc; // calculate number of bytes to allocate
 			if (0 < AllocMem_d((void**)&m_d_det_img, nbytes, "DetectorSetup", "image planes", true)) { nerr = 105; goto _Exit; }
 		}
-		if (m_imagedet&_JMS_DETECT_DIFFRACTION) { // prepare diffraction plane readout arrays
+		if (0 < (m_imagedet&_JMS_DETECT_DIFFRACTION)) { // prepare diffraction plane readout arrays
 			nbytes = sizeof(float)*nitems*m_ndetslc; // calculate number of bytes to allocate
 			if (0 < AllocMem_d((void**)&m_d_det_dif, nbytes, "DetectorSetup", "diffraction planes", true)) { nerr = 106; goto _Exit; }
 		}
-		if (m_imagedet&_JMS_DETECT_WAVEREAL) { // prepare psi(r) readout arrays
+		if (0 < (m_imagedet&_JMS_DETECT_WAVEREAL)) { // prepare psi(r) readout arrays
 			nbytes = sizeof(cuComplex)*nitems*m_ndetslc; // calculate number of bytes to allocate
 			if (0 < AllocMem_d((void**)&m_d_det_wfr, nbytes, "DetectorSetup", "real-space wavefunction", true)) { nerr = 107; goto _Exit; }
 		}
-		if (m_imagedet&_JMS_DETECT_WAVEFOURIER) { // prepare psi(k) readout arrays
+		if (0 < (m_imagedet&_JMS_DETECT_WAVEFOURIER)) { // prepare psi(k) readout arrays
 			nbytes = sizeof(cuComplex)*nitems*m_ndetslc; // calculate number of bytes to allocate
 			if (0 < AllocMem_d((void**)&m_d_det_wff, nbytes, "DetectorSetup", "Fourier-space wavefunction", true)) { nerr = 109; goto _Exit; }
 		}
-		m_d_weight_avg = 0.f;
-		if (m_imagedet & _JMS_DETECT_IMAGE_AVG) { // prepare averaged image plane readout arrays
+		m_d_weight_imgavg = 0.f;
+		m_d_weight_wavavg = 0.f;
+		if (0 < (m_imagedet & _JMS_DETECT_IMAGE_AVG)) { // prepare averaged image plane readout arrays
 			nbytes = sizeof(float) * nitems * m_ndetslc; // calculate number of bytes to allocate
 			if (0 < AllocMem_d((void**)&m_d_det_img_avg, nbytes, "DetectorSetup", "averaged image planes", true)) { nerr = 111; goto _Exit; }
 		}
-		if (m_imagedet & _JMS_DETECT_DIFFR_AVG) { // prepare averaged diffraction plane readout arrays
+		if (0 < (m_imagedet & _JMS_DETECT_DIFFR_AVG)) { // prepare averaged diffraction plane readout arrays
 			nbytes = sizeof(float) * nitems * m_ndetslc; // calculate number of bytes to allocate
 			if (0 < AllocMem_d((void**)&m_d_det_dif_avg, nbytes, "DetectorSetup", "averaged diffraction planes", true)) { nerr = 112; goto _Exit; }
 		}
-		if (m_imagedet & _JMS_DETECT_WAVER_AVG) { // prepare averaged psi(r) readout arrays
+		if (0 < (m_imagedet & _JMS_DETECT_WAVER_AVG)) { // prepare averaged psi(r) readout arrays
 			nbytes = sizeof(cuComplex) * nitems * m_ndetslc; // calculate number of bytes to allocate
 			if (0 < AllocMem_d((void**)&m_d_det_wfr_avg, nbytes, "DetectorSetup", "averaged real-space wavefunction", true)) { nerr = 114; goto _Exit; }
 		}
-		if (m_imagedet & _JMS_DETECT_WAVEF_AVG) { // prepare averaged psi(k) readout arrays
+		if (0 < (m_imagedet & _JMS_DETECT_WAVEF_AVG)) { // prepare averaged psi(k) readout arrays
 			nbytes = sizeof(cuComplex) * nitems * m_ndetslc; // calculate number of bytes to allocate
 			if (0 < AllocMem_d((void**)&m_d_det_wff_avg, nbytes, "DetectorSetup", "averaged Fourier-space wavefunction", true)) { nerr = 115; goto _Exit; }
 		}
@@ -938,8 +944,8 @@ int CJMultiSlice::DetectorSetup(int whichcode, std::vector<int> slc_det, int nde
 
 _Exit:
 	if (nerr == 0) {
-		if (whichcode & (int)_JMS_CODE_CPU) m_status_setup_CPU |= (int)_JMS_STATUS_DET;
-		if (whichcode & (int)_JMS_CODE_GPU) m_status_setup_GPU |= (int)_JMS_STATUS_DET;
+		if (0 < (whichcode & (int)_JMS_CODE_CPU)) m_status_setup_CPU |= (int)_JMS_STATUS_DET;
+		if (0 < (whichcode & (int)_JMS_CODE_GPU)) m_status_setup_GPU |= (int)_JMS_STATUS_DET;
 	}
 	return nerr;
 }
@@ -1715,7 +1721,8 @@ int CJMultiSlice::InitCore(int whichcode, int nCPUthreads)
 		for (icore = 0; icore < m_ncputhreads; icore++) { // initialize all FFTW cores
 			//if (0 == m_jcpuco[icore].Init(2, pdims, (int)_JMS_FFTW_PLANFLAG)) {
 			if (0 == m_jcpuco[icore].Init(2, pdims)) {
-				ResetAveraging(_JMS_CODE_CPU, icore);
+				ResetImageAveraging(_JMS_CODE_CPU, icore);
+				ResetWaveAveraging(_JMS_CODE_CPU, icore);
 				ncore_ready++;
 			}
 			else {
@@ -1739,7 +1746,8 @@ int CJMultiSlice::InitCore(int whichcode, int nCPUthreads)
 			std::cerr << "Error: (InitCore): Failed to initialize GPU core." << std::endl;
 			nerr = 103; goto _Exit; 
 		} // gpu core init failure?
-		ResetAveraging(_JMS_CODE_GPU, 0);
+		ResetImageAveraging(_JMS_CODE_GPU, 0);
+		ResetWaveAveraging(_JMS_CODE_GPU, 0);
 		nbytes = sizeof(cuComplex)*(size_t)nitems;
 		if (0 < AllocMem_d((void**)&m_d_wav0, nbytes, "InitCore", "wave function backup", true)) { nerr = 104; goto _Exit; }
 		if (0 < AllocMem_d((void**)&m_d_wav, nbytes, "InitCore", "wave function", true)) { nerr = 105; goto _Exit; }
@@ -2343,23 +2351,27 @@ int CJMultiSlice::GetAvgResult(int whichcode, int whichresult, float* dst, float
 			nbytes = sizeof(float) * nitems;
 			detcur = m_h_det_img_avg + nitems * iThread;
 			memcpy(dst, detcur, nbytes);
+			weight = m_h_weight_imgavg[iThread];
 		}
 		if (whichresult == (int)_JMS_DETECT_DIFFR_AVG) {
 			nbytes = sizeof(float) * nitems;
 			detcur = m_h_det_dif_avg + nitems * iThread;
 			memcpy(dst, detcur, nbytes);
+			weight = m_h_weight_imgavg[iThread];
 		}
 		if (whichresult == (int)_JMS_DETECT_WAVER_AVG) {
 			nbytes = sizeof(fcmplx) * nitems;
 			detcur = (float*)(m_h_det_wfr_avg + nitems * iThread);
 			memcpy(dst, detcur, nbytes);
+			weight = m_h_weight_wavavg[iThread];
 		}
 		if (whichresult == (int)_JMS_DETECT_WAVEF_AVG) {
 			nbytes = sizeof(fcmplx) * nitems;
 			detcur = (float*)(m_h_det_wff_avg + nitems * iThread);
 			memcpy(dst, detcur, nbytes);
+			weight = m_h_weight_wavavg[iThread];
 		}
-		weight = m_h_weight_avg[iThread];
+		
 	}
 
 	if ((whichcode & (int)_JMS_CODE_GPU) > 0 && m_ndetslc > 0) {
@@ -2367,23 +2379,26 @@ int CJMultiSlice::GetAvgResult(int whichcode, int whichresult, float* dst, float
 			nbytes = sizeof(float) * nitems;
 			detcur = m_d_det_img_avg;
 			cuerr = cudaMemcpy(dst, detcur, nbytes, cudaMemcpyDeviceToHost);
+			weight = m_d_weight_imgavg;
 		}
 		if (whichresult == (int)_JMS_DETECT_DIFFR_AVG) {
 			nbytes = sizeof(float) * nitems;
 			detcur = m_d_det_dif_avg;
 			cuerr = cudaMemcpy(dst, detcur, nbytes, cudaMemcpyDeviceToHost);
+			weight = m_d_weight_imgavg;
 		}
 		if (whichresult == (int)_JMS_DETECT_WAVER_AVG) {
 			nbytes = sizeof(float) * nitems;
 			detcur = (float*)m_d_det_wfr_avg;
 			cuerr = cudaMemcpy(dst, detcur, nbytes, cudaMemcpyDeviceToHost);
+			weight = m_d_weight_wavavg;
 		}
 		if (whichresult == (int)_JMS_DETECT_WAVEF_AVG) {
 			nbytes = sizeof(float) * nitems;
 			detcur = (float*)m_d_det_wff_avg;
 			cuerr = cudaMemcpy(dst, detcur, nbytes, cudaMemcpyDeviceToHost);
+			weight = m_d_weight_wavavg;
 		}
-		weight = m_d_weight_avg;
 	}
 
 _Exit:
@@ -2393,28 +2408,40 @@ _Exit:
 
 
 
-float CJMultiSlice::GetAveragingWeight(int whichcode, int iThread)
+float CJMultiSlice::GetImageAveragingWeight(int whichcode, int iThread)
 {
 	float fwgt = 0.f;
 	if ((whichcode&_JMS_CODE_GPU)) {
-		fwgt = m_d_weight_avg;
+		fwgt = m_d_weight_imgavg;
 	}
-	if ((whichcode&_JMS_CODE_CPU) && (NULL != m_h_weight_avg) && (iThread >= 0) && (iThread < m_ncputhreads)) {
-		fwgt = m_h_weight_avg[iThread];
+	if ((whichcode&_JMS_CODE_CPU) && (NULL != m_h_weight_imgavg) && (iThread >= 0) && (iThread < m_ncputhreads)) {
+		fwgt = m_h_weight_imgavg[iThread];
+	}
+	return fwgt;
+}
+
+float CJMultiSlice::GetWaveAveragingWeight(int whichcode, int iThread)
+{
+	float fwgt = 0.f;
+	if ((whichcode & _JMS_CODE_GPU)) {
+		fwgt = m_d_weight_wavavg;
+	}
+	if ((whichcode & _JMS_CODE_CPU) && (NULL != m_h_weight_wavavg) && (iThread >= 0) && (iThread < m_ncputhreads)) {
+		fwgt = m_h_weight_wavavg[iThread];
 	}
 	return fwgt;
 }
 
 
-int CJMultiSlice::ResetAveraging(int whichcode, int iThread)
+int CJMultiSlice::ResetImageAveraging(int whichcode, int iThread)
 {
 	int nerr = 0;
 	cudaError cuerr;
 	size_t nitems = (size_t)m_nscx * (size_t)m_nscy * (size_t)m_ndetslc;
 	void *pchan = NULL;
 	if (nitems == 0) return 0;
-	if ((whichcode&_JMS_CODE_CPU) && (NULL != m_h_weight_avg) && (iThread >= 0) && (iThread < m_ncputhreads)) {
-		m_h_weight_avg[iThread] = 0.f;
+	if ((whichcode&_JMS_CODE_CPU) && (NULL != m_h_weight_imgavg) && (iThread >= 0) && (iThread < m_ncputhreads)) {
+		m_h_weight_imgavg[iThread] = 0.f;
 		if ((m_imagedet & _JMS_DETECT_IMAGE_AVG) && (NULL != m_h_det_img_avg)) {
 			pchan = (void*)(&m_h_det_img_avg[iThread * nitems]);
 			if (NULL == memset(pchan, 0, sizeof(float) * nitems)) {
@@ -2427,6 +2454,31 @@ int CJMultiSlice::ResetAveraging(int whichcode, int iThread)
 				nerr = 2; goto _exit;
 			}
 		}
+	}
+	if ((whichcode&_JMS_CODE_GPU)) {
+		m_d_weight_imgavg = 0.f;
+		if ((m_imagedet & _JMS_DETECT_IMAGE_AVG) && (NULL != m_d_det_img_avg)) {
+			cuerr = cudaMemset((void*)m_d_det_img_avg, 0, sizeof(float) * nitems);
+			if (cuerr != cudaSuccess) { nerr = 101; goto _exit; }
+		}
+		if ((m_imagedet & _JMS_DETECT_DIFFR_AVG) && (NULL != m_d_det_dif_avg)) {
+			cuerr = cudaMemset((void*)m_d_det_dif_avg, 0, sizeof(float) * nitems);
+			if (cuerr != cudaSuccess) { nerr = 102; goto _exit; }
+		}
+	}
+_exit:
+	return nerr;
+}
+
+int CJMultiSlice::ResetWaveAveraging(int whichcode, int iThread)
+{
+	int nerr = 0;
+	cudaError cuerr;
+	size_t nitems = (size_t)m_nscx * (size_t)m_nscy * (size_t)m_ndetslc;
+	void* pchan = NULL;
+	if (nitems == 0) return 0;
+	if ((whichcode & _JMS_CODE_CPU) && (NULL != m_h_weight_wavavg) && (iThread >= 0) && (iThread < m_ncputhreads)) {
+		m_h_weight_wavavg[iThread] = 0.f;
 		if ((m_imagedet & _JMS_DETECT_WAVER_AVG) && (NULL != m_h_det_wfr_avg)) {
 			pchan = (void*)(&m_h_det_wfr_avg[iThread * nitems]);
 			if (NULL == memset(pchan, 0, sizeof(fcmplx) * nitems)) {
@@ -2440,16 +2492,8 @@ int CJMultiSlice::ResetAveraging(int whichcode, int iThread)
 			}
 		}
 	}
-	if ((whichcode&_JMS_CODE_GPU)) {
-		m_d_weight_avg = 0.f;
-		if ((m_imagedet & _JMS_DETECT_IMAGE_AVG) && (NULL != m_d_det_img_avg)) {
-			cuerr = cudaMemset((void*)m_d_det_img_avg, 0, sizeof(float) * nitems);
-			if (cuerr != cudaSuccess) { nerr = 101; goto _exit; }
-		}
-		if ((m_imagedet & _JMS_DETECT_DIFFR_AVG) && (NULL != m_d_det_dif_avg)) {
-			cuerr = cudaMemset((void*)m_d_det_dif_avg, 0, sizeof(float) * nitems);
-			if (cuerr != cudaSuccess) { nerr = 102; goto _exit; }
-		}
+	if ((whichcode & _JMS_CODE_GPU)) {
+		m_d_weight_wavavg = 0.f;
 		if ((m_imagedet & _JMS_DETECT_WAVER_AVG) && (NULL != m_d_det_wfr_avg)) {
 			cuerr = cudaMemset((void*)m_d_det_wfr_avg, 0, sizeof(cuComplex) * nitems);
 			if (cuerr != cudaSuccess) { nerr = 103; goto _exit; }
@@ -2460,6 +2504,287 @@ int CJMultiSlice::ResetAveraging(int whichcode, int iThread)
 		}
 	}
 _exit:
+	return nerr;
+}
+
+
+int CJMultiSlice::ReadoutDetAvg(int whichcode, int whichresult, float* dst, float& weight, int iThread)
+{
+	int nerr = 0, ierr = 0;
+	int idet = 0, idx = 0;
+	int nitems = m_nscx * m_nscy;
+	int idetslc = 0;
+	int msklen = 0;
+	int nBlockSize = 0;
+	int* msk = NULL;
+	int64_t ioffset = 0, ioffset2 = 0, ioffset3 = 0;
+	size_t nbytes = 0, ntmp = 0;
+	bool bdetmsk = false;
+	bool bwfr = (0 < (m_imagedet & _JMS_DETECT_WAVER_AVG)); // average wave function is present in real space (assuming memory allocations are OK)
+	bool bwff = (0 < (m_imagedet & _JMS_DETECT_WAVEF_AVG)); // average wave function is present in Fourier space (assuming memory allocations are OK)
+	bool br2f = ( (!bwff) && ( (whichresult == _JMS_DETECT_INTEGRATED) || (whichresult == _JMS_DETECT_DIFFRACTION) ) ); // need to transform from real to Fourier space
+	bool bf2r = ( (!bwfr) && ( whichresult == _JMS_DETECT_IMAGE ) ); // need to transform from Fourier to real space
+	float* buf_h = NULL;
+	float* det = NULL;
+	float* out = NULL;
+	float re = 0.f, im = 0.f;
+	cuComplex* wav_d = NULL;
+	fcmplx* wav_h = NULL;
+	fcmplx* tmp_h = NULL;
+	cudaError cuerr = cudaSuccess;
+	ArrayOpStats1 stats;
+	
+	if (!(bwfr || bwff)) goto _exit; // neither real-space nor Fourier-space wave functions are present
+	if (m_ndetslc <= 0) goto _exit; // no detection slices ... do nothing
+	
+	if ((whichcode == _JMS_CODE_CPU) && (iThread >= 0) && (iThread < m_ncputhreads)) { // work with results calculated by a CPU thread
+
+		weight = m_h_weight_wavavg[iThread];
+
+		// The following two blocks are not needed if m_h_det_wff_avg and m_h_det_wfr_avg are
+		// both allocated before, depending on which detection flag is set.
+
+		//if (br2f) { // wave functions were collected in real space, but we need Fourier space
+		//	ioffset = (int64_t)m_ndetslc * nitems * iThread; // offset to data for this thread
+		//	tmp_h = &m_h_det_wfr_avg[ioffset]; // address of this thread real-space data
+		//	if (NULL == m_h_det_wff_avg) { // device buffer not allocated
+		//		nbytes = sizeof(fcmplx) * nitems * m_ndetslc * m_ncputhreads; // calculate number of bytes to allocate
+		//		if (0 < AllocMem_h((void**)&m_h_det_wff_avg, nbytes, "ReadoutDetAvg", "averaged Fourier-space wavefunctions", true)) { nerr = 1; goto _exit; }
+		//	}
+		//	wav_h = &m_h_det_wff_avg[ioffset]; // address of this thread Fourier-space data
+		//	// get a copy of the real-space average wave functions to the Fourier space buffer
+		//	nbytes = sizeof(fcmplx) * nitems * m_ndetslc; // calculate number of bytes to copy per thread (all planes of detection)
+		//	memcpy(wav_h, tmp_h, nbytes); // copy data from real to Fourier space buffer for this thread
+		//	// transform all planes to Fourier space
+		//	for (idetslc = 0; idetslc < m_ndetslc; idetslc++) { // loop over detection slices
+		//		ioffset3 = (int64_t)idetslc * nitems; // wave function offset
+		//		ierr = m_jcpuco[iThread].FT_h(&wav_h[ioffset3]); // transform in this plane
+		//		if (0 < ierr) {
+		//			std::cerr << "Error (ReadoutDetAvg): Failed to calculate FT of average wave function " << idetslc << " on host." << std::endl;
+		//			nerr = 3; goto _exit;
+		//		}
+		//	}
+		//}
+
+		//if (bf2r) { // wave functions were collected in real space, but we need Fourier space
+		//	ioffset = (int64_t)m_ndetslc * nitems * iThread; // offset to data for this thread
+		//	tmp_h = &m_h_det_wff_avg[ioffset]; // address of this thread Fourier-space data
+		//	if (NULL == m_h_det_wfr_avg) { // device buffer not allocated
+		//		nbytes = sizeof(fcmplx) * nitems * m_ndetslc * m_ncputhreads; // calculate number of bytes to allocate
+		//		if (0 < AllocMem_h((void**)&m_h_det_wfr_avg, nbytes, "ReadoutDetAvg", "averaged real-space wavefunctions", true)) { nerr = 11; goto _exit; }
+		//	}
+		//	wav_h = &m_h_det_wfr_avg[ioffset]; // address of this thread real-space data
+		//	// get a copy of the Fourier-space average wave functions to the real-space buffer
+		//	nbytes = sizeof(fcmplx) * nitems * m_ndetslc; // calculate number of bytes to copy per thread (all planes of detection)
+		//	memcpy(wav_h, tmp_h, nbytes); // copy data from real to Fourier space buffer for this thread
+		//	// transform all planes to real space
+		//	for (idetslc = 0; idetslc < m_ndetslc; idetslc++) { // loop over detection slices
+		//		ioffset3 = (int64_t)idetslc * nitems; // wave function offset
+		//		ierr = m_jcpuco[iThread].IFT_h(&wav_h[ioffset3]); // transform in this plane
+		//		if (0 < ierr) {
+		//			std::cerr << "Error (ReadoutDetAvg): Failed to calculate IFT of average wave function " << idetslc << " on host." << std::endl;
+		//			nerr = 3; goto _exit;
+		//		}
+		//	}
+		//}
+		
+		switch (whichresult) { // which result is requested?
+		case _JMS_DETECT_INTEGRATED:
+			if ((0 < m_ndet) && (0 < (m_imagedet & _JMS_DETECT_INTEGRATED))) { // retrieve data for all integrating detectors
+				if (0 < AllocMem_h((void**)&buf_h, sizeof(float) * nitems, "ReadoutDetAvg", "diffraction pattern")) { nerr = 21; goto _exit; }
+				for (idetslc = 0; idetslc < m_ndetslc; idetslc++) { // loop over detection slices
+					ioffset3 = (int64_t)idetslc * nitems + (int64_t)m_ndetslc * nitems * iThread; // wave function offset
+					wav_h = m_h_det_wff_avg + ioffset3; // ... get address of wave function in the current detection plane
+					// calculate diffraction pattern
+					for (idx = 0; idx < nitems; idx++) {
+						re = wav_h[idx].real(); im = wav_h[idx].imag();
+						buf_h[idx] = re * re + im * im;
+					}
+					for (idet = 0; idet < m_ndet; idet++) { // loop over detectors
+						det = m_h_det[idet]; // pointer to current detector function
+						msk = NULL; msklen = 0;
+						if ((NULL != m_h_detmask) && (NULL != m_detmask_len)) {
+							msk = m_h_detmask[idet]; // get detector mask if defined
+							msklen = m_detmask_len[idet]; // get detector mask length
+						}
+						ioffset = (int64_t)idet + (int64_t)idetslc * m_ndet; // output channel offset (addressing output for each detector first, then output for each output slice)
+						out = dst + ioffset; // pointer to integrating output channel
+						// sum and add to current detector intensity
+						if ((NULL != msk) && (0 < msklen)) {
+							*out = MaskedDotProduct_h(msk, buf_h, det, (size_t)msklen);
+						}
+						else {
+							*out = DotProduct_h(buf_h, det, (size_t)nitems);
+						}
+					}
+				}
+			}
+			break;
+		case _JMS_DETECT_IMAGE:
+			if (0 < (m_imagedet & ((int)_JMS_DETECT_IMAGE))) {
+				ioffset3 = (int64_t)m_ndetslc * nitems * iThread; // wave stack function offset by thread
+				wav_h = m_h_det_wfr_avg + ioffset3; // ... get address of wave function stack
+				// we can collect the data of all detection planes to dst in one pass
+				ntmp = (size_t)nitems * m_ndetslc; // number of all items
+				for (idx = 0; idx < ntmp; idx++) {
+					re = wav_h[idx].real(); im = wav_h[idx].imag();
+					dst[idx] = re * re + im * im;
+				}
+			}
+			break;
+		case _JMS_DETECT_DIFFRACTION:
+			if (0 < (m_imagedet & ((int)_JMS_DETECT_DIFFRACTION))) {
+				ioffset3 = (int64_t)m_ndetslc * nitems * iThread; // wave stack function offset by thread
+				wav_h = m_h_det_wff_avg + ioffset3; // ... get address of wave function stack
+				// we can collect the data of all detection planes to dst in one pass
+				ntmp = (size_t)nitems * m_ndetslc; // number of all items
+				for (idx = 0; idx < ntmp; idx++) {
+					re = wav_h[idx].real(); im = wav_h[idx].imag();
+					dst[idx] = re * re + im * im;
+				}
+			}
+			break;
+		}
+
+	}
+
+	if (whichcode == _JMS_CODE_GPU) { // work with results calculated by GPU
+
+		weight = m_d_weight_wavavg;
+
+		nBlockSize = m_jgpuco.GetBlockSize();
+
+		// The following two blocks are not needed if m_d_det_wff_avg and m_d_det_wfr_avg are
+		// both allocated before, depending on which detection flag is set.
+
+		//if (br2f) { // wave functions were collected in real space, but we need Fourier space
+		//	nbytes = sizeof(cuComplex) * nitems * m_ndetslc; // calculate number of bytes to allocate
+		//	if (NULL == m_d_det_wff_avg) { // device buffer not allocated
+		//		if (0 < AllocMem_d((void**)&m_d_det_wff_avg, nbytes, "ReadoutDetAvg", "averaged Fourier-space wavefunctions", true)) { nerr = 101; goto _exit; }
+		//	}
+		//	// get a copy of the real-space average wave functions to the Fourier space buffer
+		//	cuerr = cudaMemcpy(m_d_det_wff_avg, m_d_det_wfr_avg, nbytes, ::cudaMemcpyDeviceToDevice);
+		//	if (cuerr != cudaSuccess) {
+		//		std::cerr << "Error (ReadoutDetAvg): Failed to copy average wave function buffer on device." << std::endl;
+		//		nerr = 102; goto _exit;
+		//	}
+		//	// transform all planes to Fourier space
+		//	for (idetslc = 0; idetslc < m_ndetslc; idetslc++) { // loop over detection slices
+		//		ioffset3 = (int64_t)idetslc * nitems; // wave function offset
+		//		ierr = m_jgpuco.FT_d(&m_d_det_wff_avg[ioffset3]);
+		//		if (0 < ierr) {
+		//			std::cerr << "Error (ReadoutDetAvg): Failed to calculate FT of average wave function " << idetslc << " on device." << std::endl;
+		//			nerr = 103; goto _exit;
+		//		}
+		//	}
+		//}
+
+		//if (bf2r) { // wave functions were collected in real space, but we need Fourier space
+		//	if (NULL == m_d_det_wfr_avg) { // device buffer not allocated
+		//		nbytes = sizeof(cuComplex) * nitems * m_ndetslc; // calculate number of bytes to allocate
+		//		if (0 < AllocMem_d((void**)&m_d_det_wfr_avg, nbytes, "ReadoutDetAvg", "averaged real-space wavefunction", true)) { nerr = 111; goto _exit; }
+		//	}
+		//	// get a copy of the real-space average wave functions to the Fourier space buffer
+		//	cuerr = cudaMemcpy(m_d_det_wfr_avg, m_d_det_wff_avg, nbytes, ::cudaMemcpyDeviceToDevice);
+		//	if (cuerr != cudaSuccess) {
+		//		std::cerr << "Error (ReadoutDetAvg): Failed to copy average wave function buffer on device." << std::endl;
+		//		nerr = 112; goto _exit;
+		//	}
+		//	// transform all planes to Fourier space
+		//	for (idetslc = 0; idetslc < m_ndetslc; idetslc++) { // loop over detection slices
+		//		ioffset3 = (int64_t)idetslc * nitems; // wave function offset
+		//		ierr = m_jgpuco.IFT_d(&m_d_det_wfr_avg[ioffset3]);
+		//		if (0 < ierr) {
+		//			std::cerr << "Error (ReadoutDetAvg): Failed to calculate IFT of average wave function " << idetslc << " on device." << std::endl;
+		//			nerr = 113; goto _exit;
+		//		}
+		//	}
+		//}
+
+		switch (whichresult) { // which result is requested?
+		case _JMS_DETECT_INTEGRATED:
+			if ((0 < m_ndet) && (0 < (m_imagedet & ((int)_JMS_DETECT_INTEGRATED)))) { // this detection has happened
+				for (idetslc = 0; idetslc < m_ndetslc; idetslc++) { // loop over detection slices
+					ioffset3 = (int64_t)idetslc * nitems; // wave function offset
+					wav_d = &m_d_det_wff_avg[ioffset3]; // ... get address of wave function in the current detection plane
+					for (idet = 0; idet < m_ndet; idet++) { // loop over detectors
+						ioffset2 = (int64_t)idet * nitems; // detector function offset
+						det = m_d_det + ioffset2; // pointer to current detector function
+						msk = NULL; msklen = 0;
+						bdetmsk = false;
+						if ((NULL != m_d_detmask) && (NULL != m_detmask_len)) {
+							msk = m_d_detmask + ioffset2;
+							msklen = m_detmask_len[idet];
+							bdetmsk = true;
+						}
+						ioffset = (int64_t)idet + (int64_t)idetslc * m_ndet; // output channel offset (addressing output for each detector first, then output for each output slice)
+						out = dst + ioffset; // pointer to integrating output channel
+						// ---> Here is the STEM detector readout!
+						// sum and add to current detector intensity
+						if (bdetmsk) {
+							*out = MaskedDotProduct_d(msk, wav_d, det, msklen, nBlockSize);
+						}
+						else {
+							*out = DotProduct_d(wav_d, det, nitems, nBlockSize);
+						}
+					}
+				}
+			}
+			break;
+		case _JMS_DETECT_IMAGE:
+			if (0 < (m_imagedet & ((int)_JMS_DETECT_IMAGE))) {
+				// we collect the data plane by plane, doing all planes at once would cost too much device memory in large scale problems
+				stats.uSize = (unsigned int)nitems; // number of all items
+				stats.nBlockSize = nBlockSize;
+				stats.nGridSize = (nitems + stats.nBlockSize - 1) / stats.nBlockSize;
+				//
+				for (idetslc = 0; idetslc < m_ndetslc; idetslc++) { // loop over detection slices
+					ioffset3 = (int64_t)idetslc * nitems; // wave function offset
+					cuerr = ArrayOpCPowSca(m_d_det_tmp, &m_d_det_wfr_avg[ioffset3], 1.0, stats); // accumulate from the wave function
+					if (cuerr != cudaSuccess) {
+						PostCUDAError("(ReadoutDetAvg): Failed to integrate elastic probe images from average wave functions on device", cuerr);
+						nerr = 121;
+						goto _exit;
+					}
+					cuerr = cudaMemcpy(&dst[ioffset3], m_d_det_tmp, sizeof(float) * nitems, ::cudaMemcpyDeviceToHost);
+					if (cuerr != cudaSuccess) {
+						PostCUDAError("(ReadoutDetAvg): Failed to copy elastic probe image from device to host", cuerr);
+						nerr = 122;
+						goto _exit;
+					}
+				}
+			}
+			break;
+		case _JMS_DETECT_DIFFRACTION:
+			if (0 < (m_imagedet & ((int)_JMS_DETECT_DIFFRACTION))) {
+				// we collect the data plane by plane, doing all planes at once would cost too much device memory in large scale problems
+				stats.uSize = (unsigned int)nitems; // number of all items
+				stats.nBlockSize = nBlockSize;
+				stats.nGridSize = (nitems + stats.nBlockSize - 1) / stats.nBlockSize;
+				//
+				for (idetslc = 0; idetslc < m_ndetslc; idetslc++) { // loop over detection slices
+					ioffset3 = (int64_t)idetslc * nitems; // wave function offset
+					cuerr = ArrayOpCPowSca(m_d_det_tmp, &m_d_det_wff_avg[ioffset3], 1.0, stats); // accumulate from the wave function
+					if (cuerr != cudaSuccess) {
+						PostCUDAError("(ReadoutDetAvg): Failed to integrate elastic diffraction patterns from average wave functions on device", cuerr);
+						nerr = 131;
+						goto _exit;
+					}
+					cuerr = cudaMemcpy(&dst[ioffset3], m_d_det_tmp, sizeof(float) * nitems, ::cudaMemcpyDeviceToHost);
+					if (cuerr != cudaSuccess) {
+						PostCUDAError("(ReadoutDetAvg): Failed to copy elastic diffraction pattern from device to host", cuerr);
+						nerr = 132;
+						goto _exit;
+					}
+				}
+			}
+			break;
+		}
+
+	}
+
+_exit:
+	DeallocMem_h((void**)&buf_h);
 	return nerr;
 }
 
@@ -2501,7 +2826,8 @@ int CJMultiSlice::Cleanup(void)
 	DeallocMem_h((void**)&m_h_det_wff_avg);
 	DeallocMem_h((void**)&m_h_det_dif_avg);
 	DeallocMem_h((void**)&m_h_det_img_avg);
-	DeallocMem_h((void**)&m_h_weight_avg);
+	DeallocMem_h((void**)&m_h_weight_imgavg);
+	DeallocMem_h((void**)&m_h_weight_wavavg);
 	DeallocMem_h((void**)&m_h_det_wfr);
 	DeallocMem_h((void**)&m_h_det_wff);
 	DeallocMem_h((void**)&m_h_det_dif);
@@ -2522,7 +2848,8 @@ int CJMultiSlice::Cleanup(void)
 	DeallocMem_d((void**)&m_d_detmask);
 	DeallocMem_h((void**)&m_det_objslc);
 	DeallocMem_h((void**)&m_detmask_len);
-	m_d_weight_avg = 0.f;
+	m_d_weight_imgavg = 0.f;
+	m_d_weight_wavavg = 0.f;
 	m_ndet = 0;
 	m_ndetper = 0;
 	m_imagedet = (int)_JMS_DETECT_NONE;
@@ -2682,45 +3009,51 @@ int CJMultiSlice::ClearDetMem_h(int iThread)
 }
 
 
-int CJMultiSlice::ClearDetAvgMem_h(int iThread)
-{
-	int nerr = 0;
-	int nitems = 0;
-	size_t nbytes = 0;
-	// avg. probe image readouts
-	if ((m_imagedet & (int)_JMS_DETECT_IMAGE_AVG) > 0 && m_ndetslc > 0 && m_h_det_img_avg != NULL) {
-		nitems = m_nscx * m_nscy * m_ndetslc;
-		nbytes = sizeof(float) * nitems;
-		memset(&m_h_det_img_avg[iThread * nitems], 0, nbytes);
-	}
-	// avg. probe diffraction readouts
-	if ((m_imagedet & (int)_JMS_DETECT_DIFFR_AVG) > 0 && m_ndetslc > 0 && m_h_det_dif_avg != NULL) {
-		nitems = m_nscx * m_nscy * m_ndetslc;
-		nbytes = sizeof(float) * nitems;
-		memset(&m_h_det_dif_avg[iThread * nitems], 0, nbytes);
-	}
-	// avg. real-space wave function readouts
-	if ((m_imagedet & (int)_JMS_DETECT_WAVER_AVG) > 0 && m_ndetslc > 0 && m_h_det_wfr_avg != NULL) {
-		nitems = m_nscx * m_nscy * m_ndetslc;
-		nbytes = sizeof(fcmplx) * nitems;
-		memset(&m_h_det_wfr_avg[iThread * nitems], 0, nbytes);
-	}
-	// avg. Fourier-space wave function readouts
-	if ((m_imagedet & (int)_JMS_DETECT_WAVEF_AVG) > 0 && m_ndetslc > 0 && m_h_det_wff_avg != NULL) {
-		nitems = m_nscx * m_nscy * m_ndetslc;
-		nbytes = sizeof(fcmplx) * nitems;
-		memset(&m_h_det_wff_avg[iThread * nitems], 0, nbytes);
-	}
-	// averaging channel weights
-	if (m_ncputhreads > 0 && m_h_weight_avg != NULL) {
-		nitems = m_ncputhreads;
-		nbytes = sizeof(float) * nitems;
-		memset(m_h_weight_avg, 0, nbytes);
-	}
-	//_Exit:
-	// error handling
-	return nerr;
-}
+//int CJMultiSlice::ClearDetAvgMem_h(int iThread)
+//{
+//	int nerr = 0;
+//	int nitems = 0;
+//	size_t nbytes = 0;
+//	// avg. probe image readouts
+//	if ((m_imagedet & (int)_JMS_DETECT_IMAGE_AVG) > 0 && m_ndetslc > 0 && m_h_det_img_avg != NULL) {
+//		nitems = m_nscx * m_nscy * m_ndetslc;
+//		nbytes = sizeof(float) * nitems;
+//		memset(&m_h_det_img_avg[iThread * nitems], 0, nbytes);
+//	}
+//	// avg. probe diffraction readouts
+//	if ((m_imagedet & (int)_JMS_DETECT_DIFFR_AVG) > 0 && m_ndetslc > 0 && m_h_det_dif_avg != NULL) {
+//		nitems = m_nscx * m_nscy * m_ndetslc;
+//		nbytes = sizeof(float) * nitems;
+//		memset(&m_h_det_dif_avg[iThread * nitems], 0, nbytes);
+//	}
+//	// avg. real-space wave function readouts
+//	if ((m_imagedet & (int)_JMS_DETECT_WAVER_AVG) > 0 && m_ndetslc > 0 && m_h_det_wfr_avg != NULL) {
+//		nitems = m_nscx * m_nscy * m_ndetslc;
+//		nbytes = sizeof(fcmplx) * nitems;
+//		memset(&m_h_det_wfr_avg[iThread * nitems], 0, nbytes);
+//	}
+//	// avg. Fourier-space wave function readouts
+//	if ((m_imagedet & (int)_JMS_DETECT_WAVEF_AVG) > 0 && m_ndetslc > 0 && m_h_det_wff_avg != NULL) {
+//		nitems = m_nscx * m_nscy * m_ndetslc;
+//		nbytes = sizeof(fcmplx) * nitems;
+//		memset(&m_h_det_wff_avg[iThread * nitems], 0, nbytes);
+//	}
+//	// image averaging channel weights
+//	if (m_ncputhreads > 0 && m_h_weight_imgavg != NULL) {
+//		nitems = m_ncputhreads;
+//		nbytes = sizeof(float) * nitems;
+//		memset(m_h_weight_imgavg, 0, nbytes);
+//	}
+//	// wave averaging channel weights
+//	if (m_ncputhreads > 0 && m_h_weight_wavavg != NULL) {
+//		nitems = m_ncputhreads;
+//		nbytes = sizeof(float) * nitems;
+//		memset(m_h_weight_wavavg, 0, nbytes);
+//	}
+//	//_Exit:
+//	// error handling
+//	return nerr;
+//}
 
 float CJMultiSlice::GetCoreAbsTotal_h(int iThread)
 {
@@ -3120,8 +3453,8 @@ int CJMultiSlice::CPUMultislice(int islc0, int accmode, float weight, int iThrea
 	bool bdet_dif = ((m_imagedet&_JMS_DETECT_INTEGRATED)
 		|| (m_imagedet&_JMS_DETECT_DIFFRACTION) || (m_imagedet&_JMS_DETECT_WAVEFOURIER)
 		|| (m_imagedet&_JMS_DETECT_DIFFR_AVG) || (m_imagedet&_JMS_DETECT_WAVEF_AVG));
-	bool bdet_avg = ((m_imagedet & _JMS_DETECT_IMAGE_AVG) || (m_imagedet & _JMS_DETECT_WAVER_AVG)
-		|| (m_imagedet & _JMS_DETECT_DIFFR_AVG) || (m_imagedet & _JMS_DETECT_WAVEF_AVG));
+	bool bdet_img_avg = ((m_imagedet & _JMS_DETECT_IMAGE_AVG) || (m_imagedet & _JMS_DETECT_DIFFR_AVG));
+	bool bdet_wav_avg = ((m_imagedet & _JMS_DETECT_WAVER_AVG) || (m_imagedet & _JMS_DETECT_WAVEF_AVG));
 	if (nitems != npgitems) {
 		bsubframe = true;
 	}
@@ -3218,8 +3551,11 @@ int CJMultiSlice::CPUMultislice(int islc0, int accmode, float weight, int iThrea
 		nerr = ReadoutImgDet_h(m_nobjslc, iThread, weight);
 		if (nerr > 0) { nerr += 900; goto _Exit; }
 	}
-	if (bdet_avg) { // detection and averaging images happened ...
-		m_h_weight_avg[iThread] += weight; // update the weight counter of the averaging channels
+	if (bdet_img_avg) { // detection and averaging images happened ...
+		m_h_weight_imgavg[iThread] += weight; // update the weight counter of the image averaging channels
+	}
+	if (bdet_wav_avg) { // detection and averaging wave functions happened ...
+		m_h_weight_wavavg[iThread] += weight; // update the weight counter of the wave averaging channels
 	}
 	//
 _Exit:
@@ -3615,56 +3951,57 @@ int CJMultiSlice::ClearDetMem_d(void) {
 }
 
 
-int CJMultiSlice::ClearDetAvgMem_d(void) {
-	int nerr = 0;
-	size_t nitems = 0;
-	size_t nbytes = 0;
-	cudaError cuerr;
-	// avg. probe image readouts (this is device memory)
-	if ((m_imagedet & (int)_JMS_DETECT_IMAGE_AVG) > 0 && m_ndetslc > 0 && m_d_det_img_avg != NULL) {
-		nitems = (size_t)m_nscx * m_nscy * m_ndetslc;
-		nbytes = sizeof(float) * nitems;
-		cuerr = cudaMemset((void*)m_d_det_img_avg, 0, nbytes);
-		if (cuerr != cudaSuccess) {
-			PostCUDAError("(ClearDetMem_d): Failed to reset memory m_d_det_img_avg", cuerr);
-			return 3;
-		}
-	}
-	// avg. probe diffraction readouts (this is device memory)
-	if ((m_imagedet & (int)_JMS_DETECT_DIFFR_AVG) > 0 && m_ndetslc > 0 && m_d_det_dif_avg != NULL) {
-		nitems = (size_t)m_nscx * m_nscy * m_ndetslc;
-		nbytes = sizeof(float) * nitems;
-		cuerr = cudaMemset((void*)m_d_det_dif_avg, 0, nbytes);
-		if (cuerr != cudaSuccess) {
-			PostCUDAError("(ClearDetMem_d): Failed to reset memory m_d_det_dif_avg", cuerr);
-			return 3;
-		}
-	}
-	// avg. real-space wave function readouts (this is device memory)
-	if ((m_imagedet & (int)_JMS_DETECT_WAVER_AVG) > 0 && m_ndetslc > 0 && m_d_det_wfr_avg != NULL) {
-		nitems = (size_t)m_nscx * m_nscy * m_ndetslc;
-		nbytes = sizeof(cuComplex) * nitems;
-		cuerr = cudaMemset((void*)m_d_det_wfr_avg, 0, nbytes);
-		if (cuerr != cudaSuccess) {
-			PostCUDAError("(ClearDetMem_d): Failed to reset memory m_d_det_wfr_avg", cuerr);
-			return 3;
-		}
-	}
-	// Fourier-space wave function readouts (this is device memory)
-	if ((m_imagedet & (int)_JMS_DETECT_WAVEF_AVG) > 0 && m_ndetslc > 0 && m_d_det_wff_avg != NULL) {
-		nitems = (size_t)m_nscx * m_nscy * m_ndetslc;
-		nbytes = sizeof(cuComplex) * nitems;
-		cuerr = cudaMemset((void*)m_d_det_wff_avg, 0, nbytes);
-		if (cuerr != cudaSuccess) {
-			PostCUDAError("(ClearDetMem_d): Failed to reset memory m_d_det_wff_avg", cuerr);
-			return 3;
-		}
-	}
-	m_d_weight_avg = 0.f;
-	//_Exit:
-	// error handling
-	return nerr;
-}
+//int CJMultiSlice::ClearDetAvgMem_d(void) {
+//	int nerr = 0;
+//	size_t nitems = 0;
+//	size_t nbytes = 0;
+//	cudaError cuerr;
+//	// avg. probe image readouts (this is device memory)
+//	if ((m_imagedet & (int)_JMS_DETECT_IMAGE_AVG) > 0 && m_ndetslc > 0 && m_d_det_img_avg != NULL) {
+//		nitems = (size_t)m_nscx * m_nscy * m_ndetslc;
+//		nbytes = sizeof(float) * nitems;
+//		cuerr = cudaMemset((void*)m_d_det_img_avg, 0, nbytes);
+//		if (cuerr != cudaSuccess) {
+//			PostCUDAError("(ClearDetMem_d): Failed to reset memory m_d_det_img_avg", cuerr);
+//			return 3;
+//		}
+//	}
+//	// avg. probe diffraction readouts (this is device memory)
+//	if ((m_imagedet & (int)_JMS_DETECT_DIFFR_AVG) > 0 && m_ndetslc > 0 && m_d_det_dif_avg != NULL) {
+//		nitems = (size_t)m_nscx * m_nscy * m_ndetslc;
+//		nbytes = sizeof(float) * nitems;
+//		cuerr = cudaMemset((void*)m_d_det_dif_avg, 0, nbytes);
+//		if (cuerr != cudaSuccess) {
+//			PostCUDAError("(ClearDetMem_d): Failed to reset memory m_d_det_dif_avg", cuerr);
+//			return 3;
+//		}
+//	}
+//	// avg. real-space wave function readouts (this is device memory)
+//	if ((m_imagedet & (int)_JMS_DETECT_WAVER_AVG) > 0 && m_ndetslc > 0 && m_d_det_wfr_avg != NULL) {
+//		nitems = (size_t)m_nscx * m_nscy * m_ndetslc;
+//		nbytes = sizeof(cuComplex) * nitems;
+//		cuerr = cudaMemset((void*)m_d_det_wfr_avg, 0, nbytes);
+//		if (cuerr != cudaSuccess) {
+//			PostCUDAError("(ClearDetMem_d): Failed to reset memory m_d_det_wfr_avg", cuerr);
+//			return 3;
+//		}
+//	}
+//	// Fourier-space wave function readouts (this is device memory)
+//	if ((m_imagedet & (int)_JMS_DETECT_WAVEF_AVG) > 0 && m_ndetslc > 0 && m_d_det_wff_avg != NULL) {
+//		nitems = (size_t)m_nscx * m_nscy * m_ndetslc;
+//		nbytes = sizeof(cuComplex) * nitems;
+//		cuerr = cudaMemset((void*)m_d_det_wff_avg, 0, nbytes);
+//		if (cuerr != cudaSuccess) {
+//			PostCUDAError("(ClearDetMem_d): Failed to reset memory m_d_det_wff_avg", cuerr);
+//			return 3;
+//		}
+//	}
+//	m_d_weight_imgavg = 0.f;
+//	m_d_weight_wavavg = 0.f;
+//	//_Exit:
+//	// error handling
+//	return nerr;
+//}
 
 
 cuComplex* CJMultiSlice::GetPhaseGrating_d(int iSlice, int* pVarID)
@@ -4041,8 +4378,8 @@ int CJMultiSlice::GPUMultislice(int islc0, int accmode, float weight)
 	bool bdet_dif = ((m_imagedet&_JMS_DETECT_INTEGRATED)
 		|| (m_imagedet&_JMS_DETECT_DIFFRACTION) || (m_imagedet&_JMS_DETECT_WAVEFOURIER)
 		|| (m_imagedet&_JMS_DETECT_DIFFR_AVG) || (m_imagedet&_JMS_DETECT_WAVEF_AVG));
-	bool bdet_avg = ((m_imagedet & _JMS_DETECT_DIFFR_AVG) || (m_imagedet & _JMS_DETECT_WAVEF_AVG)
-		|| (m_imagedet & _JMS_DETECT_IMAGE_AVG) || (m_imagedet & _JMS_DETECT_WAVER_AVG));
+	bool bdet_img_avg = ((m_imagedet & _JMS_DETECT_DIFFR_AVG) || (m_imagedet & _JMS_DETECT_IMAGE_AVG));
+	bool bdet_wav_avg = ((m_imagedet & _JMS_DETECT_WAVEF_AVG) || (m_imagedet & _JMS_DETECT_WAVER_AVG));
 	bool bplasmc = false;
 	if (nitems != npgitems) { // calculation grid and phase gratings are on different sizes
 		bsubframe = true;
@@ -4171,8 +4508,11 @@ int CJMultiSlice::GPUMultislice(int islc0, int accmode, float weight)
 		nerr = ReadoutImgDet_d(m_nobjslc, weight);
 		if (0 < nerr) { nerr += 900;  goto _Exit; }
 	}
-	if (bdet_avg) { // detection of averaging channels happened ... 
-		m_d_weight_avg += weight; // update the averaging channel weight
+	if (bdet_img_avg) { // detection of averaging channels happened ... 
+		m_d_weight_imgavg += weight; // update the averaging channel weight
+	}
+	if (bdet_wav_avg) { // detection of averaging channels happened ... 
+		m_d_weight_wavavg += weight; // update the averaging channel weight
 	}
 	//
 _Exit:

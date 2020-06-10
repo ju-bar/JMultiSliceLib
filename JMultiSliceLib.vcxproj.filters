@@ -213,6 +213,12 @@
     <None Include="backup\JMSLib_SRC_Backup_200604.zip">
       <Filter>Backup</Filter>
     </None>
+    <None Include="backup\JMSLib_PRJ_Backup_200610.zip">
+      <Filter>Backup</Filter>
+    </None>
+    <None Include="backup\JMSLib_SRC_Backup_200610.zip">
+      <Filter>Backup</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Text Include="Changes.txt" />

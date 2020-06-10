@@ -3,7 +3,6 @@ List of next steps and wishes for JMultiSliceLib
 - Extend the LIB interface to a similar level as the C++ class interface
 	* target for linking to Fortran
 	* test the interface
-- Test functionality of the wave function accumulation and readout interface
 - Calculating plane and vortex wave functions
 - Support more atomic structure data I/O formats
 - Calculation of transition potentials for inelastic scattering

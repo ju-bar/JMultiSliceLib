@@ -60,6 +60,7 @@ public:
 	prm_result stem_pix_padif; // STEM pixelated averaged diffraction patterns
 	prm_result stem_pix_img; // STEM pixelated probe images
 	prm_result stem_pix_paimg; // STEM pixelated averaged probe images
+	prm_result stem_images_ela; // STEM imaging results (elastic channel)
 
 	// Methods
 

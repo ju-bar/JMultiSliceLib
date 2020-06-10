@@ -83,6 +83,13 @@ protected:
 
 	mutable std::mutex guard; // threading guard used for some data accumulation functions
 
+	
+	// operators
+public:
+
+	void operator=(const prm_result& src);
+
+
 	// member functions
 public:
 
@@ -100,6 +107,9 @@ public:
 	// normalizes the data by dividing the data with a given weight
 	int normalize(float weight);
 
+	// returns true if the result *pcmp is compatible with this object in terms of data size, data type, and detector type
+	bool is_compatible(prm_result* pcmp);
+
 	// Stores data of a selected channel to file.
 	// Channels are assumed to be the fourth index in v_dim, if existing.
 	// The file name is made from str_out_file and str_suffix is appended
@@ -107,6 +117,14 @@ public:
 	// Currently supported formats:
 	// - "bin" = raw binary file, data is dumped as is
 	int save(unsigned int idx_chan, std::string str_suffix, std::string str_format);
+
+	// Stores the difference of the data and the data in ref of a selected channel to file.
+	// Channels are assumed to be the fourth index in v_dim, if existing.
+	// The file name is made from str_out_file and str_suffix is appended
+	// The data is stored in a format selected by str_format
+	// Currently supported formats:
+	// - "bin" = raw binary file, data is dumped as is
+	int dif_save(prm_result* ref, unsigned int idx_chan, std::string str_suffix, std::string str_format);
 	
 	// Returns the number of bytes per data item as determined by data_type
 	size_t get_item_bytes(void);

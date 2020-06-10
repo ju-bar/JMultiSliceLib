@@ -278,7 +278,7 @@ int CAtomType::CalculateRadialFormFactors(size_t nk, float sk, float bwlk, float
 		memset(scaf, 0, sizeof(fcmplx) * nk);
 	}
 	if (bverbose) {
-		std::cout << "  - Calculating radial form factors of " << SpeciesName() << "." << std::endl;
+		std::cout << "  - calculating radial form factors of " << SpeciesName() << std::endl;
 	}
 
 	// set smapling rate for keepting track

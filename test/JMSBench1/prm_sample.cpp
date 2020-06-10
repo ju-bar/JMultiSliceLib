@@ -1300,11 +1300,6 @@ int prm_sample::calculate_pgr(int cpu_num, int gpu_id) {
 	// clock_0
 	cl_0 = clock.getmsec();
 
-	if (btalk) {
-		std::cout << std::endl;
-		std::cout << "  Calculation of object transmission functions ..." << std::endl;
-	}
-
 	if (igpu >= 0) { // check for valid GPU ID
 		if (igpu >= GetGPUNum()) {
 			std::cout << std::endl;
@@ -1317,6 +1312,10 @@ int prm_sample::calculate_pgr(int cpu_num, int gpu_id) {
 		std::cout << std::endl;
 		std::cout << "  Warning: no CPU or GPU selected, fallback to run on 1 CPU." << std::endl;
 		ncpu = 1;
+	}
+
+	if (btalk) {
+		std::cout << "  - initializing electron scattering module." << std::endl;
 	}
 
 	// get basic sampling data
@@ -1398,7 +1397,7 @@ int prm_sample::calculate_pgr(int cpu_num, int gpu_id) {
 			std::cerr << "Error (prm_sample::calculate_pgr): Failed to calculate mean inner potential (" << ierr << ")." << std::endl;
 			goto _exit;
 		}
-		std::cout << "  - mean inner potential: " << format("%8.3f V  (absorptive: %8.3f V).", mip.real(), mip.imag()) << std::endl;
+		std::cout << "  - mean inner potential: " << format("%8.3f V  (absorptive: %8.3f V)", mip.real(), mip.imag()) << std::endl;
 	}
 
 	// Calculate
@@ -1409,7 +1408,7 @@ int prm_sample::calculate_pgr(int cpu_num, int gpu_id) {
 		for (islc = 0; islc < nslc; islc++) { // loop over all slices
 			for (ivar = 0; ivar < nvar; ivar++) { // loop over all variants
 				if (btalk) {
-					std::cout << "  - calculating slice " << islc + 1 << " of " << nslc << ", variant " << ivar + 1 << " of " << nvar << "     \r";
+					std::cout << "  - calculating for slice " << islc + 1 << " of " << nslc << ", variant " << ivar + 1 << " of " << nvar << "     \r";
 				}
 				ppgr = v_slc[islc].get_pgr(ivar);
 				if (ncpu == 1) {
@@ -1493,6 +1492,10 @@ int prm_sample::calculate_pgr(int cpu_num, int gpu_id) {
 	}
 
 	if (save_sli == 1 && nslc > 0) { // store the phase grating data in sli files.
+		if (btalk) {
+			std::cout << std::endl;
+			std::cout << "  Saving object transmission functions to files ..." << std::endl;
+		}
 		int ndig = std::max((int)3, (int)std::ceil(std::log10((double)nslc))); // number of digits are at least 3
 		for (islc = 0; islc < nslc; islc++) {
 			sfile = generate_ser_file_name(str_slc_file_pre + "_", (unsigned int)islc + 1, (unsigned int)ndig, str_slc_file_suf);

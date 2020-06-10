@@ -6,7 +6,7 @@
 // Copyright (C) 2018 - 2020 - Juri Barthel (juribarthel@gmail.com)
 // Copyright (C) 2018 - 2020 - Forschungszentrum Juelich GmbH, 52425 Juelich, Germany
 //
-// Verions of JMultiSlice: 0.44b (2020 - June - 02)
+// Verions of JMultiSlice: 0.45b (2020 - June - 10)
 //
 /*
 This program is free software : you can redistribute it and/or modify
@@ -120,8 +120,8 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 // VERSION NUMBERS
 #define __JMS_VERSION__			0
 #define __JMS_VERSION_SUB__		4
-#define __JMS_VERSION_SUB_SUB__	4
-#define __JMS_VERSION_BUILD__	20200602
+#define __JMS_VERSION_SUB_SUB__	5
+#define __JMS_VERSION_BUILD__	20200610
 // CODE IDs
 #define _JMS_CODE_CPU			1
 #define _JMS_CODE_GPU			2
@@ -321,8 +321,10 @@ protected:
 	fcmplx *m_h_det_wfr_avg;
 	// per thread list of host memory holding averaged Fourier-space wave functions for all detection thicknesses ( iThread, -> idetslc*m_nscx*m_nscy )
 	fcmplx *m_h_det_wff_avg;
-	// per thread list of weights on host averging channels ( iThread )
-	float *m_h_weight_avg;
+	// per thread list of weights on host image averging channels ( iThread )
+	float *m_h_weight_imgavg;
+	// per thread list of weights on host wave function averging channels ( iThread )
+	float* m_h_weight_wavavg;
 	// per thread list of host memory diffraction de-scan in x direction [pixels]
 	int *m_h_dif_ndescanx;
 	// per thread list of host memory diffraction de-scan in y direction [pixels]
@@ -359,8 +361,10 @@ protected:
 	cuComplex *m_d_det_wfr_avg;
 	// device memory holding averaged Fourier-space wave functions for all detection thicknesses ( -> idetslc*m_nscx*m_nscy )
 	cuComplex *m_d_det_wff_avg;
-	// weight on device averging channels
-	float m_d_weight_avg;
+	// weight on device image averging channels
+	float m_d_weight_imgavg;
+	// weight on device wave function averging channels
+	float m_d_weight_wavavg;
 	// device memory used temporary for readout steps (managed by InitCore)
 	float *m_d_det_tmp;
 	// device memory used temporary for readout steps (managed by InitCore)
@@ -729,15 +733,15 @@ public:
 	// - thread ID is not checked
 	int ClearDetMem_h(int iThread);
 
-	// clears hist averaging detector memory for a thread
-	// - thread ID is not checked
-	int ClearDetAvgMem_h(int iThread);
+	//// clears averaging detector memory for a thread
+	//// - thread ID is not checked
+	//int ClearDetAvgMem_h(int iThread);
 	
 	// clears device detector memory
 	int ClearDetMem_d(void);
 
-	// clears device detector memory
-	int ClearDetAvgMem_d(void);
+	//// clears device detector memory
+	//int ClearDetAvgMem_d(void);
 	
 protected:
 	// returns host memory phase grating for a slice
@@ -879,16 +883,37 @@ public:
 	// - iThread: thread ID of CPU code
 	int GetAvgResult(int whichcode, int whichresult, float* dst, float& weight, int iThread = 0);
 
-	// Returns the averaging weight of a given code channel
+	// Returns the image averaging weight of a given code channel
 	// - whichcode: flag signaling which code to prepare (_JMS_CODE_GPU or _JMS_CODE_CPU)
 	// - iThread: thread ID of CPU code
-	float GetAveragingWeight(int whichcode, int iThread=0);
+	float GetImageAveragingWeight(int whichcode, int iThread=0);
 
-	// Resets active averaging channels and weight counters for a given code channel
+	// Returns the wave function averaging weight of a given code channel
+	// - whichcode: flag signaling which code to prepare (_JMS_CODE_GPU or _JMS_CODE_CPU)
+	// - iThread: thread ID of CPU code
+	float GetWaveAveragingWeight(int whichcode, int iThread = 0);
+
+
+	// Resets active image averaging channels and weight counters for a given code channel
 	// - whichcode: flag signaling which code to prepare (_JMS_CODE_GPU or _JMS_CODE_CPU)
 	// - iThread: thread ID of CPU code
 	// Returns an error code or 0 in case of success.
-	int ResetAveraging(int whichcode, int iThread = 0);
+	int ResetImageAveraging(int whichcode, int iThread = 0);
+
+	// Resets active wave function averaging channels and weight counters for a given code channel
+	// - whichcode: flag signaling which code to prepare (_JMS_CODE_GPU or _JMS_CODE_CPU)
+	// - iThread: thread ID of CPU code
+	// Returns an error code or 0 in case of success.
+	int ResetWaveAveraging(int whichcode, int iThread = 0);
+
+	// Reads detector intensities from the previously calculated average wave functions
+	// - whichcode: flag signaling which code to prepare (one of _JMS_CODE_GPU or _JMS_CODE_CPU)
+	// - whichresult: flag signaling which detector is to be read out (one of _JMS_DETECT_INTEGRATED, _JMS_DETECT_IMAGE, or _JMS_DETECT_DIFFRACTION)
+	// - iThread: thread ID of CPU code
+	// Returns an error code or 0 in case of success.
+	// Writes the intensities to buffer dst, assuming that a sufficiently large amount of memory is allocated.
+	// Writes the weight of the data to weight.
+	int ReadoutDetAvg(int whichcode, int whichresult, float *dst, float &weight, int iThread = 0);
 
 };
 

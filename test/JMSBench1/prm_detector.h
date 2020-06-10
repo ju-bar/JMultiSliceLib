@@ -124,6 +124,7 @@ public:
 	bool b_waveft; // record wave function in reciprocal space
 	bool b_wave_avg; // record average wave function (elastic channel)
 	bool b_waveft_avg; // record average wave function in reciprocal space (elastic channel)
+	bool b_separate_tds; // separate intensities of thermal diffuse and elastic scattering from the total intensity (causes allocation of additional data buffers)
 
 	std::vector<prm_annular> v_annular; // list of registered annular detectors
 
@@ -156,6 +157,10 @@ public:
 	
 	// returns the maximum detection angle of the angular detectors in mrad
 	float get_annular_betamax(void);
+
+	// user input and setup for separating thermal diffuse scattering
+	int setup_separate_tds(void);
+
 
 };
 

@@ -226,6 +226,7 @@
     <None Include="backup\JMSLib_PRJ_Backup_191216.zip" />
     <None Include="backup\JMSLib_PRJ_Backup_191217.zip" />
     <None Include="backup\JMSLib_PRJ_Backup_200113.zip" />
+    <None Include="backup\JMSLib_PRJ_Backup_200610.zip" />
     <None Include="backup\JMSLib_SRC_Backup_181005.zip" />
     <None Include="backup\JMSLib_SRC_Backup_181112.zip" />
     <None Include="backup\JMSLib_SRC_Backup_181207.zip" />
@@ -238,6 +239,7 @@
     <None Include="backup\JMSLib_SRC_Backup_200113.zip" />
     <None Include="backup\JMSLib_SRC_Backup_200407.zip" />
     <None Include="backup\JMSLib_SRC_Backup_200604.zip" />
+    <None Include="backup\JMSLib_SRC_Backup_200610.zip" />
     <None Include="CUDA EULA.pdf" />
     <None Include="Intel-Simplified-Software-License.pdf" />
     <None Include="README.md" />

@@ -186,14 +186,24 @@ int __stdcall GetUnscrambleHash(unsigned int* phash)
 	return JMS.GetUnscrambleHash(phash);
 }
 
-float __stdcall GetAveragingWeight(int whichcode, int iThread)
+float __stdcall GetImageAveragingWeight(int whichcode, int iThread)
 {
-	return JMS.GetAveragingWeight(whichcode, iThread);
+	return JMS.GetImageAveragingWeight(whichcode, iThread);
 }
 
-int __stdcall ResetAveraging(int whichcode, int iThread)
+float __stdcall GetWaveAveragingWeight(int whichcode, int iThread)
 {
-	return JMS.ResetAveraging(whichcode, iThread);
+	return JMS.GetWaveAveragingWeight(whichcode, iThread);
+}
+
+int __stdcall ResetImageAveraging(int whichcode, int iThread)
+{
+	return JMS.ResetImageAveraging(whichcode, iThread);
+}
+
+int __stdcall ResetWaveAveraging(int whichcode, int iThread)
+{
+	return JMS.ResetWaveAveraging(whichcode, iThread);
 }
 
 int __stdcall Cleanup(void)
@@ -275,10 +285,10 @@ int __stdcall ClearDetMem_h(int iThread)
 	return JMS.ClearDetMem_h(iThread);
 }
 
-int __stdcall ClearDetAvgMem_h(int iThread)
-{
-	return JMS.ClearDetAvgMem_h(iThread);
-}
+//int __stdcall ClearDetAvgMem_h(int iThread)
+//{
+//	return JMS.ClearDetAvgMem_h(iThread);
+//}
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -331,7 +341,7 @@ int __stdcall ClearDetMem_d(void)
 	return JMS.ClearDetMem_d();
 }
 
-int __stdcall ClearDetAvgMem_d(void)
-{
-	return JMS.ClearDetAvgMem_d();
-}
+//int __stdcall ClearDetAvgMem_d(void)
+//{
+//	return JMS.ClearDetAvgMem_d();
+//}

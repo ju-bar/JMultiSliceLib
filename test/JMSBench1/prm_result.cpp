@@ -35,8 +35,8 @@
 
 prm_result::prm_result()
 {
-	data_type = _RESULT_DATA_TYPE_UNKNOWN;
-	det_type = _JMS_DETECT_NONE;
+	data_type = (unsigned int)_RESULT_DATA_TYPE_UNKNOWN;
+	det_type = (unsigned int)_JMS_DETECT_NONE;
 	sz_data = 0;
 	pdata = NULL;
 	str_out_file = "";
@@ -53,21 +53,49 @@ prm_result::prm_result(const prm_result &src) : params(src)
 
 	//set_ctrl(src); // copy base class member
 
-	data_type = src.data_type;
-	det_type = src.det_type;
-	v_dim = src.v_dim;
-	str_out_file = src.str_out_file;
-	f_calc_scale = src.f_calc_scale;
-	f_calc_weight = src.f_calc_weight;
+	data_type = psrc->data_type;
+	det_type = psrc->det_type;
+	v_dim = psrc->v_dim;
+	str_out_file = psrc->str_out_file;
+	f_calc_scale = psrc->f_calc_scale;
+	f_calc_weight = psrc->f_calc_weight;
 	
 	pdata = NULL;
 	sz_data = 0;
-	psrc->copy_data_to((void**)pdata, sz_data);
+	psrc->copy_data_to((void**)&pdata, sz_data);
 	if (NULL == pdata) { // failed to allocate
 		v_dim.clear();
-		det_type = _JMS_DETECT_NONE;
-		data_type = _RESULT_DATA_TYPE_UNKNOWN;
+		det_type = (unsigned int)_JMS_DETECT_NONE;
+		data_type = (unsigned int)_RESULT_DATA_TYPE_UNKNOWN;
 	}
+
+	probe.copy_data_from(&psrc->probe);
+	scan.copy_data_from(&psrc->scan);
+	detector.copy_data_from(&psrc->detector);
+	sample.copy_data_from(&psrc->sample);
+}
+
+
+void prm_result::operator=(const prm_result& src)
+{
+	prm_result* psrc = const_cast <prm_result*>(&src);
+
+	set_ctrl(src); // copy base class member
+
+	data_type = psrc->data_type;
+	det_type = psrc->det_type;
+	v_dim = psrc->v_dim;
+	str_out_file = psrc->str_out_file;
+	f_calc_scale = psrc->f_calc_scale;
+	f_calc_weight = psrc->f_calc_weight;
+
+	if (NULL != pdata) { // get rid of previous data
+		free(pdata);
+		pdata = NULL;
+		sz_data = 0;
+	}
+	
+	psrc->copy_data_to((void**)&pdata, sz_data); // get a copy of the source data
 
 	probe.copy_data_from(&psrc->probe);
 	scan.copy_data_from(&psrc->scan);
@@ -262,6 +290,151 @@ _exit:
 	return nerr;
 }
 
+
+bool prm_result::is_compatible(prm_result* pcmp)
+{
+	bool bchk = true;
+	size_t nbytes = get_data_bytes();
+	size_t ndims = v_dim.size();
+	if (NULL == pcmp) return false;
+	bchk &= (nbytes > 0);
+	bchk &= (ndims == pcmp->v_dim.size());
+	bchk &= (nbytes == pcmp->get_data_bytes());
+	if (bchk) {
+		for (size_t i = 0; i < ndims; i++) {
+			bchk &= (v_dim[i] == pcmp->v_dim[i]);
+		}
+	}
+	bchk &= (det_type == pcmp->det_type);
+	bchk &= ((pdata != NULL) && (pcmp->pdata != NULL));
+	return bchk;
+}
+
+
+int prm_result::dif_save(prm_result* ref, unsigned int idx_chan, std::string str_suffix, std::string str_format)
+{
+	// * TODO * //
+	// Add a parameter to control whether the data should be added to an existing file.
+	// Also partial data storing might be an option of different processes generate
+	// different parts of a result, e.g. by using sub-frame scanning.
+	int nerr = 0;
+	int ifmt = 0;
+	size_t dim_num = v_dim.size(); // number of data dimensions
+	size_t items_num = 0; // number of items per image (pixels)
+	size_t sz_out = 0; // size of output in bytes
+	size_t sz_dif = 0, idx = 0;
+	size_t chan_pos = 0; // offset position (item) of the channel
+	unsigned int img_num = 1; // number of images per channel
+	unsigned int chan_num = 1; // number of channels
+	float* pchan = (float*)pdata; // pointer to the channel in pdata
+	float* pchan_ref = NULL;
+	float* pchan_tmp = NULL;
+	std::string str_file;
+	std::ofstream ofs;
+
+	// check for sufficient image dimensions
+	if (dim_num < 2) {
+		nerr = 1;
+		std::cerr << "Error (dif_save): data has insufficient number of dimensions to represent images." << std::endl;
+		goto _exit;
+	}
+
+	// check state of data buffer
+	if (NULL == pdata || 0 == sz_data) {
+		nerr = 2;
+		std::cerr << "Error (dif_save): data buffer not allocated." << std::endl;
+		goto _exit;
+	}
+
+	// check compatibility with reference data
+	if (NULL == ref) {
+		nerr = 10;
+		std::cerr << "Error (dif_save): invalid parameter (ref)." << std::endl;
+		goto _exit;
+	}
+	if (!is_compatible(ref)) {
+		nerr = 11;
+		std::cerr << "Error (dif_save): incompatible reference data." << std::endl;
+		goto _exit;
+	}
+
+	// calculate number of data items per image
+	items_num = (size_t)v_dim[0] * v_dim[1];
+
+	// get length of image series (thickness)
+	if (dim_num > 2) {
+		img_num = v_dim[2];
+	}
+
+	// get number of data channels (detectors)
+	if (dim_num > 3) {
+		chan_num = v_dim[3];
+	}
+
+	// check selected output channel
+	if (idx_chan >= chan_num) {
+		nerr = 3;
+		std::cerr << "Error (save): index of selected output channel (" <<
+			idx_chan << ") is too large for present number of channels (" <<
+			chan_num << ")." << std::endl;
+		goto _exit;
+	}
+
+	// calculate output bytes
+	sz_dif = items_num * img_num;
+	sz_out = get_item_bytes() * sz_dif; // size of the output in bytes
+	chan_pos = sz_dif * idx_chan;
+	pchan = &((float*)pdata)[chan_pos];
+	pchan_ref = &((float*)ref->pdata)[chan_pos];
+	pchan_tmp = new float[sz_dif];
+	for (idx = 0; idx < sz_dif; idx++) { // calculate the difference for all items
+		pchan_tmp[idx] = pchan[idx] - pchan_ref[idx];
+	}
+	
+
+	// prepare output file name
+	str_file = str_out_file + str_suffix;
+
+	// make format specific settings
+	if (str_format == "bin") {
+		ifmt = 1;
+		str_file = str_file + ".bin";
+	}
+
+	if (ifmt == 0) { // format not supported
+		nerr = 999;
+		std::cerr << "Error: failed to save result due to unsupported format (" << str_format << ")." << std::endl;
+		goto _exit;
+	}
+
+	ofs.open(str_file, std::ios::out | std::ios::trunc | std::ios::binary);
+	if (!ofs.is_open()) {
+		nerr = 4;
+		std::cerr << "Error (save): failed to open file [" << str_file << "]." << std::endl;
+		goto _exit;
+	}
+
+	// save depending on format
+	if (str_format == "bin") {
+		ofs.write((char*)pchan_tmp, sz_out); // store the diffence
+		if (ofs.fail()) {
+			nerr = 5;
+			std::cerr << "Error (save): failed to write data to file [" << str_file << "]." << std::endl;
+			goto _exit;
+		}
+		if (btalk) {
+			std::cout << std::endl;
+			std::cout << "  Image series of channel #" << idx_chan << " written to file [" << str_file << "]" << std::endl;
+			std::cout << "  - " << v_dim[0] << " x " << v_dim[1] << " x " << img_num << " x " << get_data_type_name() << std::endl;
+		}
+	}
+
+_exit:
+	if (ofs.is_open()) { ofs.close(); }
+	if (NULL != pchan_tmp) { delete[] pchan_tmp; }
+	return nerr;
+}
+
 size_t prm_result::get_item_bytes()
 {
 	size_t szi = 0;
@@ -333,8 +506,12 @@ int prm_result::copy_data_to(void ** _data, size_t &bytes)
 			return 2;
 		}
 	}
-	else {
-		*_data = NULL;
+	else { // no data to copy
+		if (NULL != *_data) {
+			free(*_data);
+			*_data = NULL;
+			bytes = 0;
+		}
 	}
 	return 0;
 }

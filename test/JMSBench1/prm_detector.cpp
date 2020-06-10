@@ -323,6 +323,7 @@ prm_detector::prm_detector()
 	b_waveft = false;
 	b_wave_avg = false;
 	b_waveft_avg = false;
+	b_separate_tds = false;
 }
 
 prm_detector::~prm_detector()
@@ -342,6 +343,7 @@ void prm_detector::copy_data_from(prm_detector *psrc)
 		b_waveft = psrc->b_waveft;
 		b_wave_avg = psrc->b_wave_avg;
 		b_waveft_avg = psrc->b_waveft_avg;
+		b_separate_tds = psrc->b_separate_tds;
 		v_annular = psrc->v_annular;
 	}
 }
@@ -358,6 +360,7 @@ void prm_detector::copy_setup_from(prm_detector *psrc)
 		b_waveft = psrc->b_waveft;
 		b_wave_avg = psrc->b_wave_avg;
 		b_waveft_avg = psrc->b_waveft_avg;
+		b_separate_tds = psrc->b_separate_tds;
 		size_t num_ann = psrc->v_annular.size();
 		v_annular.clear();
 		if (num_ann > 0) {
@@ -588,6 +591,42 @@ int prm_detector::setup_pixelated()
 }
 
 
+int prm_detector::setup_separate_tds()
+{
+	int ierr = 0, ichk = 0, j = 0;
+	std::string  stmp;
+
+	if (binteractive) {
+		// allow to modify the setup
+		std::cout << std::endl;
+		std::cout << "  Do you want to separate elastic and thermal diffuse scattering?  <0> No  <1> Yes ";
+		std::cin >> ichk;
+		if (ichk == 1) {
+			b_separate_tds = true;
+		}
+		else {
+			b_separate_tds = false;
+		}
+		if (b_separate_tds) {
+			v_str_ctrl.push_back("set_det_separate_tds");
+		}
+
+	}
+	else { // read the setup from the control lines
+		if (0 <= ctrl_find_param("set_det_separate_tds", &stmp, j)) {
+			b_separate_tds = true;
+		}
+
+		if (btalk) {
+			std::cout << std::endl;
+			std::cout << "  Separate images will be saved for elastic channel and thermal diffuse scattering." << std::endl;
+		}
+	}
+
+	return ierr;
+}
+
+
 int prm_detector::get_jms_flags()
 {
 	int ndetflg = (int)_JMS_DETECT_NONE;
@@ -600,6 +639,14 @@ int prm_detector::get_jms_flags()
 	if (b_wave_avg) ndetflg += (int)_JMS_DETECT_WAVER_AVG;
 	if (b_waveft) ndetflg += (int)_JMS_DETECT_WAVEFOURIER;
 	if (b_waveft_avg) ndetflg += (int)_JMS_DETECT_WAVEF_AVG;
+	if (b_separate_tds) {
+		if ((b_annular || b_difpat) && !b_waveft_avg) {
+			ndetflg += (int)_JMS_DETECT_WAVEF_AVG;
+		}
+		if (b_image && !b_wave_avg) {
+			ndetflg += (int)_JMS_DETECT_WAVER_AVG;
+		}
+	}
 	return ndetflg;
 }
 
