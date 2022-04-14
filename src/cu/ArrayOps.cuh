@@ -157,6 +157,13 @@ __global__ void AddCPowScaKernel(float* out_1, cuComplex* in_1, float sca, unsig
 // - n0, n1 -> grid size on dimensions 0 and 1
 __global__ void CShift2dKernel(cuComplex *out_1, cuComplex *in_1, unsigned int sh0, unsigned int sh1, unsigned int n0, unsigned int n1);
 
+// copies from in_1 to out_1 using a cyclic 2d shift of sh0 and sh1 positive along dimensions n0 and n1
+// - out_1 -> shifted output data
+// - in_1 -> input data
+// - sh0, sh1 -> positive (right) shift values of dimension 0 and 1
+// - n0, n1 -> grid size on dimensions 0 and 1
+__global__ void FShift2dKernel(float *out_1, float *in_1, unsigned int sh0, unsigned int sh1, unsigned int n0, unsigned int n1);
+
 // applies a shift and defocus offset to a wave-function: out_1[i] = in_[1]*Exp{ -I *2*Pi * [ dx*in_2[i] + dy*in_3[i] ] }
 // - in_1 -> input wave function (Fourier space)
 // - in_2 -> kx field [1/nm]
@@ -171,6 +178,15 @@ __global__ void MulPhasePlate00Kernel(cuComplex *out_1, cuComplex *in_1, float *
 // - dx, dy = shifts x and y [nm]
 // - dz = defocus * wavelength / 2 [nm^2]
 __global__ void MulPhasePlate01Kernel(cuComplex *out_1, cuComplex *in_1, float *in_2, float *in_3, float dx, float dy, float dz, unsigned int size);
+
+// applies a shift and defocus offset to a wave-function: out_1[i] = in_[1]*Exp{ -I * (2*Pi * [ dx*in_2[i] + dy*in_3[i] + dz*(in_2[i]*in_2[i]+in_3[i]*in_3[i]) ] + in_4[i])}
+// - in_1 -> input wave function (Fourier space)
+// - in_2 -> kx field [1/nm]
+// - in_3 -> ky field [1/nm]
+// - in_4 -> given phase plate [rad]
+// - dx, dy = shifts x and y [nm]
+// - dz = defocus * wavelength / 2 [nm^2]
+__global__ void MulPhasePlateC01Kernel(cuComplex *out_1, cuComplex *in_1, float *in_2, float *in_3, float *in_4, float dx, float dy, float dz, unsigned int size);
 
 //// calculates the total sum of a float array using a reduction scheme: out_1[blockIdx.x] = SUM( in_1[i] , i=1 ... N-1)
 //template <unsigned int blockSize> __global__ void FAddReduceKernel(float *out_1, float *in_1, unsigned int size);
@@ -275,6 +291,9 @@ cudaError_t ArrayOpAddCPowSca(float* out_1, cuComplex* in_1, float sca, ArrayOpS
 // calculates out_1[(j+sh1)%n1][(i+sh0)%n0] = in_1[j][i] on device
 cudaError_t ArrayOpCShift2d(cuComplex *out_1, cuComplex *in_1, unsigned int sh0, unsigned int sh1, unsigned int n0, unsigned int n1, ArrayOpStats1 stats);
 
+// calculates out_1[(j+sh1)%n1][(i+sh0)%n0] = in_1[j][i] on device
+cudaError_t ArrayOpFShift2d(float *out_1, float *in_1, unsigned int sh0, unsigned int sh1, unsigned int n0, unsigned int n1, ArrayOpStats1 stats);
+
 
 // multiplies a shift phase plate to a complex array
 // - out_1 is the modified wave function
@@ -292,6 +311,16 @@ cudaError_t ArrayOpMulPP00(cuComplex *out_1, cuComplex *in_1, float *in_2, float
 // - dx and dy are the shift coordinates [nm]
 // - dz is the defocus multiplied by wave length / 2 [nm^2]
 cudaError_t ArrayOpMulPP01(cuComplex *out_1, cuComplex *in_1, float *in_2, float *in_3, float dx, float dy, float dz, ArrayOpStats1 stats);
+
+// multiplies a given phase plate plus shift and defocus phase plate to a complex array
+// - out_1 is the modified wave function
+// - in_1 is the input wave function
+// - in_2 is the kx-array [1/nm] (full field)
+// - in_3 is the ky-array [1/nm] (full field)
+// - in_4 is the input given phase plate [rad] (full field)
+// - dx and dy are the shift coordinates [nm]
+// - dz is the defocus multiplied by wave length / 2 [nm^2]
+cudaError_t ArrayOpMulPPC01(cuComplex *out_1, cuComplex *in_1, float *in_2, float *in_3, float *in_4, float dx, float dy, float dz, ArrayOpStats1 stats);
 
 
 

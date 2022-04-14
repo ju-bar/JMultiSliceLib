@@ -47,16 +47,17 @@
 #define _C0						299792458. // vacuum speed of light [ m s^(-1) ]
 #define _MU0					1.2566370614359172953850573533118E-6 // magnetic constant = 4*Pi * 10^(-7) [ N A^(-1) ]
 #define _EPS0					8.8541878176203898505365630317108E-12 // electric constant = 1/(_MU0 _C0^2) [ F m^(-1) ]
-#define _HPL					6.62607015E-34	// Planck's constant [ J s ]
-#define _QEL					1.602176634E-19 // elementary charge [ C ]
-
-#define _HPLEV					4.135667697E-15	// Planck's constant [ eV s ]
-#define _HBAR					1.054571818E-34	// reduced Planck's constant [ J s ]
-#define _HBAREV					6.582119570E-16	// reduced Planck's constant [ eV s ]
 
 // Derived constants
 
-#define _ME0					9.1093837015E-31 // electron rest mass, error (28) in last digits [ kg ]
+#define _HPL					6.62607015E-34	// Planck's constant, error (81) in last digits [ J s ]
+#define _HPLEV					4.135667662E-15	// Planck's constant, error (25) in last digits [ eV s ]
+#define _HBAR					1.054571817E-34	// reduced Planck's constant, error (13) in last digits [ J s ]
+#define _HBAREV					6.582119565E-16	// reduced Planck's constant, error (40) in last digits [ eV s ]
+
+#define _QEL					1.602176634E-19 // elementary charge, error (98) in last digits [ C ]
+
+#define _ME0					9.10938370E-31 // electron rest mass, error (11) in last digits [ kg ]
 
 #define _EEL0					_ME0*_C0*_C0 // electron rest energy [ J ]
 #define _EEL0EV					_EEL0/_QEL // electron rest energy [ eV ]

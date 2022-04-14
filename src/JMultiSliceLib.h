@@ -4,8 +4,8 @@
 // (Implementation see JMultisliceLib.cpp)
 //
 //
-// Copyright (C) 2018 - 2020 - Juri Barthel (juribarthel@gmail.com)
-// Copyright (C) 2018 - 2020 - Forschungszentrum Jülich GmbH, 52425 Jülich, Germany
+// Copyright (C) 2018 - 2022 - Juri Barthel (juribarthel@gmail.com)
+// Copyright (C) 2018 - 2022 - Forschungszentrum Jülich GmbH, 52425 Jülich, Germany
 //
 //
 //
@@ -245,6 +245,12 @@ extern "C" __declspec(dllexport) int __stdcall InitCore(int whichcode, int nCPUt
 // set the incoming wave
 extern "C" __declspec(dllexport) int __stdcall SetIncidentWave(int whichcode, fcmplx* wav);
 
+// set the incident wave phase plate
+extern "C" __declspec(dllexport) int __stdcall SetIncidentWavePhaseplate(int whichcode, float* ppl, bool bTranspose = false);
+
+// zeroe the incident wave phase plate
+extern "C" __declspec(dllexport) int __stdcall ZeroIncidentWavePhaseplate(int whichcode);
+
 // set phase gratings for a structure slice
 extern "C" __declspec(dllexport) int __stdcall SetSlicePhaseGratings(int whichcode, int islc, int nvar, fcmplx* pgr);
 
@@ -308,14 +314,16 @@ extern "C" __declspec(dllexport) int __stdcall CalculatePropagator(float fthick,
 // - det: pointer to a float array receiving the detector function data (pre-allocated)
 // - msklen: length of an access pixel mask list
 // - msk: pointer to an access pixel mask list, which speeds up the detector readout, optional (pre-allocated)
-extern "C" __declspec(dllexport) int __stdcall CalculateRingDetector(float beta0, float beta1, float phi0, float phi1, float theta0x, float theta0y, std::string sdsprofile, float *det, int &msklen, int *msk = NULL);
+// - kmom1: first moment pattern index (0 by default)
+extern "C" __declspec(dllexport) int __stdcall CalculateRingDetector(float beta0, float beta1, float phi0, float phi1, float theta0x, float theta0y, std::string sdsprofile, float *det, int &msklen, int *msk = NULL, int kmom1 = 0);
 
 // Takes a copy of the backup wave function, offsets in (x, y, z), and stores
 // in the the active wave function channel used for the multislice calculation.
 // - whichcode: flag signaling which code to prepare (_JMS_CODE_CPU | _JMS_CODE_GPU)
 // - dx, dy, dz: offset distances in 3 dimensions and nm units.
 // - iThread: thread ID for CPU code, ignored for GPU code
-extern "C" __declspec(dllexport) int __stdcall OffsetIncomingWave(int whichcode, float dx, float dy, float dz, int iThread = 0);
+// - ibtx, ibty: offset tilt in Fourier pixels. Defaults to zero. (added 2022-Apr-07 for SPED simulations)
+extern "C" __declspec(dllexport) int __stdcall OffsetIncomingWave(int whichcode, float dx, float dy, float dz, int iThread = 0, int ibtx = 0, int ibty = 0);
 
 // Runs a multislice calculation on a CPU thread
 // Assumes incident wave function present in _h_JMS_wav

@@ -350,6 +350,20 @@ __global__ void CShift2dKernel(cuComplex *out_1, cuComplex *in_1, unsigned int s
 	}
 }
 
+// copies from in_1 to out_1 using a cyclic 2d shift of sh0 and sh1 positive along dimensions n0 and n1
+__global__ void FShift2dKernel(float *out_1, float *in_1, unsigned int sh0, unsigned int sh1, unsigned int n0, unsigned int n1) {
+	unsigned int idx = threadIdx.x + blockIdx.x * blockDim.x; // source index from thread id
+	unsigned int size = n0 * n1;
+	unsigned int i0 = idx % n0;
+	unsigned int j0 = (idx - i0) / n0;
+	unsigned int i1 = (i0 + sh0) % n0;
+	unsigned int j1 = (j0 + sh1) % n1;
+	unsigned int idx1 = i1 + n0 * j1;
+	if (idx < size && idx1 < size) {
+		out_1[idx1] = in_1[idx];
+	}
+}
+
 // applies a shift offset to a wave-function: out_1[i] = in_[1]*Exp{ -I *2*Pi * [ dx*in_2[i] + dy*in_3[i]) ] }
 // - in_1 -> input wave function (Fourier space)
 // - in_2 -> kx field [1/nm]
@@ -383,6 +397,26 @@ __global__ void MulPhasePlate01Kernel(cuComplex *out_1, cuComplex *in_1, float *
 		tf.x = cosf(chi);
 		tf.y = sinf(chi);
 		out_1[idx] = cuCmulf(in_1[idx] , tf);
+	}
+}
+
+// applies a shift and defocus offset to a wave-function: out_1[i] = in_[1]*Exp{ -I * (2*Pi * [ dx*in_2[i] + dy*in_3[i] + dz*(in_2[i]*in_2[i]+in_3[i]*in_3[i]) ] + in_4[i])}
+// - in_1 -> input wave function (Fourier space)
+// - in_2 -> kx field [1/nm]
+// - in_3 -> ky field [1/nm]
+// - in_4 -> given phase plate [rad]
+// - dx, dy = shifts x and y [nm]
+// - dz = defocus * wavelength / 2 [nm^2]
+__global__ void MulPhasePlateC01Kernel(cuComplex *out_1, cuComplex *in_1, float *in_2, float *in_3, float *in_4, float dx, float dy, float dz, unsigned int size)
+{
+	unsigned int idx = threadIdx.x + blockIdx.x * blockDim.x;
+	cuComplex tf;
+	if (idx < size) {
+		float ksqr = in_2[idx] * in_2[idx] + in_3[idx] * in_3[idx];
+		float chi = -6.28318531f*(dx*in_2[idx] + dy * in_3[idx] + dz * ksqr) - in_4[idx];
+		tf.x = cosf(chi);
+		tf.y = sinf(chi);
+		out_1[idx] = cuCmulf(in_1[idx], tf);
 	}
 }
 
@@ -1663,6 +1697,35 @@ Error:
 }
 
 
+// calculate out_1[(j+sh1)%n1][(i+sh0)%n0] = in_1[j][i] on device
+cudaError_t ArrayOpFShift2d(float *out_1, float *in_1, unsigned int sh0, unsigned int sh1, unsigned int n0, unsigned int n1, ArrayOpStats1 stats)
+{
+	cudaError_t cudaStatus;
+	//	unsigned int size = stats.uSize;	// input size
+	int blockSize = stats.nBlockSize;	// block size 
+	int gridSize = stats.nGridSize;		// grid size needed, based on input size
+
+	// Launch the parallel kernel operation
+	FShift2dKernel<<<gridSize, blockSize>>>(out_1, in_1, sh0, sh1, n0, n1);
+
+	// Check for any errors launching the kernel
+	cudaStatus = cudaGetLastError();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "FShift2dKernel launch failed: %s\n", cudaGetErrorString(cudaStatus));
+		fprintf(stderr, "  - gridSize: %i, blockSize: %i\n", gridSize, blockSize);
+		goto Error;
+	}
+
+	// synchronize threads and wait for all to be finished
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaDeviceSynchronize failed after launching FShift2dKernel: %s\n", cudaGetErrorString(cudaStatus));
+		goto Error;
+	}
+Error:
+	return cudaStatus;
+}
+
 cudaError_t ArrayOpMulPP00(cuComplex *out_1, cuComplex *in_1, float *in_2, float *in_3, float dx, float dy, ArrayOpStats1 stats)
 {
 	cudaError_t cudaStatus;
@@ -1671,7 +1734,7 @@ cudaError_t ArrayOpMulPP00(cuComplex *out_1, cuComplex *in_1, float *in_2, float
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
 
 	// Launch the parallel kernel operation
-	MulPhasePlate00Kernel <<<gridSize, blockSize>>>(out_1, in_1, in_2, in_3, dx, dy, size);
+	MulPhasePlate00Kernel<<<gridSize, blockSize>>>(out_1, in_1, in_2, in_3, dx, dy, size);
 
 	// Check for any errors launching the kernel
 	cudaStatus = cudaGetLastError();
@@ -1721,6 +1784,37 @@ cudaError_t ArrayOpMulPP01(cuComplex *out_1, cuComplex *in_1, float *in_2, float
 Error:
 	return cudaStatus;
 }
+
+
+cudaError_t ArrayOpMulPPC01(cuComplex *out_1, cuComplex *in_1, float *in_2, float *in_3, float *in_4, float dx, float dy, float dz, ArrayOpStats1 stats)
+{
+	cudaError_t cudaStatus;
+	unsigned int size = stats.uSize;	// input size
+	int blockSize = stats.nBlockSize;	// block size 
+	int gridSize = stats.nGridSize;		// grid size needed, based on input size
+
+										// Launch the parallel kernel operation
+	MulPhasePlateC01Kernel<<<gridSize, blockSize>>>(out_1, in_1, in_2, in_3, in_4, dx, dy, dz, size);
+
+	// Check for any errors launching the kernel
+	cudaStatus = cudaGetLastError();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "MulPhasePlateC01Kernel launch failed: %s\n", cudaGetErrorString(cudaStatus));
+		fprintf(stderr, "  - gridSize: %i, blockSize: %i\n", gridSize, blockSize);
+		goto Error;
+	}
+
+	// synchronize threads and wait for all to be finished
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaDeviceSynchronize failed after launching MulPhasePlateC01Kernel: %s\n", cudaGetErrorString(cudaStatus));
+		goto Error;
+	}
+
+Error:
+	return cudaStatus;
+}
+
 
 //// Calculates the sum of a float array on device.
 //cudaError_t ArrayOpFSum(float &out_1, float * in_1, ArrayOpStats1 stats, int CPU_threshold)

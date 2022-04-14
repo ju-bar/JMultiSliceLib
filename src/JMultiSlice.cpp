@@ -285,6 +285,7 @@ CJMultiSlice::CJMultiSlice() : m_msg("")
 	m_d_kny = NULL;
 	m_h_wav = NULL;
 	m_h_wav0 = NULL;
+	m_h_cppl = NULL;
 	m_h_pgr = NULL;
 	m_h_pro = NULL;
 	m_h_det = NULL;
@@ -304,6 +305,7 @@ CJMultiSlice::CJMultiSlice() : m_msg("")
 	m_h_dif_ndescany = NULL;
 	m_d_wav = NULL;
 	m_d_wav0 = NULL;
+	m_d_cppl = NULL;
 	m_d_pgr = NULL;
 	m_d_pro = NULL;
 	m_d_det = NULL;
@@ -320,6 +322,7 @@ CJMultiSlice::CJMultiSlice() : m_msg("")
 	m_d_weight_imgavg = 0.f;
 	m_d_weight_wavavg = 0.f;
 	m_d_det_tmp = NULL;
+	m_d_det_tmp2 = NULL;
 	m_d_det_tmpwav = NULL;
 	m_d_dif_ndescanx = 0;
 	m_d_dif_ndescany = 0;
@@ -1268,7 +1271,7 @@ float CJMultiSlice::GetRadialDetectorSensitivity(float theta, float* profile, in
 	return sens;
 }
 
-int CJMultiSlice::CalculateRingDetector(float beta0, float beta1, float phi0, float phi1, float theta0x, float theta0y, std::string sdsprofile, float *det, int &msklen, int *msk)
+int CJMultiSlice::CalculateRingDetector(float beta0, float beta1, float phi0, float phi1, float theta0x, float theta0y, std::string sdsprofile, float *det, int &msklen, int *msk, int kmom1)
 {
 	int nuseprofile = 0; // preset the use of a sensitivity profile to 'no' by default
 	int nitems = m_nscx * m_nscy; // set number of detector function items
@@ -1401,8 +1404,9 @@ int CJMultiSlice::CalculateRingDetector(float beta0, float beta1, float phi0, fl
 			}
 			// all position checks were passed
 			// THIS IS A DETECTOR PIXEL
+			sens = 1.0f;
 			if (busesprof) { // get detector sensitivity from profile
-				sens = 1.0f;
+				
 				if (dr1 > 0.) { // require the reference angle to be non-zero and positive
 					sens = GetRadialDetectorSensitivity((float)g, pfDetProfile, nDetProfileLen, fRefPixelBeta1, (float)dr1);
 				}
@@ -1410,6 +1414,14 @@ int CJMultiSlice::CalculateRingDetector(float beta0, float beta1, float phi0, fl
 					sens = GetRadialDetectorSensitivity((float)g, pfDetProfile, nDetProfileLen, fRefPixelBeta1, (float)dr2);
 				}
 				// If none of the above two options is used, the default sensitivity of 1 is used.
+			}
+			switch (kmom1) { // multiply k-moment pattern
+			case 1:
+				sens = sens * (float)gx;
+				break;
+			case 2:
+				sens = sens * (float)gy;
+				break;
 			}
 			det[idx] = sens; // set pixel sensitivity
 			if (bmakemask) { // add pixel index to the end of the mask list
@@ -1732,11 +1744,13 @@ int CJMultiSlice::InitCore(int whichcode, int nCPUthreads)
 		if (ncore_ready < m_ncputhreads) { nerr = 3; goto _Exit; } // not all cores are initialized
 		nbytes = sizeof(fcmplx)*(size_t)nitems;
 		if (0 < AllocMem_h((void**)&m_h_wav0, nbytes, "InitCore", "wave function backup", true)) { nerr = 4; goto _Exit; }
+		nbytes = sizeof(float)*(size_t)nitems;
+		if (0 < AllocMem_h((void**)&m_h_cppl, nbytes, "InitCore", "constant phase plate", true)) { nerr = 5; goto _Exit; }
 		nbytes = sizeof(fcmplx)*(size_t)nitems*m_ncputhreads;
-		if (0 < AllocMem_h((void**)&m_h_wav, nbytes, "InitCore", "wave functions", true)) { nerr = 5; goto _Exit; }
+		if (0 < AllocMem_h((void**)&m_h_wav, nbytes, "InitCore", "wave functions", true)) { nerr = 6; goto _Exit; }
 		nbytes = sizeof(int)*(size_t)m_ncputhreads;
-		if (0 < AllocMem_h((void**)&m_h_dif_ndescanx, nbytes, "InitCore", "de-scan x", true)) { nerr = 6; goto _Exit; }
-		if (0 < AllocMem_h((void**)&m_h_dif_ndescany, nbytes, "InitCore", "de-scan y", true)) { nerr = 7; goto _Exit; }
+		if (0 < AllocMem_h((void**)&m_h_dif_ndescanx, nbytes, "InitCore", "de-scan x", true)) { nerr = 7; goto _Exit; }
+		if (0 < AllocMem_h((void**)&m_h_dif_ndescany, nbytes, "InitCore", "de-scan y", true)) { nerr = 8; goto _Exit; }
 		m_status_setup_CPU |= (int)_JMS_STATUS_CORE; // mark CPU core setup as completed
 	}
 
@@ -1750,12 +1764,14 @@ int CJMultiSlice::InitCore(int whichcode, int nCPUthreads)
 		ResetWaveAveraging(_JMS_CODE_GPU, 0);
 		nbytes = sizeof(cuComplex)*(size_t)nitems;
 		if (0 < AllocMem_d((void**)&m_d_wav0, nbytes, "InitCore", "wave function backup", true)) { nerr = 104; goto _Exit; }
-		if (0 < AllocMem_d((void**)&m_d_wav, nbytes, "InitCore", "wave function", true)) { nerr = 105; goto _Exit; }
-		if (0 < AllocMem_d((void**)&m_d_det_tmpwav, nbytes, "InitCore", "temp wave readout", true)) { nerr = 111; goto _Exit; }
+		if (0 < AllocMem_d((void**)&m_d_wav, nbytes, "InitCore", "wave function", true)) { nerr = 106; goto _Exit; }
+		if (0 < AllocMem_d((void**)&m_d_det_tmpwav, nbytes, "InitCore", "temp wave readout", true)) { nerr = 110; goto _Exit; }
 		nbytes = sizeof(float)*(size_t)nitems;
-		if (0 < AllocMem_d((void**)&m_d_det_tmp, nbytes, "InitCore", "temp readout", true)) { nerr = 106; goto _Exit; }
-		if (0 < AllocMem_d((void**)&m_d_knx, nbytes, "InitCore", "kx field", true)) { nerr = 107; goto _Exit; }
-		if (0 < AllocMem_d((void**)&m_d_kny, nbytes, "InitCore", "ky field", true)) { nerr = 108; goto _Exit; }
+		if (0 < AllocMem_d((void**)&m_d_det_tmp, nbytes, "InitCore", "temp readout", true)) { nerr = 111; goto _Exit; }
+		if (0 < AllocMem_d((void**)&m_d_det_tmp2, nbytes, "InitCore", "temp readout 2", true)) { nerr = 112; goto _Exit; }
+		if (0 < AllocMem_d((void**)&m_d_knx, nbytes, "InitCore", "kx field", true)) { nerr = 113; goto _Exit; }
+		if (0 < AllocMem_d((void**)&m_d_kny, nbytes, "InitCore", "ky field", true)) { nerr = 114; goto _Exit; }
+		if (0 < AllocMem_d((void**)&m_d_cppl, nbytes, "InitCore", "constant phase plate", true)) { nerr = 105; goto _Exit; }
 		ftmpx = (float*)malloc(nbytes);
 		ftmpy = (float*)malloc(nbytes);
 		for (j = 0; j < m_nscy; j++) {
@@ -1770,12 +1786,12 @@ int CJMultiSlice::InitCore(int whichcode, int nCPUthreads)
 		cuerr = cudaMemcpy(m_d_knx, ftmpx, nbytes, cudaMemcpyHostToDevice);
 		if (cuerr != cudaSuccess) {
 			PostCUDAError("(InitCore): Failed to copy kx data to device.", cuerr);
-			nerr = 109; goto _Exit;
+			nerr = 120; goto _Exit;
 		}
 		cuerr = cudaMemcpy(m_d_kny, ftmpy, nbytes, cudaMemcpyHostToDevice);
 		if (cuerr != cudaSuccess) {
 			PostCUDAError("(InitCore): Failed to copy ky data to device.", cuerr);
-			nerr = 110; goto _Exit;
+			nerr = 121; goto _Exit;
 		}
 		m_status_setup_GPU |= (int)_JMS_STATUS_CORE; // mark GPU core setup as completed
 	}
@@ -1839,6 +1855,80 @@ _Exit:
 }
 
 
+int CJMultiSlice::SetIncidentWavePhaseplate(int whichcode, float* ppl, bool bTranspose)
+{
+	int nerr = 0;
+	cudaError cuerr;
+	int nitems = m_nscx * m_nscy;
+	int i = 0, j = 0, i1 = 0, j1 = 0, idx = 0, idx1 = 0, idy = 0, idy1 = 0; // iterator
+	size_t nbytes = sizeof(float)*(size_t)nitems;
+	float* ppluse = ppl;
+	float* ptmp = NULL; // temp buffer only used when bTranspose == true
+	// float ftmp1 = 0.f, ftmp2 = 0.f;
+	// ftmp1 = GetAbsTotal(wav, nitems);
+	if (bTranspose) { // transpose the input to wavtmp and relink wavuse
+		ptmp = (float*)malloc(nbytes);
+		if (NULL == ptmp) { // allocation failed
+			nerr = 1; goto _Exit;
+		}
+		// copy a transposed version of the input to the temporary buffer
+		// - assumes that the input wav has m_nscx rows of length m_nscy
+		// - writes data transposed to wavtmp in m_nscy rows of length m_nscx
+		// This can be slow due to massive memory jumps
+		for (j = 0; j < m_nscx; j++) { // loop over input m_nscx rows -> tmp columns (j)
+			idy = j * m_nscy;
+			for (i = 0; i < m_nscy; i++) { // loop over input m_nscy columns -> tmp rows (i)
+				idx = i + idy;
+				idx1 = j + i * m_nscx;
+				ptmp[idx1] = ppl[idx];
+			}
+		}
+		ppluse = ptmp; // link the temporary buffer to used
+	}
+	if (whichcode & (int)_JMS_CODE_CPU && (m_status_setup_CPU & (int)_JMS_THRESHOLD_CALC) > 0 &&
+		nitems > 0 && m_h_cppl != NULL && ppluse != NULL) {
+		if (NULL == memcpy(m_h_cppl, ppluse, nbytes)) {
+			nerr = 2; goto _Exit;
+		}
+	}
+	if (whichcode & (int)_JMS_CODE_GPU && (m_status_setup_GPU & (int)_JMS_THRESHOLD_CALC) > 0 &&
+		nitems > 0 && m_d_cppl != NULL && ppluse != NULL) {
+		cuerr = cudaMemcpy(m_d_cppl, ppluse, nbytes, cudaMemcpyHostToDevice);
+		if (cuerr != cudaSuccess) {
+			PostCUDAError("(SetIncidentWave): Failed to copy wave function to GPU devices", cuerr);
+			nerr = 102; goto _Exit;
+		}
+	}
+_Exit:
+	if (NULL != ptmp) { free(ptmp); ptmp = NULL; } // free wavtmp if used
+	return nerr;
+}
+
+int CJMultiSlice::ZeroIncidentWavePhaseplate(int whichcode)
+{
+	int nerr = 0;
+	cudaError cuerr;
+	int nitems = m_nscx * m_nscy;
+	int i = 0, j = 0, i1 = 0, j1 = 0, idx = 0, idx1 = 0, idy = 0, idy1 = 0; // iterator
+	size_t nbytes = sizeof(float)*(size_t)nitems;
+	if (whichcode & (int)_JMS_CODE_CPU && (m_status_setup_CPU & (int)_JMS_THRESHOLD_CALC) > 0 &&
+		nitems > 0 && m_h_cppl != NULL) {
+		if (NULL == memset(m_h_cppl, 0, nbytes)) {
+			nerr = 1; goto _Exit;
+		}
+	}
+	if (whichcode & (int)_JMS_CODE_GPU && (m_status_setup_GPU & (int)_JMS_THRESHOLD_CALC) > 0 &&
+		nitems > 0 && m_d_cppl != NULL) {
+		cuerr = cudaMemset(m_d_cppl, 0, nbytes);
+		if (cuerr != cudaSuccess) {
+			PostCUDAError("(SetIncidentWave): Failed to zeroe phase plate devices", cuerr);
+			nerr = 101; goto _Exit;
+		}
+	}
+_Exit:
+	return nerr;
+}
+
 int CJMultiSlice::GetUnscrambleHash(unsigned int* phash)
 {
 	int nerr = 0;
@@ -1868,7 +1958,7 @@ _exit_point:
 }
 
 
-int CJMultiSlice::OffsetIncomingWave(int whichcode, float dx, float dy, float dz, int iThread)
+int CJMultiSlice::OffsetIncomingWave(int whichcode, float dx, float dy, float dz, int iThread, int ibtx, int ibty, bool bcppl)
 {
 	// Requires completed setup: (int)_JMS_THRESHOLD_CALC
 	// Assumes that m_h_wav0 and m_d_wav0 is set in Fourier space representation
@@ -1876,15 +1966,16 @@ int CJMultiSlice::OffsetIncomingWave(int whichcode, float dx, float dy, float dz
 	int nerr = 0;
 	int i = 0, j = 0, jj = 0, idx = 0;
 	int nitems = m_nscx*m_nscy;
+	unsigned int ish0 = 0, ish1 = 0;
 	float ca = 1.f / m_a0[0];
 	float cb = 1.f / m_a0[1];
-	float chi = 1.f;
+	float chi = 1.f, chic = 0.f;
 	float kx = 0.f, ky = 0.f, ppy = 0.f, fz = dz*m_wl*0.5f;
 
 	size_t nbytes = sizeof(fcmplx)*(size_t)nitems;
 	fcmplx * _h_wav = NULL;
 	fcmplx * _h_pp = NULL;
-	cuComplex * _d_pp = NULL;
+	//cuComplex * _d_pp = NULL;
 	cudaError cuerr;
 	ArrayOpStats1 stats;
 
@@ -1895,6 +1986,10 @@ int CJMultiSlice::OffsetIncomingWave(int whichcode, float dx, float dy, float dz
 	}
 
 	// ftmp1 = GetAbsTotal(m_h_wav0, nitems);
+
+	// positive shift numbers (Fourier space) for beam tilt
+	ish0 = (unsigned int)mod(ibtx, m_nscx);
+	ish1 = (unsigned int)mod(ibty, m_nscy);
 
 	if (whichcode & (int)_JMS_CODE_CPU && (m_status_setup_CPU & (int)_JMS_THRESHOLD_CALC) > 0 &&
 		iThread >= 0 && iThread < m_ncputhreads) {
@@ -1908,15 +2003,33 @@ int CJMultiSlice::OffsetIncomingWave(int whichcode, float dx, float dy, float dz
 			for (i = 0; i < m_nscx; i++) {
 				idx = i + jj;
 				kx = (float)m_h_fnx[i] * ca;
-				chi = ((float)_TPI)*(ppy + kx*(dx + kx*fz));
+				if (bcppl) chic = m_h_cppl[idx]; // get const. phase late value (added 2022-04-14)
+				chi = ((float)_TPI)*(ppy + kx*(dx + kx*fz)) + chic; // (added constant phase)
 				_h_pp[idx].real(cos(chi)); // cos(chi)
 				_h_pp[idx].imag(-sin(chi)); // - I * Sin(chi)
 			}
 		}
-		// multiply the translation phase plate to the original incoming wave and store in wave slot
-		for (i = 0; i < nitems; i++) {
-			_h_wav[i] = m_h_wav0[i] * _h_pp[i];
+
+		if (ish0 > 0 || ish1 > 0) { // beam tilt before defocus and shift
+			// multiply the translation phase plate to the tilted incoming wave and store in wave slot
+			int jj1 = 0, idx1 = 0;
+			for (j = 0; j < m_nscy; j++) {
+				jj = j * m_nscx;
+				jj1 = mod(j - ibty, m_nscy) * m_nscx;
+				for (i = 0; i < m_nscx; i++) {
+					idx = i + jj;
+					idx1 = mod(i - ibtx, m_nscx) + jj1;
+					_h_wav[idx] = m_h_wav0[idx1] * _h_pp[idx];
+				}
+			}
 		}
+		else { // defocus and shift only
+			// multiply the translation phase plate to the original incoming wave and store in wave slot
+			for (i = 0; i < nitems; i++) {
+				_h_wav[i] = m_h_wav0[i] * _h_pp[i];
+			}
+		}
+		
 		// ftmp2 = GetAbsTotal(_h_wav, nitems);
 	}
 
@@ -1932,17 +2045,41 @@ int CJMultiSlice::OffsetIncomingWave(int whichcode, float dx, float dy, float dz
 		stats.nBlockSize = m_jgpuco.GetBlockSize();
 		if (stats.nBlockSize == 0) stats.nBlockSize = 512; // some common sense block size in case of failed setup?
 		stats.nGridSize = (nitems + stats.nBlockSize - 1) / stats.nBlockSize;
-		cuerr = ArrayOpMulPP01(m_d_wav, m_d_wav0, m_d_knx, m_d_kny, dx, dy, fz, stats);
-		//cuerr = ArrayOpMul(m_d_wav, m_d_wav0, _d_pp, stats);
-		if (cuerr != cudaSuccess) {
-			PostCUDAError("(OffsetIncomingWave): failed to multiply phase-plate to wave function on device", cuerr);
-			nerr = 105; goto _Exit;
+		
+		if (ish0 > 0 || ish1 > 0) { // beam tilt by wave function shift (precession scan) ... shift and defocus after tilt
+			cuerr = ArrayOpCShift2d(m_d_det_tmpwav, m_d_wav0, ish0, ish1, (unsigned int)m_nscx, (unsigned int)m_nscy, stats);
+			if (cuerr != cudaSuccess) {
+				PostCUDAError("(OffsetIncomingWave): failed to apply beam tilt offset to incident wave function on device", cuerr);
+				nerr = 105; goto _Exit;
+			}
+			if (bcppl) {
+				cuerr = ArrayOpMulPPC01(m_d_wav, m_d_det_tmpwav, m_d_knx, m_d_kny, m_d_cppl, dx, dy, fz, stats);
+			}
+			else {
+				cuerr = ArrayOpMulPP01(m_d_wav, m_d_det_tmpwav, m_d_knx, m_d_kny, dx, dy, fz, stats);
+			}
+			if (cuerr != cudaSuccess) {
+				PostCUDAError("(OffsetIncomingWave): failed to multiply phase-plate to wave function on device", cuerr);
+				nerr = 106; goto _Exit;
+			}
+		}
+		else { // phase plate only
+			if (bcppl) {
+				cuerr = ArrayOpMulPPC01(m_d_wav, m_d_wav0, m_d_knx, m_d_kny, m_d_cppl, dx, dy, fz, stats);
+			}
+			else {
+				cuerr = ArrayOpMulPP01(m_d_wav, m_d_wav0, m_d_knx, m_d_kny, dx, dy, fz, stats);
+			}
+			if (cuerr != cudaSuccess) {
+				PostCUDAError("(OffsetIncomingWave): failed to multiply phase-plate to wave function on device", cuerr);
+				nerr = 106; goto _Exit;
+			}
 		}
 	}
 
 _Exit:
 	DeallocMem_h((void**)&_h_pp);
-	DeallocMem_d((void**)&_d_pp);
+	//DeallocMem_d((void**)&_d_pp);
 	return nerr;
 }
 
@@ -2054,10 +2191,11 @@ int CJMultiSlice::DescanDifN(int whichcode, int dnx, int dny, float* dif, int iT
 	int j1 = 0, jj1 = 0, idx1 = 0;
 	size_t nitems = (size_t)m_nscx * m_nscy;
 	size_t nbytes = 0;
+	ArrayOpStats1 stats;
 	cudaError_t cuerr = cudaSuccess;
 	float* _h_desc = NULL;
 	float* _h_cp = NULL;
-	float dsum = 0.f;
+	//float dsum = 0.f;
 	//
 	// check for invalid parameters
 	if ((0 < (whichcode & (int)_JMS_CODE_CPU)) && (0 < (whichcode & (int)_JMS_CODE_GPU))) {
@@ -2081,47 +2219,50 @@ int CJMultiSlice::DescanDifN(int whichcode, int dnx, int dny, float* dif, int iT
 		goto _Exit;
 	}
 	//
-	// prepare a host buffer receiving the shifted diffraction pattern
 	nbytes = sizeof(float)*((size_t)nitems);
-	if (0<AllocMem_h((void**)&_h_cp, nbytes, "DescanDif", "_h_cp")) { nerr = 2; goto _Exit; } // allocation of array failed
-	if (0<AllocMem_h((void**)&_h_desc, nbytes, "DescanDif", "_h_desc")) { nerr = 3; goto _Exit; } // allocation of array failed
-	// fill data from cores
+	//
+	// CPU core readout
 	if (whichcode & (int)_JMS_CODE_CPU && (m_status_setup_CPU & (int)_JMS_THRESHOLD_CALC) > 0 &&
 		iThread >= 0 && iThread < m_ncputhreads) {
+		// prepare a host buffer receiving the shifted diffraction pattern
+		if (0 < AllocMem_h((void**)&_h_cp, nbytes, "DescanDif", "_h_cp")) { nerr = 2; goto _Exit; } // allocation of array failed
+		if (0 < AllocMem_h((void**)&_h_desc, nbytes, "DescanDif", "_h_desc")) { nerr = 3; goto _Exit; } // allocation of array failed
+		// fill data from cores
 		nerr = m_jcpuco[iThread].GetDataPow(_h_cp); // direct readout to host buffer
-		dsum = GetTotalF(_h_cp, nitems);
-	}
-	if (whichcode & (int)_JMS_CODE_GPU && (m_status_setup_GPU & (int)_JMS_THRESHOLD_CALC) > 0) {
-		nerr = m_jgpuco.GetDataPow(_h_cp); // direct readout to host buffer
-		dsum = GetTotalF(_h_cp, nitems);
-	}
-	if (nerr > 0) {
-		snprintf(m_msg, _JPG_MESSAGE_LEN, "(CJMultiSlice::DescanDifN): Failed to readout diffraction power (code type: %d, thread: %d, error code: %d)", whichcode, iThread, nerr);
-		nerr = 4; goto _Exit;
-	}
-	// pixel-shift de-scan loop with periodic wrap-around
-	for (j = 0; j < m_nscy; j++) { // loop over rows
-		j1 = mod(j + dny, m_nscy); // shifted row index // use inline mod since numbers can be negative
-		jj = j * m_nscx; // row offset
-		jj1 = j1 * m_nscx; // shifted row offset
-		for (i = 0; i < m_nscx; i++) {
-			idx = i + jj; // index
-			idx1 = mod(i + dnx, m_nscx) + jj1; // shifted index // use inline mod since numbers can be negative
-			_h_desc[idx1] = _h_cp[idx]; // copy shifted
+		//dsum = GetTotalF(_h_cp, nitems);
+		if (nerr > 0) {
+			snprintf(m_msg, _JPG_MESSAGE_LEN, "(CJMultiSlice::DescanDifN): Failed to readout diffraction power (code type: %d, thread: %d, error code: %d)", whichcode, iThread, nerr);
+			nerr = 4; goto _Exit;
 		}
-	}
-	if (whichcode & (int)_JMS_CODE_CPU && (m_status_setup_CPU & (int)_JMS_THRESHOLD_CALC) > 0 &&
-		iThread >= 0 && iThread < m_ncputhreads) {
-		dsum = GetTotalF(_h_desc, nitems);
+		// pixel-shift de-scan loop with periodic wrap-around
+		for (j = 0; j < m_nscy; j++) { // loop over rows
+			j1 = mod(j - dny, m_nscy); // shifted row index // use inline mod since numbers can be negative
+			jj = j * m_nscx; // row offset
+			jj1 = j1 * m_nscx; // shifted row offset
+			for (i = 0; i < m_nscx; i++) {
+				idx = i + jj; // index
+				idx1 = mod(i - dnx, m_nscx) + jj1; // shifted index // use inline mod since numbers can be negative
+				_h_desc[idx1] = _h_cp[idx]; // copy shifted
+			}
+		}
 		if (dif != memcpy(dif, _h_desc, nbytes)) { // copy to host output buffer
 			nerr = 5; goto _Exit; // result copy error
 		}
 	}
+
+	// GPU core readout
 	if (whichcode & (int)_JMS_CODE_GPU && (m_status_setup_GPU & (int)_JMS_THRESHOLD_CALC) > 0) {
-		dsum = GetTotalF(_h_desc, nitems);
-		cuerr = cudaMemcpy(dif, _h_desc, nbytes, ::cudaMemcpyHostToDevice);
+		nerr = m_jgpuco.GetDataPow_d(m_d_det_tmp2); // direct readout to temp device buffer
+		// shift back for descan
+		stats.uSize = (unsigned int)nitems;
+		stats.nBlockSize = m_jgpuco.GetBlockSize();
+		stats.nGridSize = (int)((nitems + stats.nBlockSize - 1) / stats.nBlockSize);
+		unsigned int dux = (unsigned int)mod(-dnx, m_nscx);
+		unsigned int duy = (unsigned int)mod(-dny, m_nscy);
+		cuerr = ArrayOpFShift2d(dif, m_d_det_tmp2, dux, duy, (unsigned int)m_nscx, (unsigned int)m_nscy, stats);
 		if (cuerr != cudaSuccess) {
-			nerr = 5; goto _Exit; // result copy error
+			PostCUDAError("(DescanDifN): failed to apply beam tilt descan to wave function on device", cuerr);
+			nerr = 5; goto _Exit;
 		}
 	}
 
@@ -2169,12 +2310,12 @@ int CJMultiSlice::DescanDifWavN_h(int dnx, int dny, fcmplx* wav, int iThread)
 	}
 	// pixel-shift de-scan loop with periodic wrap-around
 	for (j = 0; j < m_nscy; j++) { // loop over rows
-		j1 = mod(j + dny, m_nscy); // shifted row index // use inline mod since numbers can be negative
+		j1 = mod(j - dny, m_nscy); // shifted row index // use inline mod since numbers can be negative
 		jj = j * m_nscx; // row offset
 		jj1 = j1 * m_nscx; // shifted row offset
 		for (i = 0; i < m_nscx; i++) {
 			idx = i + jj; // index
-			idx1 = mod(i + dnx, m_nscx) + jj1; // shifted index // use inline mod since numbers can be negative
+			idx1 = mod(i - dnx, m_nscx) + jj1; // shifted index // use inline mod since numbers can be negative
 			wav[idx1] = _h_cp[idx]; // copy shifted
 		}
 	}
@@ -2193,11 +2334,14 @@ int CJMultiSlice::DescanDifWavN_d(int dnx, int dny, cuComplex* wav)
 	int nerr = 0;
 	int i = 0, j = 0, jj = 0, idx = 0;
 	int j1 = 0, jj1 = 0, idx1 = 0;
+	unsigned int dux = (unsigned int)mod(-dnx, m_nscx);
+	unsigned int duy = (unsigned int)mod(-dny, m_nscy);
 	size_t nitems = (size_t)m_nscx * m_nscy;
 	size_t nbytes = 0;
+	ArrayOpStats1 stats;
 	cudaError_t cuerr = cudaSuccess;
-	fcmplx* _h_desc = NULL;
-	fcmplx* _h_cp = NULL;
+	//fcmplx* _h_desc = NULL;
+	//fcmplx* _h_cp = NULL;
 	float dsum = 0.f;
 	//
 	// check for invalid parameters
@@ -2213,34 +2357,46 @@ int CJMultiSlice::DescanDifWavN_d(int dnx, int dny, cuComplex* wav)
 		goto _Exit;
 	}
 	//
-	// prepare a host buffer receiving the shifted diffraction pattern
-	nbytes = sizeof(fcmplx)*((size_t)nitems);
-	if (0<AllocMem_h((void**)&_h_cp, nbytes, "DescanDifWavN_d", "_h_cp")) { nerr = 2; goto _Exit; } // allocation of array failed
-	if (0<AllocMem_h((void**)&_h_desc, nbytes, "DescanDifWavN_d", "_h_desc")) { nerr = 3; goto _Exit; } // allocation of array failed
-	// fill data from core
-	nerr = m_jgpuco.GetDataC(_h_cp); // direct readout to host buffer
-	if (nerr > 0) {
-		snprintf(m_msg, _JPG_MESSAGE_LEN, "(CJMultiSlice::DescanDifWavN_d): Failed to readout wave function from device (error code: %d)", nerr);
-		nerr = 4; goto _Exit;
-	}
-	// pixel-shift de-scan loop with periodic wrap-around
-	for (j = 0; j < m_nscy; j++) { // loop over rows
-		j1 = mod(j + dny, m_nscy); // shifted row index // use inline mod since numbers can be negative
-		jj = j * m_nscx; // row offset
-		jj1 = j1 * m_nscx; // shifted row offset
-		for (i = 0; i < m_nscx; i++) {
-			idx = i + jj; // index
-			idx1 = mod(i + dnx, m_nscx) + jj1; // shifted index // use inline mod since numbers can be negative
-			_h_desc[idx1] = _h_cp[idx]; // copy shifted
-		}
-	}
-	cuerr = cudaMemcpy(wav, _h_desc, nbytes, ::cudaMemcpyHostToDevice);
+	//// prepare a host buffer receiving the shifted diffraction pattern
+	//nbytes = sizeof(fcmplx)*((size_t)nitems);
+	//if (0<AllocMem_h((void**)&_h_cp, nbytes, "DescanDifWavN_d", "_h_cp")) { nerr = 2; goto _Exit; } // allocation of array failed
+	//if (0<AllocMem_h((void**)&_h_desc, nbytes, "DescanDifWavN_d", "_h_desc")) { nerr = 3; goto _Exit; } // allocation of array failed
+	//// fill data from core
+	//nerr = m_jgpuco.GetDataC(_h_cp); // direct readout to host buffer
+	//if (nerr > 0) {
+	//	snprintf(m_msg, _JPG_MESSAGE_LEN, "(CJMultiSlice::DescanDifWavN_d): Failed to readout wave function from device (error code: %d)", nerr);
+	//	nerr = 4; goto _Exit;
+	//}
+	//// pixel-shift de-scan loop with periodic wrap-around
+	//for (j = 0; j < m_nscy; j++) { // loop over rows
+	//	j1 = mod(j + dny, m_nscy); // shifted row index // use inline mod since numbers can be negative
+	//	jj = j * m_nscx; // row offset
+	//	jj1 = j1 * m_nscx; // shifted row offset
+	//	for (i = 0; i < m_nscx; i++) {
+	//		idx = i + jj; // index
+	//		idx1 = mod(i + dnx, m_nscx) + jj1; // shifted index // use inline mod since numbers can be negative
+	//		_h_desc[idx1] = _h_cp[idx]; // copy shifted
+	//	}
+	//}
+	//cuerr = cudaMemcpy(wav, _h_desc, nbytes, ::cudaMemcpyHostToDevice);
+	//if (cuerr != cudaSuccess) {
+	//	nerr = 5; goto _Exit; // result copy error
+	//}
+	m_jgpuco.GetDataC_d(m_d_det_tmpwav); // direct readout to device buffer
+	// shift back for descan
+	stats.uSize = (unsigned int)nitems;
+	stats.nBlockSize = m_jgpuco.GetBlockSize();
+	stats.nGridSize = (int)((nitems + stats.nBlockSize - 1) / stats.nBlockSize);
+	cuerr = ArrayOpCShift2d(wav, m_d_det_tmpwav, dux, duy, (unsigned int)m_nscx, (unsigned int)m_nscy, stats);
 	if (cuerr != cudaSuccess) {
-		nerr = 5; goto _Exit; // result copy error
+		PostCUDAError("(DescanDifWavN_d): failed to apply beam tilt descan to wave function on device", cuerr);
+		nerr = 5; goto _Exit;
 	}
+
+
 _Exit:
-	DeallocMem_h((void**)&_h_cp);
-	DeallocMem_h((void**)&_h_desc);
+	//DeallocMem_h((void**)&_h_cp);
+	//DeallocMem_h((void**)&_h_desc);
 	return nerr;
 }
 
@@ -2802,6 +2958,7 @@ int CJMultiSlice::Cleanup(void)
 	DeallocMem_d((void**)&m_d_wav0);
 	DeallocMem_d((void**)&m_d_det_tmpwav);
 	DeallocMem_d((void**)&m_d_det_tmp);
+	DeallocMem_d((void**)&m_d_det_tmp2);
 	DeallocMem_h((void**)&m_status_calc_CPU);
 	if (NULL != m_jcpuco && m_ncputhreads >0) { // there seem to be old cores, get rid of them
 		for (icore = 0; icore < m_ncputhreads; icore++) {

@@ -295,6 +295,8 @@ protected:
 	fcmplx *m_h_wav;
 	// host memory backup of incident wave function (common for all threads)
 	fcmplx *m_h_wav0;
+	// host memory of a constant phase plate due to aberrations of the probe-forming optics
+	float *m_h_cppl;
 	// list of host memory phase gratings (pointers for each slice to external arrays, for each slice several variants via m_nvarslc)
 	fcmplx **m_h_pgr;
 	// list of host memory holding propagators (pointers for each propagator to external arrays, ID via m_proidx)
@@ -333,6 +335,8 @@ protected:
 	cuComplex *m_d_wav;
 	// device memory holding a backup of the incident wave function (one)
 	cuComplex *m_d_wav0;
+	// device memory of a constant phase plate due to aberrations of the probe-forming optics
+	float *m_d_cppl;
 	// device memory holding phase gratings ( -> m_slcoffset[islc] + ivar*m_nscx*m_nscy )
 	cuComplex *m_d_pgr;
 	// device memory holding propagators ( -> ipro*m_nscx*m_nscy )
@@ -367,6 +371,8 @@ protected:
 	float m_d_weight_wavavg;
 	// device memory used temporary for readout steps (managed by InitCore)
 	float *m_d_det_tmp;
+	// device memory used temporary for readout steps (managed by InitCore)
+	float *m_d_det_tmp2;
 	// device memory used temporary for readout steps (managed by InitCore)
 	cuComplex *m_d_det_tmpwav;
 	// device diffraction de-scan in x-direction pixels
@@ -529,7 +535,8 @@ public:
 	// - det: pointer to a float array receiving the detector function data (pre-allocated)
 	// - msklen: length of an access pixel mask list
 	// - msk: pointer to an access pixel mask list, which speeds up the detector readout, optional (pre-allocated)
-	int CalculateRingDetector(float beta0, float beta1, float phi0, float phi1, float theta0x, float theta0y, std::string sdsprofile, float *det, int &msklen, int *msk=NULL);
+	// - kmom1: first moment pattern index (0 by default)
+	int CalculateRingDetector(float beta0, float beta1, float phi0, float phi1, float theta0x, float theta0y, std::string sdsprofile, float *det, int &msklen, int *msk=NULL, int kmom1=0);
 
 	// Prepare phase grating data setup
 	// This function is common for both codes, CPU and GPU.
@@ -618,6 +625,16 @@ public:
 	// - wav: pointer to wave function data (assumed to be in Fourier space)
 	// - bTranspose: flag causing a 2d transpose from input to module buffer (default: false)
 	int SetIncidentWave(int whichcode, fcmplx* wav, bool bTranspose=false);
+
+	// Stores the phase plate to be appplied to the incident wave function
+	// - whichcode: flag signaling which code to prepare (_JMS_CODE_CPU | _JMS_CODE_GPU)
+	// - ppl: pointer to phase plate data (scrambled Fourier space)
+	// - bTranspose: flag causing a 2d transpose from input to module buffer (default: false)
+	int SetIncidentWavePhaseplate(int whichcode, float* ppl, bool bTranspose = false);
+
+	// Sets the phase plate to be appplied to the incident wave function to zero
+	// - whichcode: flag signaling which code to prepare (_JMS_CODE_CPU | _JMS_CODE_GPU)
+	int ZeroIncidentWavePhaseplate(int whichcode);
 
 	// Returns a hash table to unscramble the Fourier space by means of index access.
 	// After unscrambling, the zero beam is on pixel (m_nscx/2, m_nscy/2).
@@ -838,7 +855,9 @@ public:
 	// - whichcode: flag signaling which code to prepare (_JMS_CODE_CPU | _JMS_CODE_GPU)
 	// - dx, dy, dz: offset distances in 3 dimensions and nm units.
 	// - iThread: thread ID for CPU code, ignored for GPU code
-	int OffsetIncomingWave(int whichcode, float dx, float dy, float dz, int iThread = 0);
+	// - ibtx, ibty: offset tilt in Fourier pixels. Defaults to zero. (added 2022-Apr-07 for SPED simulations)
+	// - bcppl: flag to use the constant phase plates stored in m_h_cppl / m_d_cppl. Defaults tu true. (added 2022-Apr-14 for SPED simulations)
+	int OffsetIncomingWave(int whichcode, float dx, float dy, float dz, int iThread = 0, int ibtx = 0, int ibty = 0, bool bcppl = true);
 
 	// Ignores the backup wave function m_d_wav0 and stores wav directly in
 	// the wave function channel m_d_wav for the GPU multislice calculation.

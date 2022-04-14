@@ -739,23 +739,98 @@ int CJProbeGen::CalculateProbeWaveFourier(CJProbeParams* prm, int nx, int ny, fl
 	memset(qnx, 0, nbytesx);
 	memset(qny, 0, nbytesy);
 	memset(wav, 0, sizeof(fcmplx)*nx*ny);
-	for (i = 0; i < nx; i++) { // setup horizontal index -> qx + btx
-		qnx[i] = (float)(((i + nx2) % nx) - nx2) / ax + btx;
+	for (i = 0; i < nx; i++) { // setup horizontal index -> qx 
+		qnx[i] = (float)(((i + nx2) % nx) - nx2) / ax;
 	}
-	for (j = 0; j < ny; j++) { // setup vertical index -> qy + bty
-		qny[j] = (float)(((j + ny2) % ny) - ny2) / ay + bty;
+	for (j = 0; j < ny; j++) { // setup vertical index -> qy 
+		qny[j] = (float)(((j + ny2) % ny) - ny2) / ay;
 	}
 	//
 	for (j = 0; j < ny; j++) { // loop over grid rows
 		ij = j * nx;
 		for (i = 0; i < nx; i++) { // loop over grid columns
-			wap = ApertureFunctionA(qnx[i], qny[j], qlcx, qlcy, qlim, alim, adir, qrs); // aperture with smoothing of 1 pixel
+			// calculate aperture function incl. beam tilt
+			wap = ApertureFunctionA(qnx[i] - btx, qny[j] - bty, qlcx, qlcy, qlim, alim, adir, qrs); // aperture with smoothing of 1 pixel
 			if (wap >(float)_JPG_PROBE_APERTURE_THRESH) {
 				if (nab > 0) {
+					// calculate aberration function axial (with beam tilt, tilt-induced aberrations occur)
 					chi = AberrationFunction(qnx[i], qny[j], prm->m_wl, nab, prm->m_abrr_coeff);
 				}
 				wav[i + ij] = fcmplx(wap*cosf(chi), -wap * sinf(chi));
 				wpow += (wap*wap);
+			}
+		}
+	}
+	// normalize
+	fsca = 1.f / sqrtf(wpow);
+	for (j = 0; j < ny; j++) { // loop over grid rows
+		ij = j * nx;
+		for (i = 0; i < nx; i++) { // loop over grid columns
+			wav[i + ij] = wav[i + ij] * fsca; // apply normalization factor
+		}
+	}
+	//
+	if (NULL != qnx) free(qnx);
+	if (NULL != qny) free(qny);
+	return 0;
+}
+
+
+int CJProbeGen::CalculateProbeWaveFourier2(CJProbeParams* prm, int nx, int ny, float ax, float ay, fcmplx *wav, float *ppl)
+{
+	// Assumes that parameters are all valid, do checks before calling this routine.
+	if (NULL == wav) {
+		return 1;
+	}
+	int nitems = nx * ny;
+	int i = 0, j = 0, ij = 0;
+	size_t nbytesx = sizeof(float) * nx;
+	size_t nbytesy = sizeof(float) * ny;
+	int nx2 = (nx - (nx % 2)) >> 1;
+	int ny2 = (ny - (ny % 2)) >> 1;
+	int nab = 0;
+	float *qnx = NULL;
+	float *qny = NULL;
+	float btx = 0.f, bty = 0.f;
+	float qlcx = 0.f, qlcy = 0.f, qlim = 0.f, alim = 0.f, adir = 0.f, qrs = 0.05f;
+	float chi = 0.f;
+	float wap = 0.f;
+	float wpow = 0.f, fsca = 1.f;
+	nab = prm->GetAberrationNum();
+	qlim = prm->m_alpha * 0.001f / prm->m_wl; // mrad -> 1/nm
+	qrs = prm->m_alpha_rs;
+	alim = prm->m_alpha_asym;
+	adir = prm->m_alpha_adir * 0.0174533f; // deg -> rad
+	qlcx = prm->m_alpha_x0 * 0.001f / prm->m_wl; // mrad -> 1/nm
+	qlcy = prm->m_alpha_y0 * 0.001f / prm->m_wl; // mrad -> 1/nm
+	btx = prm->m_btx * 0.001f / prm->m_wl; // mrad -> 1/nm
+	bty = prm->m_bty * 0.001f / prm->m_wl; // mrad -> 1/nm
+	//
+	qnx = (float*)malloc(nbytesx);
+	qny = (float*)malloc(nbytesy);
+	memset(qnx, 0, nbytesx);
+	memset(qny, 0, nbytesy);
+	memset(wav, 0, sizeof(fcmplx)*nx*ny);
+	memset(ppl, 0, sizeof(float)*nx*ny);
+	for (i = 0; i < nx; i++) { // setup horizontal index -> qx 
+		qnx[i] = (float)(((i + nx2) % nx) - nx2) / ax;
+	}
+	for (j = 0; j < ny; j++) { // setup vertical index -> qy 
+		qny[j] = (float)(((j + ny2) % ny) - ny2) / ay;
+	}
+	//
+	for (j = 0; j < ny; j++) { // loop over grid rows
+		ij = j * nx;
+		for (i = 0; i < nx; i++) { // loop over grid columns
+			// calculate aperture function incl. beam tilt
+			wap = ApertureFunctionA(qnx[i] - btx, qny[j] - bty, qlcx, qlcy, qlim, alim, adir, qrs); // aperture with smoothing of 1 pixel
+			if (wap > (float)_JPG_PROBE_APERTURE_THRESH) {
+				wav[i + ij] = fcmplx(wap, 0.f);
+				wpow += (wap*wap);
+			}
+			if (nab > 0) {
+				// calculate aberration function axial (with beam tilt, tilt-induced aberrations occur)
+				ppl[i + ij] = AberrationFunction(qnx[i], qny[j], prm->m_wl, nab, prm->m_abrr_coeff);
 			}
 		}
 	}
@@ -819,11 +894,11 @@ int CJProbeGen::CalculateProbeIntensityCoh(CJProbeParams* prm, int ndim, float s
 	}
 	// set Fourier coefficients in wav
 	for (j = 0; j < ndim; j++) { // loop over grid rows
-		qy = qn[j] + bty;
+		qy = qn[j];
 		ij = j * ndim;
 		for (i = 0; i < ndim; i++) { // loop over grid columns
-			qx = qn[i] + btx;
-			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, qrs); // aperture with smoothing of 2 pixels
+			qx = qn[i];
+			wap = ApertureFunctionA(qx-btx, qy-bty, qlcx, qlcy, qlim, alim, adir, qrs); // aperture with smoothing of 2 pixels
 			if (wap >(float)_JPG_PROBE_APERTURE_THRESH) {
 				if (nab > 0) {
 					chi = AberrationFunction(qx, qy, lprm.m_wl, nab, lprm.m_abrr_coeff);
@@ -898,11 +973,11 @@ int CJProbeGen::CalculateProbeIntensityPSC(CJProbeParams* prm, int ndim, float s
 	}
 	// set Fourier coefficients in wav
 	for (j = 0; j < ndim; j++) { // loop over grid rows
-		qy = qn[j] + bty;
+		qy = qn[j];
 		ij = j * ndim;
 		for (i = 0; i < ndim; i++) { // loop over grid columns
-			qx = qn[i] + btx;
-			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, qrs); // aperture with smoothing of 2 pixels
+			qx = qn[i];
+			wap = ApertureFunctionA(qx-btx, qy-bty, qlcx, qlcy, qlim, alim, adir, qrs); // aperture with smoothing of 2 pixels
 			if (wap >(float)_JPG_PROBE_APERTURE_THRESH) {
 				if (nab > 0) {
 					chi = AberrationFunction(qx, qy, lprm.m_wl, nab, lprm.m_abrr_coeff);
@@ -1008,12 +1083,12 @@ int CJProbeGen::CalculateProbeIntensityPTC(CJProbeParams* prm, int ndim, float s
 	}
 	// set basis aberration function and the extra focal term in chi2
 	for (j = 0; j < ndim; j++) { // loop over grid rows
-		qy = qn[j] + bty;
+		qy = qn[j];
 		ij3 = j * ndim * 3;
 		for (i = 0; i < ndim; i++) { // loop over grid columns
 			ptmp3 = &tmp3[3 * i + ij3];
-			qx = qn[i] + btx;
-			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, qrs); // aperture with smoothing of 2 pixel
+			qx = qn[i];
+			wap = ApertureFunctionA(qx-btx, qy-bty, qlcx, qlcy, qlim, alim, adir, qrs); // aperture with smoothing of 2 pixel
 			chi = 0.f;
 			zchi = 0.f;
 			if (wap >(float)_JPG_PROBE_APERTURE_THRESH) {
@@ -1136,12 +1211,12 @@ int CJProbeGen::CalculateProbeIntensity(CJProbeParams *prm, int ndim, float s, f
 	}
 	// set basis aberration function and the extra focal term in chi2
 	for (j = 0; j < ndim; j++) { // loop over grid rows
-		qy = qn[j] + bty;
+		qy = qn[j];
 		ij3 = j * ndim * 3;
 		for (i = 0; i < ndim; i++) { // loop over grid columns
 			ptmp3 = &tmp3[3 * i + ij3];
-			qx = qn[i] + btx;
-			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, qrs); // aperture with smoothing of 2 pixels
+			qx = qn[i];
+			wap = ApertureFunctionA(qx-btx, qy-bty, qlcx, qlcy, qlim, alim, adir, qrs); // aperture with smoothing of 2 pixels
 			chi = 0.f;
 			zchi = 0.f;
 			if (wap > (float)_JPG_PROBE_APERTURE_THRESH) {
@@ -1262,11 +1337,11 @@ int CJProbeGen::CalculateProbePhase(CJProbeParams* prm, int ndim, float s, float
 	}
 	// set Fourier coefficients in wav
 	for (j = 0; j < ndim; j++) { // loop over grid rows
-		qy = qn[j] + bty;
+		qy = qn[j];
 		ij = j * ndim;
 		for (i = 0; i < ndim; i++) { // loop over grid columns
-			qx = qn[i] + btx;
-			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, qrs); // aperture with smoothing of 2 pixels
+			qx = qn[i];
+			wap = ApertureFunctionA(qx-btx, qy-bty, qlcx, qlcy, qlim, alim, adir, qrs); // aperture with smoothing of 2 pixels
 			if (wap >(float)_JPG_PROBE_APERTURE_THRESH) {
 				if (nab > 0) {
 					chi = AberrationFunction(qx, qy, lprm.m_wl, nab, lprm.m_abrr_coeff);
@@ -1336,11 +1411,11 @@ int CJProbeGen::CalculateProbeRe(CJProbeParams *prm, int ndim, float s, float* p
 	}
 	// set Fourier coefficients in wav
 	for (j = 0; j < ndim; j++) { // loop over grid rows
-		qy = qn[j] + bty;
+		qy = qn[j];
 		ij = j * ndim;
 		for (i = 0; i < ndim; i++) { // loop over grid columns
-			qx = qn[i] + btx;
-			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, qrs); // aperture with smoothing of 2 pixels
+			qx = qn[i];
+			wap = ApertureFunctionA(qx-btx, qy-bty, qlcx, qlcy, qlim, alim, adir, qrs); // aperture with smoothing of 2 pixels
 			if (wap >(float)_JPG_PROBE_APERTURE_THRESH) {
 				if (nab > 0) {
 					chi = AberrationFunction(qx, qy, lprm.m_wl, nab, lprm.m_abrr_coeff);
@@ -1409,11 +1484,11 @@ int CJProbeGen::CalculateProbeIm(CJProbeParams *prm, int ndim, float s, float* p
 	}
 	// set Fourier coefficients in wav
 	for (j = 0; j < ndim; j++) { // loop over grid rows
-		qy = qn[j] + bty;
+		qy = qn[j];
 		ij = j * ndim;
 		for (i = 0; i < ndim; i++) { // loop over grid columns
-			qx = qn[i] + btx;
-			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim,adir, qrs); // aperture with smoothing of 1 pixel
+			qx = qn[i];
+			wap = ApertureFunctionA(qx-btx, qy-bty, qlcx, qlcy, qlim, alim,adir, qrs); // aperture with smoothing of 1 pixel
 			if (wap >(float)_JPG_PROBE_APERTURE_THRESH) {
 				if (nab > 0) {
 					chi = AberrationFunction(qx, qy, lprm.m_wl, nab, lprm.m_abrr_coeff);
@@ -1451,8 +1526,8 @@ int CJProbeGen::CalculateAberrationPhasePlate(CJProbeParams* prm, int ndim, floa
 		int i = 0, j = 0, ij = 0; // iterators
 		float sq = 1.f / (s * ndim); // q sampling = 1 / physical box size (x and y)
 		float *qn = (float*)malloc(nbytes); // allocate frequency helper
-		float btx = prm->m_btx * 0.001f / prm->m_wl; // beam tilt X: mrad -> 1/nm
-		float bty = prm->m_bty * 0.001f / prm->m_wl; // beam tilt Y: mrad -> 1/nm
+		//float btx = prm->m_btx * 0.001f / prm->m_wl; // beam tilt X: mrad -> 1/nm
+		//float bty = prm->m_bty * 0.001f / prm->m_wl; // beam tilt Y: mrad -> 1/nm
 		//
 		for (i = 0; i < ndim; i++) { // setup frequency hash: i -> q (not scrambled!!!)
 			qn[i] = sq * (i - ndim2);
@@ -1461,7 +1536,7 @@ int CJProbeGen::CalculateAberrationPhasePlate(CJProbeParams* prm, int ndim, floa
 		for (j = 0; j < ndim; j++) { // loop over grid rows
 			ij = j * ndim;
 			for (i = 0; i < ndim; i++) { // loop over grid columns
-				pdata[i+ij] = AberrationFunction(qn[i]+btx, qn[j]+bty, prm->m_wl, nab, prm->m_abrr_coeff);
+				pdata[i+ij] = AberrationFunction(qn[i], qn[j], prm->m_wl, nab, prm->m_abrr_coeff);
 			}
 		}
 		free(qn);
@@ -1502,7 +1577,7 @@ int CJProbeGen::SetAmorph(int ndim, float s, bool bForce)
 		float fd = (float)(1. / pow(_JPG_AMORPH_SCATANG1,2));
 		float dwf = (float)(0.25*_JPG_AMORPH_DWPRM);
 		float sq = 1.f / (s * ndim); // Fourier scale for atomic form factors
-		float qy2 = 0.f, q2 = 0.f;
+		float qy2 = 0.f, q2 = 0.f, vpha = 0.f;
 		// 1) setup atomic form factor in Fourier space (float* atff)
 		float* qn = (float*)malloc(sizeof(float)*ndim);
 		if (NULL == qn) return 2;
@@ -1511,12 +1586,13 @@ int CJProbeGen::SetAmorph(int ndim, float s, bool bForce)
 		}
 		float* atff = (float*)malloc(sizeof(float)*nitems);
 		if (NULL == atff) return 2;
-		for (j = 0; j < ndim; j++) {
+		for (j = 0; j < ndim; j++) { // setup an atomic form factor
 			ij = j * ndim;
 			qy2 = qn[j] * qn[j];
 			for (i = 0; i < ndim; i++) {
 				q2 = qy2 + qn[i] * qn[i];
-				atff[i + ij] = (float)_JPG_AMORPH_PHASEMAX / (q2*fd + 1.0f)*exp(-dwf * q2);
+				//atff[i + ij] = (float)_JPG_AMORPH_PHASEMAX / (q2*fd + 1.0f)*exp(-dwf * q2);
+				atff[i + ij] = 1.f / (q2*fd + 1.0f)*exp(-dwf * q2);
 			}
 		}
 		// 2) setup random phases in real-space (float* rndpha)
@@ -1525,9 +1601,10 @@ int CJProbeGen::SetAmorph(int ndim, float s, bool bForce)
 		for (ls = 0; ls < nitems; ls++) {
 			//rand_s(&urnd); // get random number
 			urnd = rand();
-			rndpha[ls] = (float)(_TPI * (double)urnd / (double)(UINT_MAX-1) ); // set random phase values from 0 to 2*Pi
+			vpha = (float)((((double)urnd / (double)(RAND_MAX - 1)) - 0.5) * 2.0);
+			rndpha[ls] = (float)(_JPG_AMORPH_PHASEMAX * (1.0 + 0.2 * vpha)); // set random phase values
 		}
-		// 3) transform random phase to Fourier-space
+		// 3) transform random phase to Fourier-space and multiply the form factor
 		int nd2[2] = { ndim,ndim };
 		//CJFFTWcore jfft;
 		//jfft.Init(2, nd2, FFTW_MEASURE);
@@ -1535,14 +1612,13 @@ int CJProbeGen::SetAmorph(int ndim, float s, bool bForce)
 		jfft.Init(2, nd2);
 		jfft.Zero();
 		jfft.SetDataRe(rndpha);
-		jfft.FT(); // Fourier Transform
-		jfft.Scale(1.f / (float)ndim); // rescale
-		// 4) multiply by atff -> (fcmplx* obj)
+		jfft.FT();
+		// multiply by atff -> (fcmplx* obj)
 		jfft.MultiplyF(atff);
-		// 5) inverse Fourier transform
+		// inverse Fourier transform
 		jfft.IFT(); // Inverse Fourier Transform
-		jfft.Scale(1.f / (float)ndim); // rescale
-		// 6) m_amorph_pgr = exp( i * obj.re)
+		jfft.Scale(1.f / (float)(ndim*ndim)); // rescale
+		// m_amorph_pgr = exp( i * obj.re)
 		fcmplx obj;
 		jfft.GetDataC(m_amorph_pgr);
 		for (ls = 0; ls < nitems; ls++) {
@@ -1624,12 +1700,12 @@ int CJProbeGen::CalculateRonchigram(CJProbeParams* prm, int ndim, float s, float
 	nerr = SetAmorph(ndim, s);
 	// set basis aberration function and the extra focal term in chi2
 	for (j = 0; j < ndim; j++) { // loop over grid rows
-		qy = qn[j] + bty;
+		qy = qn[j];
 		ij3 = j * ndim * 3;
 		for (i = 0; i < ndim; i++) { // loop over grid columns
 			ptmp3 = &tmp3[3 * i + ij3];
-			qx = qn[i] + btx;
-			wap = ApertureFunctionA(qx, qy, qlcx, qlcy, qlim, alim, adir, qrs); // aperture with smoothing of 1 pixel
+			qx = qn[i];
+			wap = ApertureFunctionA(qx-btx, qy-bty, qlcx, qlcy, qlim, alim, adir, qrs); // aperture with smoothing of 1 pixel
 			chi = 0.f;
 			zchi = 0.f;
 			if (wap >(float)_JPG_PROBE_APERTURE_THRESH) {

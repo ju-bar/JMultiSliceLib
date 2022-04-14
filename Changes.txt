@@ -1,5 +1,19 @@
 List of changes to JMultiSliceLib
 
+!( this copy is not up to date, further dev was done off-sides the GitHub master )
+!( this copy is partially updated to provide more functions to the Dr. Probe GUI )
+
+2022-04-14: 0.46 JB
+- Added pixel-shift beam-tilt to incident wave function offset.
+  This can be used to do precession diffraction calculations while
+  scanning. Take care to set the de-scan paramaters accordingly,
+  otherwise the output remains tilted. The tilt is applied before
+  scan shift and defocus, thus a tilted wavefunction is scanned and
+  defocussed with respective consequences.
+- Inverted beam tilt action. The beam tilt given determines now the
+  point in Fourier-space at which the average incident beam direction
+  is placed. The same effect is caused by shifting the probe aperture.
+- Separated incident probe aperture and phase plate application.
 
 2020-06-10: 0.45 JB
 - Added and tested code for separating elastic and tds channels

@@ -285,7 +285,17 @@ public:
 	// - wav: address receiving the probe wave function
 	int CalculateProbeWaveFourier(CJProbeParams* prm, int nx, int ny, float ax, float ay, fcmplx *wav);
 
-	// calculates an aberration phase plate
+	// calculates a STEM probe wavefunction in Fourier space using current parameters
+	// the result is an unaberrated probe limited by an aperture (wav) and the full
+	// phase plate ppl in scrambled Fourier space representation
+	// - prm: address of a CJProbeParams object defining physical probe parameters
+	// - nx, ny: number of pixels fo wav
+	// - ax, ay: physical size of wav [nm]
+	// - wav: address receiving the aberration-free probe wave function
+	// - ppl: address receiving the phase plate (constant aberration function)
+	int CalculateProbeWaveFourier2(CJProbeParams* prm, int nx, int ny, float ax, float ay, fcmplx *wav, float *ppl);
+
+	// calculates an aberration phase plate (the result is with the zero beam centred)
 	// - prm: aberration parameters
 	// - ndim: size of the square phase plate
 	// - s: physical sampling rate in real space [nm/pix]

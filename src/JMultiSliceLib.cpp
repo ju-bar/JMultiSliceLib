@@ -181,6 +181,16 @@ int __stdcall SetIncidentWave(int whichcode, fcmplx* wav)
 	return JMS.SetIncidentWave(whichcode, wav);
 }
 
+int __stdcall SetIncidentWavePhaseplate(int whichcode, float* ppl, bool bTranspose)
+{
+	return JMS.SetIncidentWavePhaseplate(whichcode, ppl, bTranspose);
+}
+
+int __stdcall ZeroIncidentWavePhaseplate(int whichcode)
+{
+	return JMS.ZeroIncidentWavePhaseplate(whichcode);
+}
+
 int __stdcall GetUnscrambleHash(unsigned int* phash)
 {
 	return JMS.GetUnscrambleHash(phash);
@@ -224,9 +234,9 @@ void __stdcall FreeLibMem(void)
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-int __stdcall OffsetIncomingWave(int whichcode, float dx, float dy, float dz, int iThread)
+int __stdcall OffsetIncomingWave(int whichcode, float dx, float dy, float dz, int iThread, int ibtx, int ibty)
 {
-	return JMS.OffsetIncomingWave(whichcode, dx, dy, dz, iThread);
+	return JMS.OffsetIncomingWave(whichcode, dx, dy, dz, iThread, ibtx, ibty);
 }
 
 int __stdcall CalculateProbeWaveFourier(CJProbeParams* prm, fcmplx *wav)
@@ -239,9 +249,9 @@ int __stdcall CalculatePropagator(float fthick, float otx, float oty, fcmplx *pr
 	return JMS.CalculatePropagator(fthick, otx, oty, pro, ntype);
 }
 
-int __stdcall CalculateRingDetector(float beta0, float beta1, float phi0, float phi1, float theta0x, float theta0y, std::string sdsprofile, float *det, int &msklen, int *msk)
+int __stdcall CalculateRingDetector(float beta0, float beta1, float phi0, float phi1, float theta0x, float theta0y, std::string sdsprofile, float *det, int &msklen, int *msk, int kmom1)
 {
-	return JMS.CalculateRingDetector(beta0, beta1, phi0, phi1, theta0x, theta0x, sdsprofile, det, msklen, msk);
+	return JMS.CalculateRingDetector(beta0, beta1, phi0, phi1, theta0x, theta0x, sdsprofile, det, msklen, msk, kmom1);
 }
 
 int __stdcall GetResult(int whichcode, int whichresult, float *dst, int iThread)
