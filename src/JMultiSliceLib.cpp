@@ -331,10 +331,10 @@ int __stdcall GetGPUStats(int idev, int &iCMajor, int &iCMinor, int &iMaxThread,
 	return JMS.GetGPUStats(idev, iCMajor, iCMinor, iMaxThread, CUDAmemtotal, CUDAmemfree);
 }
 
-int __stdcall GetGPUCores(int idev, int &nMultiProc, int &nCores, int& nMaxThreadPerProc)
-{
-	return JMS.GetGPUCores(idev, nMultiProc, nCores, nMaxThreadPerProc);
-}
+//int __stdcall GetGPUCores(int idev, int &nMultiProc, int &nCores, int& nMaxThreadPerProc)
+//{
+//	return JMS.GetGPUCores(idev, nMultiProc, nCores, nMaxThreadPerProc);
+//}
 
 int __stdcall SetIncomingWaveGPU(fcmplx* wav, bool bTranspose)
 {

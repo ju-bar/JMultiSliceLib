@@ -100,8 +100,8 @@ class addingReduction {
     public:
 
     addingReduction(int device=0) : buffer(nullptr), max_blocks(0) {
-        cudaDeviceProp prop;
-        cudaGetDeviceProperties(&prop,device);
+		cudaDeviceProp prop{}; // initialize to zero
+        cudaError_t err = cudaGetDeviceProperties(&prop,device);
         max_blocks=prop.multiProcessorCount*(prop.maxThreadsPerMultiProcessor / blockSize);
         cudaMallocHost(&buffer,max_blocks*sizeof(T));
     }
@@ -112,7 +112,7 @@ class addingReduction {
     template<typename Op, typename ... In>
     T perform(unsigned int n, In* ... in) {
         int gridSize=std::min(max_blocks,1+ (n-1) / blockSize);
-        addingReductionKernel<Op,blockSize><<<gridSize, blockSize >>> (n,buffer,in...);
+        addingReductionKernel<Op,blockSize><<<gridSize, blockSize>>>(n,buffer,in...);
         cudaDeviceSynchronize();
         T dy,dc=0,dt,dsum=0;
         unsigned int nr = (unsigned int)gridSize;

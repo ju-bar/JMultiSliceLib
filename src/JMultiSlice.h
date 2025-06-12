@@ -692,8 +692,8 @@ public:
 	int SetCurrentGPU(int idev);
 	// Returns a few statistical numbers on the GPU device
 	int GetGPUStats(int idev, int &iCMajor, int &iCMinor, int &iMaxThread, int64_t &CUDAmemtotal, int64_t &CUDAmemfree);
-	// Returns core numbers on the GPU device
-	int GetGPUCores(int idev, int &nMultiProcs, int &nCores, int& nMaxThreadPerProc);
+	//// Returns core numbers on the GPU device
+	//int GetGPUCores(int idev, int &nMultiProcs, int &nCores, int& nMaxThreadPerProc);
 	// Returns memory info on current GPU device
 	int GetGPUMemInfo(size_t &memtotal, size_t &memfree);
 	// Sets GPU phase grating loading scheme

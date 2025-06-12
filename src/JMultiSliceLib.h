@@ -209,8 +209,8 @@ extern "C" __declspec(dllexport) int __stdcall SetCurrentGPU(int idev);
 // get some statistics of a GPU device
 extern "C" __declspec(dllexport) int __stdcall GetGPUStats(int idev, int &iCMajor, int &iCMinor, int &iMaxThread, int64_t &CUDAmemtotal, int64_t &CUDAmemfree);
 
-// get some statistics of a GPU device
-extern "C" __declspec(dllexport) int __stdcall GetGPUCores(int idev, int &nMultiProc, int &nCores, int& nMaxThreadPerProc);
+//// get some statistics of a GPU device
+//extern "C" __declspec(dllexport) int __stdcall GetGPUCores(int idev, int &nMultiProc, int &nCores, int& nMaxThreadPerProc);
 
 // Returns a hash table to unscramble the Fourier space by means of index access.
 // After unscrambling, the zero beam is on pixel (m_nscx/2, m_nscy/2).

@@ -31,7 +31,7 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 //
 #define __CUDACC__
 //
-#include <device_functions.h>
+//#include <device_functions.h>
 //
 #endif
 #include <cufft.h>

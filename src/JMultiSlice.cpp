@@ -3758,7 +3758,7 @@ int CJMultiSlice::GetGPUNum(void)
 int CJMultiSlice::GetGPUName(int idev, char* name)
 {
 	cudaError cuerr;
-	cudaDeviceProp prop;
+	cudaDeviceProp prop{};
 	cuerr = cudaGetDeviceProperties(&prop, idev);
 	if (cuerr != cudaSuccess) {
 		PostCUDAError("(GetGPUName): Failed to retrieve GPU devices properties", cuerr);
@@ -3796,7 +3796,7 @@ int CJMultiSlice::SetCurrentGPU(int idev)
 int CJMultiSlice::GetGPUStats(int idev, int &iCMajor, int &iCMinor, int &iMaxThread, int64_t &CUDAmemtotal, int64_t &CUDAmemfree)
 {
 	cudaError cuerr;
-	cudaDeviceProp prop;
+	cudaDeviceProp prop{};
 	cuerr = cudaGetDeviceProperties(&prop, idev);
 	if (cuerr != cudaSuccess) {
 		PostCUDAError("(GetGPUStats): Failed to retrieve GPU devices properties", cuerr);
@@ -3816,38 +3816,38 @@ int CJMultiSlice::GetGPUStats(int idev, int &iCMajor, int &iCMinor, int &iMaxThr
 	return 0;
 }
 
-int CJMultiSlice::GetGPUCores(int idev, int &nMultiProcs, int &nCores, int& nMaxThreadPerProc)
-{
-	cudaError cuerr;
-	cudaDeviceProp prop;
-	cuerr = cudaGetDeviceProperties(&prop, idev);
-	if (cuerr != cudaSuccess) {
-		PostCUDAError("(GetGPUCores): Failed to retrieve GPU devices properties", cuerr);
-		return 1;
-	}
-	nMultiProcs = prop.multiProcessorCount;
-	nCores = 0;
-	nMaxThreadPerProc = prop.maxThreadsPerMultiProcessor;
-	switch (prop.major) {
-	case 2: // Fermi
-		if (prop.minor == 1) nCores = nMultiProcs * 48;
-		else nCores = nMultiProcs * 32;
-		break;
-	case 3: // Kepler
-		nCores = nMultiProcs * 192;
-		break;
-	case 5: // Maxwell
-		nCores = nMultiProcs * 128;
-		break;
-	case 6: // Pascal
-		if (prop.minor == 1) nCores = nMultiProcs * 128;
-		else if (prop.minor == 0) nCores = nMultiProcs * 64;
-		break;
-	default:
-		break;
-	}
-	return 0;
-}
+//int CJMultiSlice::GetGPUCores(int idev, int &nMultiProcs, int &nCores, int& nMaxThreadPerProc)
+//{
+//	cudaError cuerr;
+//	cudaDeviceProp prop{};
+//	cuerr = cudaGetDeviceProperties(&prop, idev);
+//	if (cuerr != cudaSuccess) {
+//		PostCUDAError("(GetGPUCores): Failed to retrieve GPU devices properties", cuerr);
+//		return 1;
+//	}
+//	nMultiProcs = prop.multiProcessorCount;
+//	nCores = 0;
+//	nMaxThreadPerProc = prop.maxThreadsPerMultiProcessor;
+//	switch (prop.major) {
+//	case 2: // Fermi
+//		if (prop.minor == 1) nCores = nMultiProcs * 48;
+//		else nCores = nMultiProcs * 32;
+//		break;
+//	case 3: // Kepler
+//		nCores = nMultiProcs * 192;
+//		break;
+//	case 5: // Maxwell
+//		nCores = nMultiProcs * 128;
+//		break;
+//	case 6: // Pascal
+//		if (prop.minor == 1) nCores = nMultiProcs * 128;
+//		else if (prop.minor == 0) nCores = nMultiProcs * 64;
+//		break;
+//	default:
+//		break;
+//	}
+//	return 0;
+//}
 
 
 int CJMultiSlice::GetGPUMemInfo(size_t &memtotal, size_t &memfree)
