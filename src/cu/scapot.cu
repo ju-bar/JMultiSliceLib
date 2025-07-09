@@ -92,7 +92,7 @@ __global__ void PotToPgrKernel(cuComplex* pgr, cuComplex* pot, cuComplex cisig, 
 
 cudaError_t AddFormFactor2d(cuComplex* pot, cuComplex* ff, float* qx, float* qy, float* ap, float x, float y, float occ, unsigned int nx, unsigned int ny)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = nx * ny; // input size
 	int blockSize = 256; // default block size 
 	int gridSize = (size + blockSize - 1) / blockSize; // grid size needed, based on input size
@@ -121,7 +121,7 @@ Error:
 
 cudaError_t AddIonFormFactor2d(cuComplex* pot, cuComplex* ff, cuComplex* pio, float* qx, float* qy, float* ap, float x, float y, float crg, float occ, unsigned int nx, unsigned int ny)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = nx * ny; // input size
 	int blockSize = 256; // default block size 
 	int gridSize = (size + blockSize - 1) / blockSize; // grid size needed, based on input size
@@ -150,7 +150,7 @@ Error:
 
 cudaError_t AddDampedIonFormFactor2d(cuComplex* pot, cuComplex* ff, cuComplex* pio, float* qx, float* qy, float* ap, float x, float y, float crg, float biso, float occ, unsigned int nx, unsigned int ny)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = nx * ny; // input size
 	int blockSize = 256; // default block size 
 	int gridSize = (size + blockSize - 1) / blockSize; // grid size needed, based on input size
@@ -178,7 +178,7 @@ Error:
 
 cudaError_t PotToPgr(cuComplex* pgr, cuComplex* pot, cuComplex* cisig, unsigned int nx, unsigned int ny)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = nx * ny; // input size
 	int blockSize = 256; // default block size 
 	int gridSize = (size + blockSize - 1) / blockSize; // grid size needed, based on input size

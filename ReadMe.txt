@@ -69,9 +69,14 @@ The code of JMultiSliceLib links to
   https://developer.nvidia.com/cuda-toolkit (accessed April 2018)
   In order to be able to use the GPU routnines of JMultiSliceLib, keep
   your CUDA device drivers updated.
+  The current build is made with CUDA 12.6 and Visual Studio 2022.
 
 You should link these libraries in the calling code and take care to
 comply with the FFTW and CUDA software licenses.
+
+Possible MSVC compiler and CUDA C compiler mismatch might be resolved
+by additional NVCC compiler options:
+   -allow-unsupported-compiler -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH 
 
 
 4) Statement of license

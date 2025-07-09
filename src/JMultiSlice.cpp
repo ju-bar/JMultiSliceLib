@@ -329,6 +329,8 @@ CJMultiSlice::CJMultiSlice() : m_msg("")
 	m_d_pgr_src = 0;
 	m_jcpuco = NULL;
 	m_prng = &m_lrng;
+	m_cuerr_last = cudaSuccess;
+	m_cuerr_msg = "";
 }
 
 CJMultiSlice::~CJMultiSlice()
@@ -1443,7 +1445,7 @@ int CJMultiSlice::SetPhaseGratingData(int whichcode, int islc, int nvar, fcmplx*
 	int nerr = 0;
 	int nitems = m_npgx*m_npgy;
 	int nlvar = 0; // local and used number of variants
-	cudaError cuerr;
+	cudaError_t cuerr = cudaSuccess;
 	size_t nbytes = 0;
 	cuComplex* pgrdst = NULL;
 	if (islc >= 0 && islc < m_nscslc && NULL != pgr && NULL != m_nvarslc) { // valid structure slice ID and pointers
@@ -1477,7 +1479,7 @@ int CJMultiSlice::SetPropagatorData(int whichcode, int ipro, fcmplx* pro)
 	// Assumes previous call of PropagatorSetup
 	int nerr = 0;
 	int nitems = m_nscx*m_nscy;
-	cudaError cuerr;
+	cudaError_t cuerr = cudaSuccess;
 	size_t nbytes = 0;
 	cuComplex* prodst = NULL;
 	if (ipro >= 0 && ipro < m_npro && NULL != pro ) { // valid structure slice ID and pointers
@@ -1507,7 +1509,7 @@ int CJMultiSlice::SetDetectorData(int whichcode, int idet, float* det, int mskle
 	// Assumes previous call of DetectorSetup
 	int nerr = 0;
 	int nitems = m_nscx*m_nscy;
-	cudaError cuerr;
+	cudaError_t cuerr = cudaSuccess;
 	size_t nbytes = 0; // detector function # bytes
 	size_t nbytes2 = 0; // detector mask max. # bytes
 	size_t nbytes3 = 0; // detector mask used # bytes
@@ -1692,7 +1694,7 @@ int CJMultiSlice::InitCore(int whichcode, int nCPUthreads)
 	int nitems = m_nscx*m_nscy;
 	size_t nbytes = 0;
 	float kscax = 1.f / m_a0[0], kscay = 1.f / m_a0[1], kx = 0.f, ky = 0.f;
-	cudaError cuerr;
+	cudaError_t cuerr = cudaSuccess;
 	float* ftmpx = NULL;
 	float* ftmpy = NULL;
 	
@@ -1805,7 +1807,7 @@ _Exit:
 int CJMultiSlice::SetIncidentWave(int whichcode, fcmplx* wav, bool bTranspose)
 {
 	int nerr = 0;
-	cudaError cuerr;
+	cudaError_t cuerr = cudaSuccess;
 	int nitems = m_nscx*m_nscy;
 	int i = 0, j = 0, i1 = 0, j1 = 0, idx = 0, idx1 = 0, idy = 0, idy1 = 0; // iterator
 	size_t nbytes = sizeof(fcmplx)*(size_t)nitems;
@@ -1858,7 +1860,7 @@ _Exit:
 int CJMultiSlice::SetIncidentWavePhaseplate(int whichcode, float* ppl, bool bTranspose)
 {
 	int nerr = 0;
-	cudaError cuerr;
+	cudaError_t cuerr = cudaSuccess;
 	int nitems = m_nscx * m_nscy;
 	int i = 0, j = 0, i1 = 0, j1 = 0, idx = 0, idx1 = 0, idy = 0, idy1 = 0; // iterator
 	size_t nbytes = sizeof(float)*(size_t)nitems;
@@ -1907,7 +1909,7 @@ _Exit:
 int CJMultiSlice::ZeroIncidentWavePhaseplate(int whichcode)
 {
 	int nerr = 0;
-	cudaError cuerr;
+	cudaError_t cuerr = cudaSuccess;
 	int nitems = m_nscx * m_nscy;
 	int i = 0, j = 0, i1 = 0, j1 = 0, idx = 0, idx1 = 0, idy = 0, idy1 = 0; // iterator
 	size_t nbytes = sizeof(float)*(size_t)nitems;
@@ -1976,7 +1978,7 @@ int CJMultiSlice::OffsetIncomingWave(int whichcode, float dx, float dy, float dz
 	fcmplx * _h_wav = NULL;
 	fcmplx * _h_pp = NULL;
 	//cuComplex * _d_pp = NULL;
-	cudaError cuerr;
+	cudaError cuerr = cudaSuccess;
 	ArrayOpStats1 stats;
 
 	// float ftmp1 = 0.f, ftmp2 = 0.f;
@@ -2072,6 +2074,14 @@ int CJMultiSlice::OffsetIncomingWave(int whichcode, float dx, float dy, float dz
 			}
 			if (cuerr != cudaSuccess) {
 				PostCUDAError("(OffsetIncomingWave): failed to multiply phase-plate to wave function on device", cuerr);
+				/*std::ostringstream oss;
+				oss << " size:" << stats.uSize;
+				oss << " wav:" << static_cast<void*>(m_d_wav);
+				oss << " wav0:" << static_cast<void*>(m_d_wav0);
+				oss << " knx:" << static_cast<void*>(m_d_knx);
+				oss << " kny:" << static_cast<void*>(m_d_kny);
+				oss << " cppl:" << static_cast<void*>(m_d_cppl) << "  ";
+				m_cuerr_msg += oss.str();*/
 				nerr = 106; goto _Exit;
 			}
 		}
@@ -2409,7 +2419,7 @@ int CJMultiSlice::GetResult(int whichcode, int whichresult, float *dst, int iThr
 	size_t nbytes = 0;
 	size_t nitems = 0;
 	float *detcur = 0;
-	cudaError cuerr;
+	cudaError_t cuerr = cudaSuccess;
 
 	if (NULL == dst) { // invalid destination, do not even try
 		goto _Exit;
@@ -2492,7 +2502,7 @@ int CJMultiSlice::GetAvgResult(int whichcode, int whichresult, float* dst, float
 	size_t nbytes = 0;
 	size_t nitems = 0;
 	float* detcur = 0;
-	cudaError cuerr;
+	cudaError_t cuerr = cudaSuccess;
 
 	weight = 0.f;
 
@@ -2592,7 +2602,7 @@ float CJMultiSlice::GetWaveAveragingWeight(int whichcode, int iThread)
 int CJMultiSlice::ResetImageAveraging(int whichcode, int iThread)
 {
 	int nerr = 0;
-	cudaError cuerr;
+	cudaError_t cuerr = cudaSuccess;
 	size_t nitems = (size_t)m_nscx * (size_t)m_nscy * (size_t)m_ndetslc;
 	void *pchan = NULL;
 	if (nitems == 0) return 0;
@@ -2629,7 +2639,7 @@ _exit:
 int CJMultiSlice::ResetWaveAveraging(int whichcode, int iThread)
 {
 	int nerr = 0;
-	cudaError cuerr;
+	cudaError_t cuerr = cudaSuccess;
 	size_t nitems = (size_t)m_nscx * (size_t)m_nscy * (size_t)m_ndetslc;
 	void* pchan = NULL;
 	if (nitems == 0) return 0;
@@ -3728,8 +3738,10 @@ _Exit:
 void CJMultiSlice::PostCUDAError(const char* smsg, cudaError code)
 {
 	if (code > 0) {
+		m_cuerr_msg = cudaGetErrorString(code);
+		m_cuerr_last = code; // save last error code
 		std::cerr << "Error: " << smsg << ", code: " << code << std::endl;
-		std::cerr << "  - " << cudaGetErrorString(code) << std::endl;
+		std::cerr << "  - " << m_cuerr_msg << std::endl;
 	}
 }
 
@@ -3745,7 +3757,7 @@ void CJMultiSlice::PostCUDAMemory(size_t nrequestedbytes)
 int CJMultiSlice::GetGPUNum(void)
 {
 	int ndev = 0;
-	cudaError cuerr;
+	cudaError cuerr = cudaSuccess;
 	cuerr = cudaGetDeviceCount(&ndev);
 	if (cuerr != cudaSuccess) {
 		PostCUDAError("(GetGPUNum): Failed to retrieve number of GPU devices", cuerr);
@@ -3757,7 +3769,7 @@ int CJMultiSlice::GetGPUNum(void)
 
 int CJMultiSlice::GetGPUName(int idev, char* name)
 {
-	cudaError cuerr;
+	cudaError cuerr = cudaSuccess;
 	cudaDeviceProp prop{};
 	cuerr = cudaGetDeviceProperties(&prop, idev);
 	if (cuerr != cudaSuccess) {
@@ -3772,7 +3784,7 @@ int CJMultiSlice::GetGPUName(int idev, char* name)
 int CJMultiSlice::GetCurrentGPU(void)
 {
 	int idev = -1;
-	cudaError cuerr;
+	cudaError cuerr = cudaSuccess;
 	cuerr = cudaGetDevice(&idev);
 	if (cuerr != cudaSuccess) {
 		PostCUDAError("(GetCurrentGPU): Failed to retrieve current GPU device ID", cuerr);
@@ -3781,10 +3793,18 @@ int CJMultiSlice::GetCurrentGPU(void)
 	return idev;
 }
 
+void CJMultiSlice::ResetCurrentGPU(void)
+{
+	cudaError cuerr = cudaSuccess;
+	cuerr = cudaDeviceReset(); // reset to device 0
+	if (cuerr != cudaSuccess) {
+		PostCUDAError("(ResetCurrentGPU): Failed to reset current GPU device", cuerr);
+	}
+}
 
 int CJMultiSlice::SetCurrentGPU(int idev)
 {
-	cudaError cuerr;
+	cudaError cuerr = cudaSuccess;
 	cuerr = cudaSetDevice(idev);
 	if (cuerr != cudaSuccess) {
 		PostCUDAError("(SetCurrentGPU): Failed to set current GPU device", cuerr);
@@ -3795,7 +3815,7 @@ int CJMultiSlice::SetCurrentGPU(int idev)
 
 int CJMultiSlice::GetGPUStats(int idev, int &iCMajor, int &iCMinor, int &iMaxThread, int64_t &CUDAmemtotal, int64_t &CUDAmemfree)
 {
-	cudaError cuerr;
+	cudaError cuerr = cudaSuccess;
 	cudaDeviceProp prop{};
 	cuerr = cudaGetDeviceProperties(&prop, idev);
 	if (cuerr != cudaSuccess) {
@@ -3818,7 +3838,7 @@ int CJMultiSlice::GetGPUStats(int idev, int &iCMajor, int &iCMinor, int &iMaxThr
 
 //int CJMultiSlice::GetGPUCores(int idev, int &nMultiProcs, int &nCores, int& nMaxThreadPerProc)
 //{
-//	cudaError cuerr;
+//	cudaError cuerr = cudaSuccess;
 //	cudaDeviceProp prop{};
 //	cuerr = cudaGetDeviceProperties(&prop, idev);
 //	if (cuerr != cudaSuccess) {
@@ -3852,7 +3872,7 @@ int CJMultiSlice::GetGPUStats(int idev, int &iCMajor, int &iCMinor, int &iMaxThr
 
 int CJMultiSlice::GetGPUMemInfo(size_t &memtotal, size_t &memfree)
 {
-	cudaError cuerr;
+	cudaError cuerr = cudaSuccess;
 	cuerr = cudaMemGetInfo(&memfree, &memtotal);
 	if (cuerr != cudaSuccess) {
 		PostCUDAError("(GetGPUMemInfo): Failed to retrieve memory state of device", cuerr);
@@ -3877,7 +3897,7 @@ int CJMultiSlice::SetGPUPgrLoading(int npgrload)
 
 int CJMultiSlice::AllocMem_d(void ** _d_a, size_t size, const char* callfn, const char* arrnam, bool zero)
 {
-	cudaError cuerr;
+	cudaError cuerr = cudaSuccess;
 	size_t gpu_mem_tot = 0, gpu_mem_free = 0;
 	GetGPUMemInfo(gpu_mem_tot, gpu_mem_free);
 	if (size > gpu_mem_free) {
@@ -3910,7 +3930,7 @@ int CJMultiSlice::AllocMem_d(void ** _d_a, size_t size, const char* callfn, cons
 
 void CJMultiSlice::DeallocMem_d(void ** _d_a)
 {
-	cudaError cuerr;
+	cudaError cuerr = cudaSuccess;
 	if (NULL != *_d_a) {
 		cuerr = cudaFree(*_d_a);
 		*_d_a = NULL;
@@ -3927,7 +3947,7 @@ void CJMultiSlice::DeallocMem_d(void ** _d_a)
 //	ArrayOpStats1 stats;
 //	static size_t len_alloc = 0;
 //	static float* ftmp = NULL; // using static buffer allocation to reduce calls to cudaMAlloc
-//	cudaError cuerr;
+//	cudaError cuerr = cudaSuccess;
 //	if (len < 1) goto _Exit;
 //	stats.uSize = (unsigned int)len;
 //	stats.nBlockSize = nBlockSize;
@@ -3971,7 +3991,7 @@ float CJMultiSlice::DotProduct_d(float* in_1, float* in_2, size_t len, int nBloc
 	float fsum = 0.f;
 	ArrayOpStats1 stats;
 	float* ftmp = NULL;
-	cudaError cuerr;
+	cudaError cuerr = cudaSuccess;
 	if (len < 1) goto _Exit;
 	stats.uSize = (unsigned int)len;
 	stats.nBlockSize = nBlockSize;
@@ -3992,7 +4012,7 @@ float CJMultiSlice::DotProduct_d(float2* in_1, float* in_2, size_t len, int nBlo
 	float fsum = 0.f;
 	ArrayOpStats1 stats;
 	float* ftmp = NULL;
-	cudaError cuerr;
+	cudaError cuerr = cudaSuccess;
 	if (len < 1) goto _Exit;
 	stats.uSize = (unsigned int)len;
 	stats.nBlockSize = nBlockSize;
@@ -4014,7 +4034,7 @@ float CJMultiSlice::MaskedDotProduct_d(int *mask, float *in_1, float *in_2, size
 	float fsum = 0.f;
 	ArrayOpStats1 stats;
 	float* ftmp = NULL;
-	cudaError cuerr;
+	cudaError cuerr = cudaSuccess;
 	if (lenmask < 1) goto _Exit;
 	stats.uSize = (unsigned int)lenmask;
 	stats.nBlockSize = nBlockSize;
@@ -4036,7 +4056,7 @@ float CJMultiSlice::MaskedDotProduct_d(int* mask, float2* in_1, float* in_2, siz
 	float fsum = 0.f;
 	ArrayOpStats1 stats;
 	float* ftmp = NULL;
-	cudaError cuerr;
+	cudaError cuerr = cudaSuccess;
 	if (lenmask < 1) goto _Exit;
 	stats.uSize = (unsigned int)lenmask;
 	stats.nBlockSize = nBlockSize;
@@ -4055,7 +4075,7 @@ int CJMultiSlice::ClearDetMem_d(void) {
 	int nerr = 0;
 	size_t nitems = 0;
 	size_t nbytes = 0;
-	cudaError cuerr;
+	cudaError_t cuerr = cudaSuccess;
 	// integrating detector readouts (this is host memory, REALLY ! )
 	if (m_ndet > 0 && m_ndetslc > 0 && m_d_det_int != NULL) {
 		nitems = (size_t)m_ndet*m_ndetslc;
@@ -4112,7 +4132,7 @@ int CJMultiSlice::ClearDetMem_d(void) {
 //	int nerr = 0;
 //	size_t nitems = 0;
 //	size_t nbytes = 0;
-//	cudaError cuerr;
+//	cudaError_t cuerr = cudaSuccess;
 //	// avg. probe image readouts (this is device memory)
 //	if ((m_imagedet & (int)_JMS_DETECT_IMAGE_AVG) > 0 && m_ndetslc > 0 && m_d_det_img_avg != NULL) {
 //		nitems = (size_t)m_nscx * m_nscy * m_ndetslc;
@@ -4179,7 +4199,7 @@ cuComplex* CJMultiSlice::GetPhaseGrating_d(int iSlice, int* pVarID)
 		pgr = m_d_pgr + m_slcoffset[jslc] + (int64_t)jvar*nitems; // pointer to first item of slice variant # jvar
 	}
 	else if (m_d_pgr_src == 1) { // v.0.15: low-GPU memory mode: phase gratings are on host and need to be copied now
-		cudaError cuerr;
+		cudaError_t cuerr = cudaSuccess;
 		fcmplx* pgrsrc = GetPhaseGrating_h(iSlice, pVarID); // get phase-grating address on host
 		size_t nbytes = sizeof(fcmplx)*(size_t)nitems;
 		cuerr = cudaMemcpy(m_d_pgr, pgrsrc, nbytes, cudaMemcpyHostToDevice); // copy to device
@@ -4468,7 +4488,7 @@ _Exit:
 int CJMultiSlice::SetIncomingWaveGPU(fcmplx* wav, bool bTranspose)
 {
 	int nerr = 0;
-	cudaError cuerr;
+	cudaError_t cuerr = cudaSuccess;
 	int nitems = m_nscx * m_nscy;
 	int i = 0, j = 0, idx = 0, idx1 = 0, idy = 0; // iterator
 	size_t nbytes = sizeof(fcmplx)*(size_t)nitems;

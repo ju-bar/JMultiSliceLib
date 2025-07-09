@@ -39,7 +39,7 @@ inline int imod(int a, int b) {
 	return ret;
 }
 
-CJFFTCUDAcore::CJFFTCUDAcore() : m_scufftdllname("")
+CJFFTCUDAcore::CJFFTCUDAcore()
 {
 	m_nstatus = 0;
 	m_ndim = 0;
@@ -48,6 +48,8 @@ CJFFTCUDAcore::CJFFTCUDAcore() : m_scufftdllname("")
 	m_fw_plan = NULL;
 	//m_bw_plan = NULL;
 	m_cuerrLast = cudaSuccess;
+	m_cufftresLast = CUFFT_SUCCESS;
+	m_scufftdllname = "";
 }
 
 

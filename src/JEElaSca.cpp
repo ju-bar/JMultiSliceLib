@@ -250,12 +250,6 @@ int CJEElaSca::AllocHelper(int igpu, int ncpu)
 	}
 
 	if (igpu >= 0) { // helper allocations needed on device
-		cuerr = cudaSetDevice(igpu);
-		if (cudaSuccess != cuerr) {
-			std::cerr << "Error (CJEElaSca::AllocHelper): Select CUDA device #" << igpu << ". " << cuerr << ": " << cudaGetErrorString(cuerr) << std::endl;
-			nerr = 102;
-			goto _exit;
-		}
 		if (m_grid_x > 0) { // x-shift helper on device
 			cuerr = cudaMalloc(&m_d_qx, sizeof(float) * m_grid_x);
 			if (cuerr != cudaSuccess) {

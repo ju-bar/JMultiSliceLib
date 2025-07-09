@@ -43,7 +43,7 @@ namespace cg = cooperative_groups;
 //}
 //cudaError_t ArrayOpMet(int *out_1, int *out_2, int * out_3, int * out_4, ArrayOpStats1 stats)
 //{
-//	cudaError_t cudaStatus;
+//	cudaError_t cudaStatus = cudaSuccess;
 //	unsigned int size = stats.uSize;	// input size
 //	int blockSize = stats.nBlockSize;	// block size 
 //	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -946,7 +946,7 @@ Error:
 // sets the real part of out_1 from in_1: out_1[i].x = in_1[i] on device 
 cudaError_t ArrayOpSetRe(cuComplex *out_1, float *in_1, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -976,7 +976,7 @@ Error:
 // sets the imaginary part of out_1 from in_1: out_1[i].y = in_1[i] on device 
 cudaError_t ArrayOpSetIm(cuComplex *out_1, float *in_1, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -1006,7 +1006,7 @@ Error:
 // gets out_1 as the real part of in_1: out_1[i] = in_1[i].x on device 
 cudaError_t ArrayOpGetRe(float *out_1, cuComplex *in_1, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -1036,7 +1036,7 @@ Error:
 // gets out_1 as the imaginary part of in_1: out_1[i] = in_1[i].y on device 
 cudaError_t ArrayOpGetIm(float *out_1, cuComplex *in_1, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -1067,7 +1067,7 @@ Error:
 // calculates complex linear combination out_1[i] = in_1[i] * a + in_2[i] * b + c on device 
 cudaError_t ArrayOpAdd(cuComplex *out_1, cuComplex *in_1, cuComplex *in_2, cuComplex a, cuComplex b, cuComplex c, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -1097,7 +1097,7 @@ Error:
 // calculates complex sum out_1[i] = in_1[i] + in_2[i] on device 
 cudaError_t ArrayOpAdd0(cuComplex *out_1, cuComplex *in_1, cuComplex *in_2, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -1127,7 +1127,7 @@ Error:
 // calculates float linear combination out_1[i] = in_1[i] * a + in_2[i] * b + c on device 
 cudaError_t ArrayOpFAdd(float *out_1, float *in_1, float *in_2, float a, float b, float c, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -1157,7 +1157,7 @@ Error:
 // calculates float linear combination out_1[i] = in_1[i] * a + in_2[i] on device 
 cudaError_t ArrayOpFAdd1(float *out_1, float *in_1, float *in_2, float a, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -1187,7 +1187,7 @@ Error:
 // calculates float linear combination out_1[i] = in_1[i] + in_2[i] * a on device 
 cudaError_t ArrayOpFAdd2(float *out_1, float *in_1, float *in_2, float a, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -1217,7 +1217,7 @@ Error:
 // calculates float addition out_1[i] = in_1[i] + in_2[i] on device 
 cudaError_t ArrayOpFAdd0(float *out_1, float *in_1, float *in_2, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -1248,7 +1248,7 @@ Error:
 // calculates out_1[i] = in_1[i] * scale  on device 
 cudaError_t ArrayOpSca(cuComplex *out_1, cuComplex *in_1, float sca, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -1278,7 +1278,7 @@ Error:
 // calculates out_1[i] = in_1[i] * scale  on device 
 cudaError_t ArrayOpFSca(float *out_1, float *in_1, float sca, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -1308,7 +1308,7 @@ Error:
 // calculates out_1[i] = in_1[i] * in_2[i]  on device 
 cudaError_t ArrayOpMul(cuComplex *out_1, cuComplex *in_1, cuComplex *in_2, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -1339,7 +1339,7 @@ Error:
 // calculates out_1[j][i] = in_1[j][i] * in_2[j][i]  on device  where out_1 and in_1 are of the same dimension (n0,n1) and in_2 can be of different dimension (nsub0,nsub1), periodic wrap around is used
 cudaError_t ArrayOpMulSub2d(cuComplex *out_1, cuComplex *in_1, cuComplex *in_2, unsigned int n0, unsigned int n1, unsigned int nsub0, unsigned int nsub1, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -1369,7 +1369,7 @@ Error:
 // calculates out_1[i] = in_1[i] * in_2[i]  on device 
 cudaError_t ArrayOpFMul(cuComplex *out_1, cuComplex *in_1, float *in_2, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -1399,7 +1399,7 @@ Error:
 // calculates out_1[i] = in_1[i] * in_2[i]  on device 
 cudaError_t ArrayOpFFMul(float *out_1, float *in_1, float *in_2, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -1429,7 +1429,7 @@ Error:
 // calculates out_1[i] = in_1[i] * in_2[i] * sca  on device 
 cudaError_t ArrayOpMulSca(cuComplex *out_1, cuComplex *in_1, cuComplex *in_2, float sca, ArrayOpStats1 stats)
 {
-    cudaError_t cudaStatus;
+    cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -1459,7 +1459,7 @@ Error:
 // calculates out_1[i] = in_1[i] * in_2[i] * sca  on device 
 cudaError_t ArrayOpFMulSca(cuComplex *out_1, float *in_1, cuComplex *in_2, float sca, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -1489,7 +1489,7 @@ Error:
 // calculates out_1[i] = atan2( in_1[i].y, in_1[i].x )  on device 
 cudaError_t ArrayOpCArg(float *out_1, cuComplex *in_1, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -1519,7 +1519,7 @@ Error:
 // calculates out_1[i] = sqrt( in_1[i] * conjg(in_1[i]) ) on device 
 cudaError_t ArrayOpCAbs(float *out_1, cuComplex *in_1, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -1549,7 +1549,7 @@ Error:
 // calculates out_1[i] = sqrt( in_1[i] * conjg(in_1[i]) ) * sca  on device 
 cudaError_t ArrayOpCAbsSca(float *out_1, cuComplex *in_1, float sca, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -1580,7 +1580,7 @@ Error:
 // calculates out_1[i] = in_1[i] * conjg(in_1[i]) on device 
 cudaError_t ArrayOpCPow(float *out_1, cuComplex *in_1, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -1610,7 +1610,7 @@ Error:
 // calculates out_1[i] = in_1[i] * conjg(in_1[i]) * sca  on device 
 cudaError_t ArrayOpCPowSca(float *out_1, cuComplex *in_1, float sca, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -1640,7 +1640,7 @@ Error:
 // calculates out_1[i] += in_1[i] * conjg(in_1[i]) * sca  on device 
 cudaError_t ArrayOpAddCPowSca(float* out_1, cuComplex* in_1, float sca, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -1670,7 +1670,7 @@ Error:
 // calculate out_1[(j+sh1)%n1][(i+sh0)%n0] = in_1[j][i] on device
 cudaError_t ArrayOpCShift2d(cuComplex *out_1, cuComplex *in_1, unsigned int sh0, unsigned int sh1, unsigned int n0, unsigned int n1, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 //	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -1700,7 +1700,7 @@ Error:
 // calculate out_1[(j+sh1)%n1][(i+sh0)%n0] = in_1[j][i] on device
 cudaError_t ArrayOpFShift2d(float *out_1, float *in_1, unsigned int sh0, unsigned int sh1, unsigned int n0, unsigned int n1, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	//	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -1728,7 +1728,7 @@ Error:
 
 cudaError_t ArrayOpMulPP00(cuComplex *out_1, cuComplex *in_1, float *in_2, float *in_3, float dx, float dy, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -1758,7 +1758,7 @@ Error:
 
 cudaError_t ArrayOpMulPP01(cuComplex *out_1, cuComplex *in_1, float *in_2, float *in_3, float dx, float dy, float dz, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -1788,7 +1788,7 @@ Error:
 
 cudaError_t ArrayOpMulPPC01(cuComplex *out_1, cuComplex *in_1, float *in_2, float *in_3, float *in_4, float dx, float dy, float dz, ArrayOpStats1 stats)
 {
-	cudaError_t cudaStatus;
+	cudaError_t cudaStatus = cudaSuccess;
 	unsigned int size = stats.uSize;	// input size
 	int blockSize = stats.nBlockSize;	// block size 
 	int gridSize = stats.nGridSize;		// grid size needed, based on input size
@@ -2437,7 +2437,7 @@ cudaError_t ArrayOpCPowSumFMul(float& out_1, float2* in_1, float* in_2, float sc
 //// calculates out_1[0] = SUM( in_1[i]*conjg( in_1[i] )) * sca on device
 //cudaError_t ArrayOpCPowSum(float &out_1, cuComplex *in_1, float sca, ArrayOpStats1 stats, int CPU_threshold)
 //{
-//	cudaError_t cudaStatus;
+//	cudaError_t cudaStatus = cudaSuccess;
 //	unsigned int size = stats.uSize;	// input size
 //	unsigned int nstage = 0;			// internal error stage code
 //	// allocate temporary output size and allocate on device
@@ -2478,7 +2478,7 @@ cudaError_t ArrayOpCPowSumFMul(float& out_1, float2* in_1, float* in_2, float sc
 //// calculates out_1 = SUM( in_1[i]*conjg( in_1[i] ) * in_2[i] ) * sca on device
 //cudaError_t ArrayOpCPowSumFMul(float &out_1, cuComplex *in_1, float *in_2, float sca, ArrayOpStats1 stats, int CPU_threshold)
 //{
-//	cudaError_t cudaStatus;
+//	cudaError_t cudaStatus = cudaSuccess;
 //	unsigned int size = stats.uSize;	// input size
 //	unsigned int nstage = 0;			// internal error stage code
 //	size_t sz_tmp_out = sizeof(float)*size; // size of float temporaray working array on device

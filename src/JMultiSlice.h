@@ -114,6 +114,7 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 #include "JProbeGen.h"
 #include "JPlasmonMC.h"
 #include "rng.h"
+#include <cstring>
 //
 #ifndef __JMS__
 #define __JMS__
@@ -257,7 +258,10 @@ protected:
 public:
 	// default message string for output (not initialized)
 	char m_msg[_JPG_MESSAGE_LEN];
-
+	// cuda error message string for output (not initialized)
+	std::string m_cuerr_msg;
+	// last cuda error code
+	cudaError m_cuerr_last;
 // ----------------------------------------------------------------------------
 // multislice data objects
 protected:
@@ -700,6 +704,8 @@ public:
 	// - npgrload: 0 = pre-load all to device (default),
 	//             1 = each phase-grating is loaded to device on demand
 	int SetGPUPgrLoading(int npgrload = 0);
+	// Delectes the current GPU context. Use this with extreme care only. It will erase all allocations on the currently set device.
+	void ResetCurrentGPU(void);
 
 
 // ----------------------------------------------------------------------------
