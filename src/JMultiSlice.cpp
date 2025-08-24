@@ -268,6 +268,7 @@ CJMultiSlice::CJMultiSlice() : m_msg("")
 	m_status_setup_GPU = 0;
 	m_threads_CPU_out = 0;
 	m_ncputhreads = 0;
+	m_ngpuid = -1;
 	m_status_calc_CPU = NULL;
 	m_status_calc_GPU = 0;
 	m_objslc = NULL;
@@ -369,6 +370,25 @@ void CJMultiSlice::SeedRngEx(int nseed)
 	else {
 		m_lrng.seed(nseed);
 	}
+}
+
+int CJMultiSlice::GetCalculationStatus(int whichcode, int iThread)
+{
+	// returns the calculation status for the given code and thread
+	// whichcode: _JMS_CODE_CPU or _JMS_CODE_GPU
+	// iThread: thread index
+	if (whichcode & (int)_JMS_CODE_CPU) {
+		if (iThread < m_ncputhreads && m_status_calc_CPU) {
+			return m_status_calc_CPU[iThread];
+		}
+		else {
+			return -1; // invalid thread index
+		}
+	}
+	else if (whichcode & (int)_JMS_CODE_GPU) {
+		return m_status_calc_GPU;
+	}
+	return -1; // no valid code
 }
 
 float CJMultiSlice::SetHighTension(float ht)
@@ -1684,6 +1704,7 @@ int CJMultiSlice::InitCore(int whichcode, int nCPUthreads)
 	// via the routines SetGridSize, SetHighTension, SetSupercellSize
 	// also all components of the setup chain need to be successfully called
 	// before this function works: (m_status_setup_CPU & _JMS_THRESHOLD_CORE) > 0
+	// And SetCurrentGPU needs to be called at least once before this function is used.
 	int nerr = 0;
 	int i = 0, j = 0, i1 = 0, nx2 = 0, ny2 = 0;
 	int icore = 0;
@@ -1756,9 +1777,10 @@ int CJMultiSlice::InitCore(int whichcode, int nCPUthreads)
 		m_status_setup_CPU |= (int)_JMS_STATUS_CORE; // mark CPU core setup as completed
 	}
 
-	if (whichcode & (int)_JMS_CODE_GPU && (m_status_setup_GPU & (int)_JMS_THRESHOLD_CORE) > 0 && nitems > 0) {
+	if (whichcode & (int)_JMS_CODE_GPU && (m_status_setup_GPU & (int)_JMS_THRESHOLD_CORE) > 0 && 
+		m_ngpuid >= 0 && nitems > 0) {
 		m_jgpuco.Deinit();
-		if (0 < m_jgpuco.Init(2, pdims)) {
+		if (0 < m_jgpuco.Init(2, pdims, m_ngpuid)) {
 			std::cerr << "Error: (InitCore): Failed to initialize GPU core." << std::endl;
 			nerr = 103; goto _Exit; 
 		} // gpu core init failure?
@@ -3599,6 +3621,7 @@ _Exit:
 int CJMultiSlice::CPUMultislice(int islc0, int accmode, float weight, int iThread)
 {
 	int nerr = 0;
+	m_status_calc_CPU[iThread] = _JMS_CALC_STATE_INIT;
 	//CJFFTWcore *jco = NULL;
 	CJFFTMKLcore *jco = NULL;
 	CJPlasmonMC jpl(m_jplmc); // copy plasmon parameters from template to thread instance
@@ -3640,6 +3663,7 @@ int CJMultiSlice::CPUMultislice(int islc0, int accmode, float weight, int iThrea
 	// WARNING: No further error checks in the following code.
 	//          Make sure to do all setups properly before calling this!
 	//
+	m_status_calc_CPU[iThread] = _JMS_CALC_STATE_WAVE;
 	jco = &m_jcpuco[iThread];
 	if (0 < jco->SetDataC(m_h_wav + (int64_t)iThread*nitems)) {
 		nerr = 3; goto _Exit;
@@ -3655,6 +3679,7 @@ int CJMultiSlice::CPUMultislice(int islc0, int accmode, float weight, int iThrea
 	//
 	if (islc < m_nobjslc) {
 		// prepare new random variant sequence
+		m_status_calc_CPU[iThread] = _JMS_CALC_STATE_STACK;
 		var = (int*)malloc(sizeof(int)*m_nobjslc);
 		GetRandomVariantSequence(var);
 		if (m_plasmonmc_flg == 1) { // plasmon scattering
@@ -3663,6 +3688,7 @@ int CJMultiSlice::CPUMultislice(int islc0, int accmode, float weight, int iThrea
 		}
 		// Default case, the current wave function is not the exit-plane wave function
 		// Do the multislice
+		m_status_calc_CPU[iThread] = _JMS_CALC_STATE_MSA;
 		for (jslc = islc; jslc < m_nobjslc; jslc++) {
 			bdetect = (m_det_objslc[jslc] >= 0);
 			// 1) readout (Fourier space)
@@ -3708,6 +3734,7 @@ int CJMultiSlice::CPUMultislice(int islc0, int accmode, float weight, int iThrea
 		if (nerr > 0) goto _Exit;
 	}
 	// Final readout for the exit plane (do this always even if there is no object slice)
+	m_status_calc_CPU[iThread] = _JMS_CALC_STATE_EXIT;
 	if (bdet_dif) {
 		nerr = ReadoutDifDet_h(m_nobjslc, iThread, weight);
 		if (nerr > 0) { nerr += 700; goto _Exit; }
@@ -3726,6 +3753,7 @@ int CJMultiSlice::CPUMultislice(int islc0, int accmode, float weight, int iThrea
 	}
 	//
 _Exit:
+	m_status_calc_CPU[iThread] = _JMS_CALC_STATE_NONE;
 	return nerr;
 }
 
@@ -3810,6 +3838,7 @@ int CJMultiSlice::SetCurrentGPU(int idev)
 		PostCUDAError("(SetCurrentGPU): Failed to set current GPU device", cuerr);
 		return 1;
 	}
+	m_ngpuid = idev;
 	return 0;
 }
 
@@ -3996,7 +4025,7 @@ float CJMultiSlice::DotProduct_d(float* in_1, float* in_2, size_t len, int nBloc
 	stats.uSize = (unsigned int)len;
 	stats.nBlockSize = nBlockSize;
 	stats.nGridSize = (int)(len + nBlockSize - 1) / nBlockSize;
-	cuerr = ArrayOpFDot(fsum, in_1, in_2, stats, nBlockSize);
+	cuerr = ArrayOpFDot(fsum, in_1, in_2, stats, m_ngpuid);
 	if (cuerr != cudaSuccess) {
 		PostCUDAError("(DotProduct_d): Failed to summ array on device (ArrayOpFDot)", cuerr);
 		goto _Exit;
@@ -4017,7 +4046,7 @@ float CJMultiSlice::DotProduct_d(float2* in_1, float* in_2, size_t len, int nBlo
 	stats.uSize = (unsigned int)len;
 	stats.nBlockSize = nBlockSize;
 	stats.nGridSize = (int)(len + nBlockSize - 1) / nBlockSize;
-	cuerr = ArrayOpFDot(fsum, in_1, in_2, stats, nBlockSize);
+	cuerr = ArrayOpFDot(fsum, in_1, in_2, stats, m_ngpuid);
 	if (cuerr != cudaSuccess) {
 		PostCUDAError("(DotProduct_d): Failed to summ array on device (ArrayOpFDot)", cuerr);
 		goto _Exit;
@@ -4039,7 +4068,7 @@ float CJMultiSlice::MaskedDotProduct_d(int *mask, float *in_1, float *in_2, size
 	stats.uSize = (unsigned int)lenmask;
 	stats.nBlockSize = nBlockSize;
 	stats.nGridSize = (int)(lenmask + nBlockSize - 1) / nBlockSize;
-	cuerr = ArrayOpMaskFDot(fsum, mask, in_1, in_2, stats, nBlockSize);
+	cuerr = ArrayOpMaskFDot(fsum, mask, in_1, in_2, stats, m_ngpuid);
 	if (cuerr != cudaSuccess) {
 		PostCUDAError("(MaskedDotProduct_d): Failed to summ array on device (ArrayOpMaskFDot)", cuerr);
 		goto _Exit;
@@ -4061,7 +4090,7 @@ float CJMultiSlice::MaskedDotProduct_d(int* mask, float2* in_1, float* in_2, siz
 	stats.uSize = (unsigned int)lenmask;
 	stats.nBlockSize = nBlockSize;
 	stats.nGridSize = (int)(lenmask + nBlockSize - 1) / nBlockSize;
-	cuerr = ArrayOpMaskFDot(fsum, mask, in_1, in_2, stats, nBlockSize);
+	cuerr = ArrayOpMaskFDot(fsum, mask, in_1, in_2, stats, m_ngpuid);
 	if (cuerr != cudaSuccess) {
 		PostCUDAError("(MaskedDotProduct_d): Failed to summ array on device (ArrayOpMaskFDot)", cuerr);
 		goto _Exit;
@@ -4533,6 +4562,7 @@ _Exit:
 int CJMultiSlice::GPUMultislice(int islc0, int accmode, float weight)
 {
 	int nerr = 0;
+	m_status_calc_GPU = _JMS_CALC_STATE_INIT;
 	CJFFTCUDAcore *jco = &m_jgpuco;
 	CJPlasmonMC jpl(m_jplmc); // copy plasmon MC template
 	jpl.SetRng(m_prng); // set rng
@@ -4580,6 +4610,7 @@ int CJMultiSlice::GPUMultislice(int islc0, int accmode, float weight)
 	// WARNING: No further error checks in the following code.
 	//          Make sure to do all setups properly before calling this!
 	//
+	m_status_calc_GPU = _JMS_CALC_STATE_WAVE;
 	if (0 < jco->SetDataC_d(m_d_wav)) {
 		nerr = 4; goto _Exit;
 	}
@@ -4598,6 +4629,7 @@ int CJMultiSlice::GPUMultislice(int islc0, int accmode, float weight)
 	if (islc < m_nobjslc) {
 		
 		// prepare new random variant sequence
+		m_status_calc_GPU = _JMS_CALC_STATE_STACK;
 		var = (int*)malloc(sizeof(int)*m_nobjslc);
 		GetRandomVariantSequence(var);
 		if (m_plasmonmc_flg == 1) {
@@ -4607,8 +4639,10 @@ int CJMultiSlice::GPUMultislice(int islc0, int accmode, float weight)
 		//
 		// Default case, the current wave function is not the exit-plane wave function
 		// Do the multislice
+		m_status_calc_GPU = _JMS_CALC_STATE_MSA;
 		for (jslc = islc; jslc < m_nobjslc; jslc++) { // multi-slice loop
 			// 0) init multislice step
+			m_status_calc_GPU = _JMS_CALC_STATE_MSA_INIT;
 			bdetect = (m_det_objslc[jslc] >= 0); // detection flag
 			pgr = GetPhaseGrating_d(jslc, var); // get the object transmission function for this slice
 			pro = GetPropagator_d(jslc); // get the propagator function for the current slice
@@ -4627,21 +4661,25 @@ int CJMultiSlice::GPUMultislice(int islc0, int accmode, float weight)
 			// -----------------------------------------------
 			// 1) readout (Fourier space)
 			if (bdetect && bdet_dif) {
+				m_status_calc_GPU = _JMS_CALC_STATE_MSA_READDIF;
 				nerr = ReadoutDifDet_d(jslc, weight);
 				if (0 < nerr) {	nerr += 100; goto _CancelMS; }
 			}
 			// ----------------------------------------------- ***** IFT *****
 			// 2) transform to real space
+			m_status_calc_GPU = _JMS_CALC_STATE_MSA_IFT;
 			nerr = jco->IFT(); // inverse FFT
 			if (0 < nerr) { nerr += 200; goto _CancelMS; }
 			// -----------------------------------------------
 			// 3) readout (real space)
 			if (bdetect && bdet_img) {
+				m_status_calc_GPU = _JMS_CALC_STATE_MSA_READIMG;
 				nerr = ReadoutImgDet_d(jslc, weight);
 				if (0 < nerr) { nerr += 300; goto _CancelMS; }
 			}
 			// ----------------------------------------------- ***** PGR *****
 			// 4) scattering
+			m_status_calc_GPU = _JMS_CALC_STATE_MSA_SCATTER;
 			if (bsubframe) { // different size phase grating multiplication
 				nerr = jco->MultiplySub2dC_d(pgr, m_npgx, m_npgy); // multiply pgr with periodic repetition
 			}
@@ -4652,6 +4690,7 @@ int CJMultiSlice::GPUMultislice(int islc0, int accmode, float weight)
 			if (0 < nerr) { nerr += 400; goto _CancelMS; }
 			// ----------------------------------------------- *****  FT *****
 			// 5) transform to Fourier space
+			 m_status_calc_GPU = _JMS_CALC_STATE_MSA_FT;
 			//nerr = jco->FT(pgr_cb, pro_cb); // forward FFT
 			nerr = jco->FT(); // forward FFT
 			if (0 < nerr) { nerr += 500; goto _CancelMS; }
@@ -4659,17 +4698,20 @@ int CJMultiSlice::GPUMultislice(int islc0, int accmode, float weight)
 			// 6) low-loss inelastic scattering (plasmons)
 			//if (m_plasmonmc_flg == 1 && (jslc==0 || jslc==m_nobjslc-1)) { // surface plasmon activation
 			if (bplasmc) { // bulk plasmon scattering happens, also need to apply the propagator in that case
+				m_status_calc_GPU = _JMS_CALC_STATE_MSA_PLASMC;
 				jco->CShift2d(ish0, ish1);
 				//nerr = jco->MultiplyC_d(pro); // multiply the propagator
 				//if (0 < nerr) { nerr += 600; goto _CancelMS; }
 			}
 			// ----------------------------------------------- ***** PRO *****
 			// 7) propagation
+			m_status_calc_GPU = _JMS_CALC_STATE_MSA_PROPAGT;
 			nerr = jco->MultiplyC_d(pro); // multiply the propagator
 			if (0 < nerr) { nerr += 600; goto _CancelMS; }
 			//
 		}
 	_CancelMS:
+		m_status_calc_GPU = _JMS_CALC_STATE_EXIT;
 		free(var);
 		var = NULL;
 		if (nerr > 0) goto _Exit;
@@ -4693,5 +4735,6 @@ int CJMultiSlice::GPUMultislice(int islc0, int accmode, float weight)
 	}
 	//
 _Exit:
+	m_status_calc_GPU = _JMS_CALC_STATE_NONE;
 	return nerr;
 }

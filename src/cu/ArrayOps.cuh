@@ -338,19 +338,19 @@ cudaError_t ArrayOpMulPPC01(cuComplex *out_1, cuComplex *in_1, float *in_2, floa
 // - set stats.uSize to the size of the mask array
 // - set stats.nBlockSize to as much as many threads you want, it will be capped to 1024.
 // - use this to calculate integrated detector results with mask and detector sensitivity (in_2) from a intensity distrib. (in_1)
-// - CPU_threshold determines from which number of items on CPU summation will be carried out, set 0 to do all on GPU
-cudaError_t ArrayOpMaskFDot(float &out_1, int * mask, float * in_1, float * in_2, ArrayOpStats1 stats, int CPU_threshold = 0);
+// - device passes the device ID on which the is carried out (actuelly only where the reduction kernel is allocating memory)
+cudaError_t ArrayOpMaskFDot(float &out_1, int * mask, float * in_1, float * in_2, ArrayOpStats1 stats, int device);
 // change additional masked dot product to eliminate cpowkernel
-cudaError_t ArrayOpMaskFDot(float& out_1, int* mask, float2* in_1, float* in_2, ArrayOpStats1 stats, int CPU_threshold = 0);
-cudaError_t ArrayOpFDot(float& out_1, float* in_1, float* in_2, ArrayOpStats1 stats, int CPU_threshold = 0);
-cudaError_t ArrayOpFDot(float& out_1, float2* in_1, float* in_2, ArrayOpStats1 stats, int CPU_threshold = 0);
+cudaError_t ArrayOpMaskFDot(float& out_1, int* mask, float2* in_1, float* in_2, ArrayOpStats1 stats, int device);
+cudaError_t ArrayOpFDot(float& out_1, float* in_1, float* in_2, ArrayOpStats1 stats, int device);
+cudaError_t ArrayOpFDot(float& out_1, float2* in_1, float* in_2, ArrayOpStats1 stats, int device);
 // end change
 
 // calculates out_1 = SUM( in_1[i]*conjg( in_1[i] ) ) * sca on device
 // - CPU_threshold determines from which number of items on CPU summation will be carried out, set 0 to do all on GPU
-cudaError_t ArrayOpCPowSum(float &out_1, float2 *in_1, float sca, ArrayOpStats1 stats, int CPU_threshold = 0);
+cudaError_t ArrayOpCPowSum(float &out_1, float2 *in_1, float sca, ArrayOpStats1 stats, int device);
 
 // calculates out_1 = SUM( in_1[i]*conjg( in_1[i] ) * in_2[i] ) * sca on device
 // - CPU_threshold determines from which number of items on CPU summation will be carried out, set 0 to do all on GPU
-cudaError_t ArrayOpCPowSumFMul(float &out_1, float2 *in_1, float *in_2, float sca, ArrayOpStats1 stats, int CPU_threshold = 0);
+cudaError_t ArrayOpCPowSumFMul(float &out_1, float2 *in_1, float *in_2, float sca, ArrayOpStats1 stats, int device);
 

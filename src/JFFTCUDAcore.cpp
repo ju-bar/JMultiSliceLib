@@ -50,6 +50,7 @@ CJFFTCUDAcore::CJFFTCUDAcore()
 	m_cuerrLast = cudaSuccess;
 	m_cufftresLast = CUFFT_SUCCESS;
 	m_scufftdllname = "";
+	m_ngpuid = -1;
 }
 
 
@@ -95,7 +96,7 @@ void CJFFTCUDAcore::Deinit(void)
 	m_ndim = 0;
 }
 
-int CJFFTCUDAcore::Init(int ndim, int * pdims)
+int CJFFTCUDAcore::Init(int ndim, int * pdims, int idevice)
 {
 	int nconsistent = 0;
 	int i = 0;
@@ -191,32 +192,11 @@ int CJFFTCUDAcore::Init(int ndim, int * pdims)
 		}
 
 	}
+	// - store device id (needed to construct reduction buffer with correct device props)
+	m_ngpuid = idevice;
 	return 0;
 }
 
-
-int CJFFTCUDAcore::SetCUDADevice(int ndev)
-{
-	int imax = 0;
-	int idev = ndev;
-	m_cuerrLast = cudaGetDeviceCount(&imax);
-	if (cudaSuccess != m_cuerrLast) {
-		PostCUDAError("(JFFTCUDAcore::SetCUDADevice): Failed to get current cuda device", m_cuerrLast);
-		return 1;
-	}
-	if (imax > 0 && idev >= 0 && idev < imax) {
-		m_cuerrLast = cudaSetDevice(idev);
-		if (cudaSuccess != m_cuerrLast) {
-			PostCUDAError("(JFFTCUDAcore::SetCUDADevice): Failed to set cuda device", m_cuerrLast);
-			return 1;
-		}
-	}
-	else {
-		cerr << "Error(JFFTCUDAcore::SetCUDADevice): Requested cuda device is invalid." << endl;
-		return 2;
-	}
-	return 0;
-}
 
 
 
@@ -1149,7 +1129,7 @@ int CJFFTCUDAcore::GetDataTotalPow(float &pow)
 		nerr = 1;
 		goto Error;
 	}
-	m_cuerrLast = ArrayOpCPowSum(fpow, m_pcw, 1.0f, m_aos1dMult);
+	m_cuerrLast = ArrayOpCPowSum(fpow, m_pcw, 1.0f, m_aos1dMult, m_ngpuid);
 	if (m_cuerrLast != cudaSuccess) {
 		PostCUDAError("(JFFTCUDAcore::GetDataArg): Failed to calculate CPowSum on device", m_cuerrLast);
 		nerr = 2;

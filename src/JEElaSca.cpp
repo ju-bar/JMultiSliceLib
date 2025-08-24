@@ -642,7 +642,7 @@ _cores: // jump point for core setup
 
 	if (m_gpu_id >= 0) {
 		m_jgpuco.Deinit();
-		if (0 < m_jgpuco.Init(ndims, pdims)) {
+		if (0 < m_jgpuco.Init(ndims, pdims, m_gpu_id)) {
 			nerr = 120;
 			std::cerr << "Error (CJEElaSca::InitHelper): Failed to initialize GPU FFT module." << std::endl;
 			goto _exit;

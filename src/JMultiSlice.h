@@ -148,6 +148,21 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 #define _JMS_DETECT_DIFFR_AVG	64   // flag average diffraction detection
 #define _JMS_DETECT_WAVER_AVG	128  // flag average real-space wave-function detection
 #define _JMS_DETECT_WAVEF_AVG	256  // flag average reciprocal-space wave-function detection
+// CALCULATION STATE FLAGS
+#define _JMS_CALC_STATE_NONE	0
+#define _JMS_CALC_STATE_INIT	1
+#define _JMS_CALC_STATE_WAVE	2
+#define _JMS_CALC_STATE_STACK	3
+#define _JMS_CALC_STATE_MSA		4
+#define _JMS_CALC_STATE_EXIT	5
+#define _JMS_CALC_STATE_MSA_INIT	40
+#define _JMS_CALC_STATE_MSA_READDIF	41
+#define _JMS_CALC_STATE_MSA_IFT		42
+#define _JMS_CALC_STATE_MSA_READIMG	43
+#define _JMS_CALC_STATE_MSA_SCATTER	44
+#define _JMS_CALC_STATE_MSA_FT		45
+#define _JMS_CALC_STATE_MSA_PLASMC	46
+#define _JMS_CALC_STATE_MSA_PROPAGT	47
 // OTHER PARAMETERS
 #define _JMS_MESSAGE_LEN		2048 // max. length of message strings
 #define _JMS_FFTW_PLANFLAG		FFTW_MEASURE // used FFTW planner flag, on typical sizes FFTW_MEASURE perfoms best, whereas FFTW_PATIENT requires much more initialization time
@@ -271,6 +286,8 @@ protected:
 	int m_ncputhreads;
 	// status flags for CPU multislice calculations
 	int* m_status_calc_CPU;
+	// gpu id initialized for calculation
+	int m_ngpuid;
 	// status flag for GPU multislice calculation
 	int m_status_calc_GPU;
 	// list of object slice sequence
@@ -512,6 +529,7 @@ protected:
 	float GetRadialDetectorSensitivity(float theta, float* profile, int len, float refpix, float beta1);
 
 public:
+
 	// Calculates a STEM probe wavefunction in Fourier space using current parameters
 	// - prm: address of a CJProbeParams object defining physical probe parameters
 	// - wav: address receiving the probe wave function
@@ -692,7 +710,7 @@ public:
 	int GetGPUName(int idev, char *name);
 	// Gets the current CUDA device used
 	int GetCurrentGPU(void);
-	// Sets the current CUDA device to be used
+	// Sets the current CUDA device to be used (use this with care, call from all threads but use only one device per CJMultislice instance)
 	int SetCurrentGPU(int idev);
 	// Returns a few statistical numbers on the GPU device
 	int GetGPUStats(int idev, int &iCMajor, int &iCMinor, int &iMaxThread, int64_t &CUDAmemtotal, int64_t &CUDAmemfree);
@@ -704,7 +722,7 @@ public:
 	// - npgrload: 0 = pre-load all to device (default),
 	//             1 = each phase-grating is loaded to device on demand
 	int SetGPUPgrLoading(int npgrload = 0);
-	// Delectes the current GPU context. Use this with extreme care only. It will erase all allocations on the currently set device.
+	// Delectes the current GPU context. Use this with extreme care only (only before stopping your app). It will erase all allocations on the currently set device.
 	void ResetCurrentGPU(void);
 
 
@@ -855,6 +873,9 @@ protected:
 // multislice functions
 
 public:
+	// Returns multislice calculation status
+	int GetCalculationStatus(int whichcode, int iThread = 0);
+
 	// Takes a copy of the backup wave function m_h_wav0 / m_d_wav0,
 	// applies offsets in (x, y, z), and stores the result in the the active
 	// wave function channels m_h_wav / m_d_wav used for the multislice calculation.

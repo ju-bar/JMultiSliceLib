@@ -2391,44 +2391,44 @@ Error:
 
 
 // change call new dot product that incorporates an alternative reduction
-cudaError_t ArrayOpMaskFDot(float& out_1, int* mask, float* in_1, float* in_2, ArrayOpStats1 stats, int CPU_threshold)
+cudaError_t ArrayOpMaskFDot(float& out_1, int* mask, float* in_1, float* in_2, ArrayOpStats1 stats, int device)
 {
-	static addingReduction<float> reduction;
+	static addingReduction<float> reduction(device);
 	out_1 = reduction.perform<maskedTDotProduct<float>>(stats.uSize, mask, in_1, in_2);
 	return cudaGetLastError();
 }
 
-cudaError_t ArrayOpMaskFDot(float& out_1, int* mask, float2* in_1, float* in_2, ArrayOpStats1 stats, int CPU_threshold)
+cudaError_t ArrayOpMaskFDot(float& out_1, int* mask, float2* in_1, float* in_2, ArrayOpStats1 stats, int device)
 {
-	static addingReduction<float> reduction;
+	static addingReduction<float> reduction(device);
 	out_1 = reduction.perform<maskedComplexDotProduct<float, float2>>(stats.uSize, mask, in_1, in_2);
 	return cudaGetLastError();
 }
 
-cudaError_t ArrayOpFDot(float& out_1, float* in_1, float* in_2, ArrayOpStats1 stats, int CPU_threshold)
+cudaError_t ArrayOpFDot(float& out_1, float* in_1, float* in_2, ArrayOpStats1 stats, int device)
 {
-	static addingReduction<float> reduction;
+	static addingReduction<float> reduction(device);
 	out_1 = reduction.perform<TDotProduct<float>>(stats.uSize, in_1, in_2);
 	return cudaGetLastError();
 }
 
-cudaError_t ArrayOpFDot(float& out_1, float2 * in_1, float* in_2, ArrayOpStats1 stats, int CPU_threshold)
+cudaError_t ArrayOpFDot(float& out_1, float2 * in_1, float* in_2, ArrayOpStats1 stats, int device)
 {
-	static addingReduction<float> reduction;
+	static addingReduction<float> reduction(device);
 	out_1 = reduction.perform<ComplexDotProduct<float, float2>>(stats.uSize, in_1, in_2);
 	return cudaGetLastError();
 }
 
-cudaError_t ArrayOpCPowSum(float& out_1, float2* in_1, float sca, ArrayOpStats1 stats, int CPU_threshold)
+cudaError_t ArrayOpCPowSum(float& out_1, float2* in_1, float sca, ArrayOpStats1 stats, int device)
 {
-	static addingReduction<float> reduction;
+	static addingReduction<float> reduction(device);
 	out_1 = sca * reduction.perform<ComplexPower<float, float2>>(stats.uSize, in_1);
 	return cudaGetLastError();
 }
 
-cudaError_t ArrayOpCPowSumFMul(float& out_1, float2* in_1, float* in_2, float sca, ArrayOpStats1 stats, int CPU_threshold)
+cudaError_t ArrayOpCPowSumFMul(float& out_1, float2* in_1, float* in_2, float sca, ArrayOpStats1 stats, int device)
 {
-	static addingReduction<float> reduction;
+	static addingReduction<float> reduction(device);
 	out_1 = sca * reduction.perform<ComplexPowerFMul<float, float2>>(stats.uSize, in_1, in_2);
 	return cudaGetLastError();
 }

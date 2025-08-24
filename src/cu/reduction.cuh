@@ -74,18 +74,27 @@ struct ComplexPowerFMul {
 template<typename Loader, int BlockSize, typename Out, typename ... In>
 __global__ void addingReductionKernel(unsigned int n, Out *out, const In* const ... in) {
     Out t=0;
-    for(unsigned int i=threadIdx.x+blockDim.x*blockIdx.x;i<n;i+=gridDim.x*blockDim.x) {
+    for(unsigned int i=threadIdx.x+blockDim.x*blockIdx.x;
+        i<n;
+        i+=gridDim.x*blockDim.x)
+    {
         t+=Loader::load(i,in...);
     }
     __shared__ Out c[BlockSize];
-    int ti=threadIdx.x;
+    const int ti=threadIdx.x;
     c[ti]=t;
-    for (int stage=BlockSize/2;stage;stage/=2) {
-        __syncthreads();
-        if (ti<stage)
-            c[ti]+=c[ti+stage];
+    __syncthreads();                  // <-- make sure all c[] are written
+    // Tree reduction in shared memory
+    for (int stage = BlockSize >> 1; stage > 0; stage >>= 1) {
+        if (ti < stage) {
+            c[ti] += c[ti + stage];
+        }
+        __syncthreads();              // <-- barrier after each add step
     }
-    out[blockIdx.x]=c[0];
+    // Single writer
+    if (ti == 0) {
+        out[blockIdx.x] = c[0];
+    }
 }
 
 // wrapper class for reduction kernel, allocates output buffer in pinned host memory to avoid cudaMemcpy
@@ -95,26 +104,28 @@ template<typename T>
 class addingReduction {
     T* buffer;
     unsigned int max_blocks;
-    static const int blockSize=256;
+    static const int blockSize = 256;
 
-    public:
+public:
 
-    addingReduction(int device=0) : buffer(nullptr), max_blocks(0) {
-		cudaDeviceProp prop{}; // initialize to zero
-        cudaError_t err = cudaGetDeviceProperties(&prop,device);
-        max_blocks=prop.multiProcessorCount*(prop.maxThreadsPerMultiProcessor / blockSize);
-        cudaMallocHost(&buffer,max_blocks*sizeof(T));
+    addingReduction(int device = 0) : buffer(nullptr), max_blocks(0) {
+        cudaDeviceProp prop;
+        cudaGetDeviceProperties(&prop, device);
+        max_blocks = prop.multiProcessorCount * (prop.maxThreadsPerMultiProcessor / blockSize);
+        cudaMallocHost(&buffer, max_blocks * sizeof(T));
     }
     ~addingReduction() {
-        if (buffer!= nullptr)
+        if (buffer != nullptr) {
             cudaFreeHost(buffer);
+            buffer = nullptr;
+        }
     }
     template<typename Op, typename ... In>
     T perform(unsigned int n, In* ... in) {
-        int gridSize=std::min(max_blocks,1+ (n-1) / blockSize);
-        addingReductionKernel<Op,blockSize><<<gridSize, blockSize>>>(n,buffer,in...);
+        int gridSize = std::min(max_blocks, 1 + (n - 1) / blockSize);
+        addingReductionKernel<Op, blockSize> <<<gridSize, blockSize >>> (n, buffer, in...);
         cudaDeviceSynchronize();
-        T dy,dc=0,dt,dsum=0;
+        T dy, dc = 0, dt, dsum = 0;
         unsigned int nr = (unsigned int)gridSize;
         for (unsigned int ir = 0; ir < nr; ir++) {
             dy = buffer[ir] - dc; // next value including previous correction
@@ -127,5 +138,6 @@ class addingReduction {
 
 
 };
+
 
 #endif //DRPROBEREDUCTION_REDUCTION_CUH

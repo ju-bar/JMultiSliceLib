@@ -71,6 +71,7 @@ protected:
 	int m_nstatus; // core status: 0: not initialized, 1: initialized
 	int m_ndim; // core plan number of dimensions: <=0: invalid, 1: 1d, 2: 2d, 3: 3d, >=4: invalid
 	int* m_pdims; // core plan size of the array
+	int m_ngpuid; // cuda device id used
 	// change added separate plans for forward and backward fft for different callback handling, add pointer to callback parameters
 	cufftHandle m_fw_plan; // core forward plan object
 	//cufftHandle m_bw_plan; // core inverse plan object
@@ -88,8 +89,8 @@ public:
 	
 	// de-initializes the object
 	void Deinit(void);
-	// initialize the plan and internal array on current cuda device
-	int Init(int ndim, int * pdims); 
+	// initialize the plan and internal array on a cuda device (only stores the device id, expects that current device is already set)
+	int Init(int ndim, int * pdims, int idevice); 
 
 	// Transformation operation interface:
 
@@ -138,8 +139,6 @@ public:
 	size_t GetFFTMemUsage(void);
 	// returns device memory usage for multiplication
 	size_t GetMulMemUsage(void);
-	// sets the cuda device id to be used for FFTs and ArrayOps
-	int SetCUDADevice(int ndev = 0);
 	// sets data by copying from device memory
 	int SetDataC_d(cuComplex * src);
 	// sets data, assuming float re,im aligned source items from host memory
