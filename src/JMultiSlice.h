@@ -3,10 +3,10 @@
 // declaration for library JMultislice.lib (implementation see JMultislice.cpp)
 //
 //
-// Copyright (C) 2018 - 2020 - Juri Barthel (juribarthel@gmail.com)
-// Copyright (C) 2018 - 2020 - Forschungszentrum Juelich GmbH, 52425 Juelich, Germany
+// Copyright (C) 2018 - 2026 - Juri Barthel (juribarthel@gmail.com)
+// Copyright (C) 2018 - 2026 - Forschungszentrum Juelich GmbH, 52425 Juelich, Germany
 //
-// Verions of JMultiSlice: 0.45b (2020 - June - 10)
+// Verions of JMultiSlice: 0.46b (2026 - July - 7)
 //
 /*
 This program is free software : you can redistribute it and/or modify
@@ -121,8 +121,8 @@ along with this program.If not, see <https://www.gnu.org/licenses/>
 // VERSION NUMBERS
 #define __JMS_VERSION__			0
 #define __JMS_VERSION_SUB__		4
-#define __JMS_VERSION_SUB_SUB__	5
-#define __JMS_VERSION_BUILD__	20200610
+#define __JMS_VERSION_SUB_SUB__	6
+#define __JMS_VERSION_BUILD__	20260707
 // CODE IDs
 #define _JMS_CODE_CPU			1
 #define _JMS_CODE_GPU			2

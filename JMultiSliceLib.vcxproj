@@ -100,7 +100,7 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>$(ProjectDir)src\fftw\include;%(AdditionalIncludeDirectories);$(CudaToolkitIncludeDir);C:\Program Files (x86)\IntelSWTools\compilers_and_libraries\windows\mkl\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)src\fftw\include;%(AdditionalIncludeDirectories);$(CudaToolkitIncludeDir);$(MKL_ROOT25)\include</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
       <LanguageStandard>stdcpp17</LanguageStandard>
@@ -110,7 +110,7 @@
     </Link>
     <Lib>
       <AdditionalDependencies>mkl_intel_lp64.lib;mkl_sequential.lib;mkl_core.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(ProjectDir)\src\fftw\lib\x64\Static-Debug;C:\Program Files (x86)\IntelSWTools\compilers_and_libraries\windows\mkl\lib\intel64</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)\src\fftw\lib\x64\Static-Debug;$(MKL_ROOT25)\lib</AdditionalLibraryDirectories>
     </Lib>
     <CudaCompile>
       <CodeGeneration>compute_61,sm_61;compute_70,sm_70;compute_75,sm_75;compute_86,sm_86;compute_89,sm_89</CodeGeneration>
@@ -141,7 +141,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>$(ProjectDir)src\fftw\include;%(AdditionalIncludeDirectories);$(CudaToolkitIncludeDir);$(MKL_ROOT)\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)src\fftw\include;%(AdditionalIncludeDirectories);$(CudaToolkitIncludeDir);$(MKL_ROOT25)\include</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <FloatingPointModel>Fast</FloatingPointModel>
@@ -154,7 +154,7 @@
     </Link>
     <Lib>
       <AdditionalDependencies>mkl_intel_lp64.lib;mkl_sequential.lib;mkl_core.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(ProjectDir)src\fftw\lib\x64\Static-Release;C:\Program Files (x86)\IntelSWTools\compilers_and_libraries\windows\mkl\lib\intel64</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)src\fftw\lib\x64\Static-Release;$(MKL_ROOT25)\lib</AdditionalLibraryDirectories>
     </Lib>
     <CudaCompile>
       <CodeGeneration>compute_61,sm_61;compute_70,sm_70;compute_75,sm_75;compute_86,sm_86;compute_89,sm_89</CodeGeneration>

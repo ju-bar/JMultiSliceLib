@@ -4,8 +4,8 @@
 // (Implementation see JMultisliceLib.cpp)
 //
 //
-// Copyright (C) 2018 - 2022 - Juri Barthel (juribarthel@gmail.com)
-// Copyright (C) 2018 - 2022 - Forschungszentrum Jülich GmbH, 52425 Jülich, Germany
+// Copyright (C) 2018 - 2026 - Juri Barthel (juribarthel@gmail.com)
+// Copyright (C) 2018 - 2026 - Forschungszentrum Jülich GmbH, 52425 Jülich, Germany
 //
 //
 //
