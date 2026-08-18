@@ -1084,8 +1084,8 @@ int CJMultiSlice::CalculatePropagator(float fthick, float otx, float oty, fcmplx
 	if (ntype == 1) {
 		// fresnel propagator version
 		m_nprotype = 1;
-		double pfac = _PI / wl * cos(ot); // chi pre-factor with thickness reduction 
-		double pt0 = pfac * (otxr*otxr + otyr*otyr); // chi0 - reference phase ! Pi/lambda * Cos[tilt] * t^2
+		double pfac = _PI / wl / cos(ot); // chi pre-factor with thickness increase 
+		double pt0 = pfac * (otxr*otxr + otyr*otyr); // chi0 - reference phase ! Pi/lambda / Cos[tilt] * t^2
 		double itowx = itogx * wl; // theta x per pixel in rad
 		double itowy = itogy * wl; // theta y per pixel in rad
 		// loop through frequencies (scrambled, not transposed here!)
